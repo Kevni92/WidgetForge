@@ -1,9 +1,20 @@
 import type { WidgetId } from './widget'
 import type { WidgetRegistry } from './widget-registry'
+import {
+  DEFAULT_MIN_WINDOW_SIZE,
+  DEFAULT_WINDOW_SIZE,
+  constrainGeometry,
+  constrainSize,
+  sameGeometry,
+  type WindowGeometry,
+  type WindowPosition,
+  type WindowSize,
+  type WindowSizeConstraints,
+} from './window-geometry'
 
 export type WindowInstanceId = string
 export type WindowOperationOrigin = 'api' | 'user'
-export type WindowManagerChangeKind = 'open' | 'focus' | 'close'
+export type WindowManagerChangeKind = 'open' | 'focus' | 'close' | 'geometry'
 
 export interface WindowState {
   readonly instanceId: WindowInstanceId
@@ -12,6 +23,8 @@ export interface WindowState {
   readonly parameters: Readonly<Record<string, unknown>>
   readonly focused: boolean
   readonly zIndex: number
+  readonly geometry: WindowGeometry
+  readonly constraints: WindowSizeConstraints
 }
 
 export interface OpenWindowRequest {
@@ -19,6 +32,8 @@ export interface OpenWindowRequest {
   parameters?: Readonly<Record<string, unknown>>
   instanceId?: WindowInstanceId
   title?: string
+  position?: WindowPosition
+  size?: WindowSize
 }
 
 export interface WindowManagerChange {
@@ -44,8 +59,23 @@ export class UnknownWindowInstanceError extends Error {
   }
 }
 
+function cloneSize(size: WindowSize): WindowSize {
+  return { ...size }
+}
+
 function cloneWindow(window: WindowState): WindowState {
-  return { ...window, parameters: { ...window.parameters } }
+  return {
+    ...window,
+    parameters: { ...window.parameters },
+    geometry: {
+      position: { ...window.geometry.position },
+      size: cloneSize(window.geometry.size),
+    },
+    constraints: {
+      minSize: cloneSize(window.constraints.minSize),
+      maxSize: window.constraints.maxSize ? cloneSize(window.constraints.maxSize) : null,
+    },
+  }
 }
 
 export class WindowManager {
@@ -73,6 +103,15 @@ export class WindowManager {
       throw new DuplicateWindowInstanceError(instanceId)
     }
 
+    const manifestWindow = resolved.manifest.window
+    const constraints: WindowSizeConstraints = {
+      minSize: cloneSize(manifestWindow?.minSize ?? DEFAULT_MIN_WINDOW_SIZE),
+      maxSize: manifestWindow?.maxSize ? cloneSize(manifestWindow.maxSize) : null,
+    }
+    const size = constrainSize(request.size ?? manifestWindow?.defaultSize ?? DEFAULT_WINDOW_SIZE, constraints)
+    const cascade = 24 + this.windows.length * 24
+    const position = request.position ?? { x: cascade, y: cascade }
+
     const unfocused = this.windows.map((window) => ({ ...window, focused: false }))
     const opened: WindowState = {
       instanceId,
@@ -81,6 +120,14 @@ export class WindowManager {
       parameters: { ...resolved.parameters },
       focused: true,
       zIndex: unfocused.length,
+      geometry: {
+        position: {
+          x: Number.isFinite(position.x) ? position.x : cascade,
+          y: Number.isFinite(position.y) ? position.y : cascade,
+        },
+        size,
+      },
+      constraints,
     }
 
     this.windows = [...unfocused, opened]
@@ -126,6 +173,46 @@ export class WindowManager {
     }))
 
     this.emit('close', origin, instanceId)
+  }
+
+  setGeometry(
+    instanceId: WindowInstanceId,
+    geometry: WindowGeometry,
+    origin: WindowOperationOrigin = 'api',
+  ): WindowState {
+    const index = this.windows.findIndex((window) => window.instanceId === instanceId)
+    if (index < 0) throw new UnknownWindowInstanceError(instanceId)
+
+    const current = this.windows[index]
+    if (!current) throw new UnknownWindowInstanceError(instanceId)
+
+    const normalized: WindowGeometry = {
+      position: {
+        x: Number.isFinite(geometry.position.x) ? geometry.position.x : current.geometry.position.x,
+        y: Number.isFinite(geometry.position.y) ? geometry.position.y : current.geometry.position.y,
+      },
+      size: constrainSize(geometry.size, current.constraints),
+    }
+
+    if (sameGeometry(current.geometry, normalized)) return cloneWindow(current)
+
+    const updated: WindowState = { ...current, geometry: normalized }
+    this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window)
+    this.emit('geometry', origin, instanceId)
+    return cloneWindow(updated)
+  }
+
+  constrainToContainer(
+    instanceId: WindowInstanceId,
+    container: WindowSize,
+    origin: WindowOperationOrigin = 'api',
+  ): WindowState {
+    const current = this.get(instanceId)
+    return this.setGeometry(
+      instanceId,
+      constrainGeometry(current.geometry, current.constraints, container),
+      origin,
+    )
   }
 
   subscribe(listener: WindowManagerListener): () => void {
