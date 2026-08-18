@@ -19,7 +19,7 @@ interface WindowShellProps {
   closable?: boolean
   minimizable?: boolean
   minimized?: boolean
-  lifecycle?: WidgetLifecycleController
+  lifecycle?: WidgetLifecycleController | undefined
 }
 
 const props = withDefaults(defineProps<WindowShellProps>(), {
