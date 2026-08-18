@@ -17,13 +17,13 @@ describe('Fullscreen Playground App', () => {
   it('renders a cohesive fullscreen simulation workspace with docks, panes and window states', async () => {
     const wrapper = mount(App)
 
-    expect(wrapper.get('[data-fullscreen-workspace-demo]').exists()).toBe(true)
+    expect(wrapper.get('[data-fullscreen-workspace-demo]').element).toBeTruthy()
     expect(wrapper.findAll('.wf-dock-host')).toHaveLength(2)
     expect(wrapper.get('[data-dock-id="workspace-top"]').attributes('data-dock-position')).toBe('top')
     expect(wrapper.get('[data-dock-id="workspace-bottom"]').attributes('data-dock-position')).toBe('bottom')
     expect(wrapper.get('[data-pane-id="workspace-top-root"]').attributes('data-pane-kind')).toBe('split')
     expect(wrapper.text()).toContain('Orbital Exchange')
-    expect(wrapper.get('[data-dock-id="workspace-bottom"] .wf-command-input__field').exists()).toBe(true)
+    expect(wrapper.get('[data-dock-id="workspace-bottom"] .wf-command-input__field').element).toBeTruthy()
 
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
     expect(wrapper.get('[data-window-instance-id="telemetry-power"]').attributes('data-window-layer')).toBe('always-on-top')
@@ -75,8 +75,8 @@ describe('Fullscreen Playground App', () => {
 
     expect(wrapper.findAll('.wf-dock-host')).toHaveLength(2)
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
-    expect(wrapper.get('[data-window-instance-id="alerts-main"]').exists()).toBe(true)
-    expect(wrapper.get('[data-pane-id="operations-root"]').exists()).toBe(true)
+    expect(wrapper.get('[data-window-instance-id="alerts-main"]').element).toBeTruthy()
+    expect(wrapper.get('[data-pane-id="operations-root"]').element).toBeTruthy()
     wrapper.unmount()
   })
 })
