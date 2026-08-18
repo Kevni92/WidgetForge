@@ -2,9 +2,12 @@
 import { ref } from 'vue'
 import {
   DataTable,
+  EmptyState,
+  ErrorState,
   InfoPopover,
   KeyValueGroup,
   KeyValueRow,
+  LoadingState,
   SimpleTable,
   StatValue,
   type DataTableColumn,
@@ -62,6 +65,7 @@ const marketColumns: DataTableColumn<MarketRow>[] = [
 const marketSort = ref<DataTableSort | null>({ columnId: 'stock', direction: 'desc' })
 const marketFilter = ref('')
 const selectedMarketRow = ref<DataTableRowId | null>(null)
+const retryCount = ref(0)
 </script>
 
 <template>
@@ -147,6 +151,19 @@ const selectedMarketRow = ref<DataTableRowId | null>(null)
         </InfoPopover>
       </template>
     </DataTable>
+
+    <div class="primitive-showcase__states">
+      <LoadingState message="Loading regional data…" />
+      <EmptyState title="No matching contracts" message="Adjust the current filters or select another region." />
+      <ErrorState
+        title="Market feed unavailable"
+        message="The latest snapshot could not be loaded."
+        retryable
+        retry-label="Try again"
+        @retry="retryCount += 1"
+      />
+    </div>
+    <p class="primitive-showcase__retry-count">Retry events: {{ retryCount }}</p>
   </section>
 </template>
 
@@ -168,11 +185,30 @@ const selectedMarketRow = ref<DataTableRowId | null>(null)
 }
 
 .primitive-showcase__table,
-.primitive-showcase__data-table {
+.primitive-showcase__data-table,
+.primitive-showcase__states {
   margin-top: var(--wf-space-lg);
 }
 
 .primitive-showcase__data-table :deep(.wf-data-table__scroller) {
   max-height: 420px;
+}
+
+.primitive-showcase__states {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--wf-space-md);
+}
+
+.primitive-showcase__retry-count {
+  margin: var(--wf-space-sm) 0 0;
+  color: var(--wf-color-text-muted);
+  font-size: var(--wf-font-size-xs);
+}
+
+@media (max-width: 800px) {
+  .primitive-showcase__states {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>
