@@ -185,8 +185,14 @@ export class CommandRegistry {
     validateDefinition(definition)
     const name = normalizeName(definition.name)
     const names = [name, ...(definition.aliases ?? []).map(normalizeName)]
+    const localNames = new Set<string>()
 
     for (const candidate of names) {
+      if (localNames.has(candidate)) {
+        throw new CommandDefinitionError(`command name or alias "${candidate}" is duplicated in the definition`)
+      }
+      localNames.add(candidate)
+
       if (this.lookup.has(candidate)) {
         throw new CommandDefinitionError(`command name or alias "${candidate}" is already registered`)
       }
