@@ -14,17 +14,17 @@ describe('Playground App', () => {
     expect(wrapper.get('[data-window-instance-id="planet-alpha"] .wf-window-shell').attributes('data-focused')).toBe('true')
 
     await wrapper.get('[data-window-instance-id="planet-alpha"] .wf-window-shell__minimize').trigger('click')
-    expect(wrapper.get('[data-window-instance-id="planet-alpha"]').attributes('data-window-mode')).toBe('minimized')
+    expect(wrapper.get('.wf-window-frame[data-window-instance-id="planet-alpha"]').attributes('data-window-mode')).toBe('minimized')
 
     await wrapper.get('[data-window-instance-id="planet-alpha"] .wf-window-shell__minimize').trigger('click')
-    expect(wrapper.get('[data-window-instance-id="planet-alpha"]').attributes('data-window-mode')).toBe('normal')
+    expect(wrapper.get('.wf-window-frame[data-window-instance-id="planet-alpha"]').attributes('data-window-mode')).toBe('normal')
 
     await wrapper.get('[data-action="open-market"]').trigger('click')
-    expect(wrapper.findAll('[data-window-instance-id="market-metals"]')).toHaveLength(1)
+    expect(wrapper.findAll('.wf-window-frame[data-window-instance-id="market-metals"]')).toHaveLength(1)
     expect(wrapper.findAll('.wf-window-shell')).toHaveLength(3)
 
     await wrapper.get('[data-window-instance-id="planet-beta"] .wf-window-shell__close').trigger('click')
-    expect(wrapper.find('[data-window-instance-id="planet-beta"]').exists()).toBe(false)
+    expect(wrapper.find('.wf-window-frame[data-window-instance-id="planet-beta"]').exists()).toBe(false)
 
     await wrapper.get('[data-action="open-planet"]').trigger('click')
     expect(wrapper.findAll('.wf-window-shell')).toHaveLength(3)
