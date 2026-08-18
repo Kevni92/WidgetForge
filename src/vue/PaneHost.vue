@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, toRaw } from 'vue'
-import { replacePane, type PaneNode, type SplitPane } from '../core/pane'
+import { replacePane, setActiveTab, type PaneNode, type SplitPane, type TabPane } from '../core/pane'
 import { resizePaneSplitWeights } from '../core/pane-layout'
 import type { WidgetLifecycleController } from '../core/widget-lifecycle'
 import type { WidgetRegistry } from '../core/widget-registry'
@@ -15,39 +15,23 @@ interface PaneHostProps {
 }
 
 const props = defineProps<PaneHostProps>()
-const emit = defineEmits<{
-  'update:pane': [pane: PaneNode]
-}>()
-
+const emit = defineEmits<{ 'update:pane': [pane: PaneNode] }>()
 const registry = toRaw(props.registry)
 const rootElement = ref<HTMLElement | null>(null)
 let disposeResize: (() => void) | null = null
 
-const backgroundClass = computed(() => {
-  const background = props.pane.settings?.background ?? 'transparent'
-  return `wf-pane-host--background-${background}`
-})
-
+const backgroundClass = computed(() => `wf-pane-host--background-${props.pane.settings?.background ?? 'transparent'}`)
 const paneStyle = computed<Record<string, string>>(() => ({
   overflow: props.pane.settings?.overflow ?? 'hidden',
   ...(props.pane.settings?.backgroundColor ? { backgroundColor: props.pane.settings.backgroundColor } : {}),
 }))
 
-function splitDirection(split: SplitPane): string {
-  return split.axis === 'horizontal' ? 'row' : 'column'
-}
-
+function splitDirection(split: SplitPane): string { return split.axis === 'horizontal' ? 'row' : 'column' }
 function childStyle(split: SplitPane, index: number): Record<string, string> {
   const child = split.children[index]
   const weight = split.weights[index] ?? 1
-  const style: Record<string, string> = {
-    flexGrow: String(weight),
-    flexBasis: '0',
-    minWidth: '0',
-    minHeight: '0',
-  }
+  const style: Record<string, string> = { flexGrow: String(weight), flexBasis: '0', minWidth: '0', minHeight: '0' }
   if (!child) return style
-
   const minSize = child.settings?.minSize
   const maxSize = child.settings?.maxSize
   if (split.axis === 'horizontal') {
@@ -59,198 +43,94 @@ function childStyle(split: SplitPane, index: number): Record<string, string> {
   }
   return style
 }
-
 function dividerResizable(split: SplitPane, index: number): boolean {
   if (split.settings?.resizable === false) return false
-  return split.children[index]?.settings?.resizable !== false
-    && split.children[index + 1]?.settings?.resizable !== false
+  return split.children[index]?.settings?.resizable !== false && split.children[index + 1]?.settings?.resizable !== false
 }
-
-function updateChild(childId: string, pane: PaneNode): void {
-  emit('update:pane', replacePane(props.pane, childId, pane))
+function updateChild(childId: string, pane: PaneNode): void { emit('update:pane', replacePane(props.pane, childId, pane)) }
+function tabLabel(child: PaneNode): string {
+  if (child.kind === 'widget') {
+    try { return registry.get(child.widgetId).title } catch { return child.id }
+  }
+  return child.id
 }
-
-function finishResize(): void {
-  disposeResize?.()
+function activateTab(tabPane: TabPane, childId: string): void { emit('update:pane', setActiveTab(props.pane, tabPane.id, childId)) }
+function onTabKeydown(event: KeyboardEvent, tabPane: TabPane, index: number): void {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  let next = index
+  if (event.key === 'ArrowLeft') next = (index - 1 + tabPane.children.length) % tabPane.children.length
+  if (event.key === 'ArrowRight') next = (index + 1) % tabPane.children.length
+  if (event.key === 'Home') next = 0
+  if (event.key === 'End') next = tabPane.children.length - 1
+  const child = tabPane.children[next]
+  if (child) activateTab(tabPane, child.id)
 }
-
+function finishResize(): void { disposeResize?.() }
 function startResize(event: PointerEvent, split: SplitPane, dividerIndex: number): void {
   if (!dividerResizable(split, dividerIndex) || event.button !== 0) return
   const host = rootElement.value
   const target = event.currentTarget
   if (!host || !(target instanceof HTMLElement)) return
-
-  event.preventDefault()
-  finishResize()
-
+  event.preventDefault(); finishResize()
   const pointerId = typeof event.pointerId === 'number' ? event.pointerId : undefined
   const startCoordinate = split.axis === 'horizontal' ? event.clientX : event.clientY
   const rect = host.getBoundingClientRect()
   const availablePx = split.axis === 'horizontal' ? rect.width : rect.height
   const startSplit = split
-
-  if (pointerId !== undefined && typeof target.setPointerCapture === 'function') {
-    try {
-      target.setPointerCapture(pointerId)
-    } catch {
-      // Global listeners keep the resize session functional without pointer capture.
-    }
+  if (pointerId !== undefined && typeof target.setPointerCapture === 'function') { try { target.setPointerCapture(pointerId) } catch {} }
+  const matches = (next: PointerEvent): boolean => pointerId === undefined || typeof next.pointerId !== 'number' || next.pointerId === pointerId
+  const move = (next: PointerEvent): void => {
+    if (!matches(next)) return
+    const coordinate = startSplit.axis === 'horizontal' ? next.clientX : next.clientY
+    emit('update:pane', { ...startSplit, weights: resizePaneSplitWeights(startSplit, dividerIndex, coordinate - startCoordinate, availablePx) })
   }
-
-  const matches = (pointerEvent: PointerEvent): boolean =>
-    pointerId === undefined || typeof pointerEvent.pointerId !== 'number' || pointerEvent.pointerId === pointerId
-
-  const onPointerMove = (pointerEvent: PointerEvent): void => {
-    if (!matches(pointerEvent)) return
-    const coordinate = startSplit.axis === 'horizontal' ? pointerEvent.clientX : pointerEvent.clientY
-    const weights = resizePaneSplitWeights(startSplit, dividerIndex, coordinate - startCoordinate, availablePx)
-    emit('update:pane', { ...startSplit, weights })
-  }
-
   const cleanup = (): void => {
-    globalThis.window.removeEventListener('pointermove', onPointerMove)
-    globalThis.window.removeEventListener('pointerup', onPointerEnd)
-    globalThis.window.removeEventListener('pointercancel', onPointerEnd)
-    if (pointerId !== undefined && typeof target.releasePointerCapture === 'function') {
-      try {
-        target.releasePointerCapture(pointerId)
-      } catch {
-        // Capture may already be released by the browser.
-      }
-    }
+    globalThis.window.removeEventListener('pointermove', move); globalThis.window.removeEventListener('pointerup', end); globalThis.window.removeEventListener('pointercancel', end)
+    if (pointerId !== undefined && typeof target.releasePointerCapture === 'function') { try { target.releasePointerCapture(pointerId) } catch {} }
     if (disposeResize === cleanup) disposeResize = null
   }
-
-  const onPointerEnd = (pointerEvent: PointerEvent): void => {
-    if (!matches(pointerEvent)) return
-    cleanup()
-  }
-
+  const end = (next: PointerEvent): void => { if (matches(next)) cleanup() }
   disposeResize = cleanup
-  globalThis.window.addEventListener('pointermove', onPointerMove)
-  globalThis.window.addEventListener('pointerup', onPointerEnd)
-  globalThis.window.addEventListener('pointercancel', onPointerEnd)
+  globalThis.window.addEventListener('pointermove', move); globalThis.window.addEventListener('pointerup', end); globalThis.window.addEventListener('pointercancel', end)
 }
 
 onBeforeUnmount(finishResize)
 </script>
 
 <template>
-  <div
-    ref="rootElement"
-    class="wf-pane-host"
-    :class="[backgroundClass, { 'wf-pane-host--split': pane.kind === 'split' }]"
-    :data-pane-id="pane.id"
-    :data-pane-kind="pane.kind"
-    :style="[
-      paneStyle,
-      pane.kind === 'split' ? { flexDirection: splitDirection(pane) } : {},
-    ]"
-  >
-    <WidgetHost
-      v-if="pane.kind === 'widget'"
-      class="wf-pane-host__widget"
-      :registry="registry"
-      :widget-id="pane.widgetId"
-      :instance-id="pane.instanceId"
-      :parameters="pane.parameters"
-      :lifecycle="lifecycle"
-    />
+  <div ref="rootElement" class="wf-pane-host" :class="[backgroundClass, { 'wf-pane-host--split': pane.kind === 'split', 'wf-pane-host--tabs': pane.kind === 'tabs' }]" :data-pane-id="pane.id" :data-pane-kind="pane.kind" :style="[paneStyle, pane.kind === 'split' ? { flexDirection: splitDirection(pane) } : {}]">
+    <WidgetHost v-if="pane.kind === 'widget'" class="wf-pane-host__widget" :registry="registry" :widget-id="pane.widgetId" :instance-id="pane.instanceId" :parameters="pane.parameters" :lifecycle="lifecycle" />
 
-    <template v-else>
+    <template v-else-if="pane.kind === 'split'">
       <template v-for="(child, index) in pane.children" :key="child.id">
         <div class="wf-pane-host__cell" :style="childStyle(pane, index)">
-          <PaneHost
-            :pane="child"
-            :registry="registry"
-            @update:pane="updateChild(child.id, $event)"
-          />
+          <PaneHost :pane="child" :registry="registry" :lifecycle="lifecycle" @update:pane="updateChild(child.id, $event)" />
         </div>
-        <div
-          v-if="index < pane.children.length - 1"
-          class="wf-pane-host__divider"
-          :class="[
-            `wf-pane-host__divider--${pane.axis}`,
-            { 'wf-pane-host__divider--disabled': !dividerResizable(pane, index) },
-          ]"
-          :data-pane-divider-index="index"
-          :aria-hidden="!dividerResizable(pane, index)"
-          @pointerdown="startResize($event, pane, index)"
-        />
+        <div v-if="index < pane.children.length - 1" class="wf-pane-host__divider" :class="[`wf-pane-host__divider--${pane.axis}`, { 'wf-pane-host__divider--disabled': !dividerResizable(pane, index) }]" :data-pane-divider-index="index" :aria-hidden="!dividerResizable(pane, index)" @pointerdown="startResize($event, pane, index)" />
       </template>
+    </template>
+
+    <template v-else>
+      <div class="wf-pane-host__tabbar" role="tablist" :aria-label="`${pane.id} tabs`">
+        <button v-for="(child, index) in pane.children" :key="child.id" class="wf-pane-host__tab" :class="{ 'wf-pane-host__tab--active': child.id === pane.activeId }" role="tab" :aria-selected="child.id === pane.activeId" :tabindex="child.id === pane.activeId ? 0 : -1" :data-tab-pane-id="child.id" @click="activateTab(pane, child.id)" @keydown="onTabKeydown($event, pane, index)">{{ tabLabel(child) }}</button>
+      </div>
+      <div class="wf-pane-host__tab-content">
+        <div v-for="child in pane.children" v-show="child.id === pane.activeId" :key="child.id" class="wf-pane-host__tab-panel" role="tabpanel" :data-tab-content-id="child.id" :aria-hidden="child.id !== pane.activeId">
+          <PaneHost :pane="child" :registry="registry" :lifecycle="lifecycle" @update:pane="updateChild(child.id, $event)" />
+        </div>
+      </div>
     </template>
   </div>
 </template>
 
 <style scoped>
-.wf-pane-host {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  color: var(--wf-color-text);
-}
-
-.wf-pane-host--split {
-  display: flex;
-  align-items: stretch;
-}
-
-.wf-pane-host--background-transparent { background: transparent; }
-.wf-pane-host--background-canvas { background: var(--wf-color-canvas); }
-.wf-pane-host--background-surface { background: var(--wf-color-surface); }
-.wf-pane-host--background-surface-raised { background: var(--wf-color-surface-raised); }
-
-.wf-pane-host__widget,
-.wf-pane-host__cell {
-  min-width: 0;
-  min-height: 0;
-}
-
-.wf-pane-host__widget {
-  width: 100%;
-  height: 100%;
-}
-
-.wf-pane-host__cell {
-  position: relative;
-  overflow: hidden;
-}
-
-.wf-pane-host__divider {
-  position: relative;
-  z-index: 1;
-  flex: 0 0 5px;
-  touch-action: none;
-  background: transparent;
-}
-
-.wf-pane-host__divider::after {
-  content: '';
-  position: absolute;
-  background: var(--wf-color-border);
-  opacity: 0.7;
-}
-
-.wf-pane-host__divider--horizontal { cursor: ew-resize; }
-.wf-pane-host__divider--horizontal::after {
-  top: 0;
-  bottom: 0;
-  left: 2px;
-  width: 1px;
-}
-
-.wf-pane-host__divider--vertical { cursor: ns-resize; }
-.wf-pane-host__divider--vertical::after {
-  top: 2px;
-  right: 0;
-  bottom: auto;
-  left: 0;
-  height: 1px;
-}
-
-.wf-pane-host__divider--disabled {
-  cursor: default;
-  pointer-events: none;
-}
+.wf-pane-host{width:100%;height:100%;min-width:0;min-height:0;color:var(--wf-color-text)}
+.wf-pane-host--split{display:flex;align-items:stretch}.wf-pane-host--tabs{display:flex;flex-direction:column}
+.wf-pane-host--background-transparent{background:transparent}.wf-pane-host--background-canvas{background:var(--wf-color-canvas)}.wf-pane-host--background-surface{background:var(--wf-color-surface)}.wf-pane-host--background-surface-raised{background:var(--wf-color-surface-raised)}
+.wf-pane-host__widget,.wf-pane-host__cell{min-width:0;min-height:0}.wf-pane-host__widget{width:100%;height:100%}.wf-pane-host__cell{position:relative;overflow:hidden}
+.wf-pane-host__divider{position:relative;z-index:1;flex:0 0 5px;touch-action:none;background:transparent}.wf-pane-host__divider::after{content:'';position:absolute;background:var(--wf-color-border);opacity:.7}.wf-pane-host__divider--horizontal{cursor:ew-resize}.wf-pane-host__divider--horizontal::after{top:0;bottom:0;left:2px;width:1px}.wf-pane-host__divider--vertical{cursor:ns-resize}.wf-pane-host__divider--vertical::after{top:2px;right:0;left:0;height:1px}.wf-pane-host__divider--disabled{cursor:default;pointer-events:none}
+.wf-pane-host__tabbar{display:flex;flex:0 0 auto;min-height:var(--wf-control-height);gap:1px;border-bottom:1px solid var(--wf-color-border);background:var(--wf-color-surface)}
+.wf-pane-host__tab{min-width:0;padding:0 var(--wf-space-md);border:0;border-right:1px solid var(--wf-color-border);background:transparent;color:var(--wf-color-text-muted);font:inherit;cursor:pointer}.wf-pane-host__tab:hover{background:var(--wf-color-hover);color:var(--wf-color-text)}.wf-pane-host__tab:focus-visible{outline:1px solid var(--wf-color-focus);outline-offset:-2px}.wf-pane-host__tab--active{background:var(--wf-color-selected);color:var(--wf-color-text)}
+.wf-pane-host__tab-content{position:relative;flex:1 1 auto;min-width:0;min-height:0}.wf-pane-host__tab-panel{position:absolute;inset:0;min-width:0;min-height:0}
 </style>
