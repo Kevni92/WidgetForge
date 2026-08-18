@@ -8,7 +8,6 @@ import {
   createWidgetNavigator,
   createWindowManager,
   forgeDarkTheme,
-  provideWidgetNavigation,
 } from 'widgetforge'
 import WorkspaceDockShowcase from '../src/WorkspaceDockShowcase.vue'
 import { playgroundWidgetRegistry } from '../src/playground-widgets'
@@ -24,11 +23,8 @@ describe('WorkspaceDockShowcase', () => {
     )
     const wrapper = mount({
       components: { DataClientProvider, ThemeProvider, WorkspaceDockShowcase },
-      setup() {
-        provideWidgetNavigation(navigator)
-        return { client, forgeDarkTheme }
-      },
-      template: '<ThemeProvider :theme="forgeDarkTheme"><DataClientProvider :client="client"><WorkspaceDockShowcase /></DataClientProvider></ThemeProvider>',
+      setup: () => ({ client, forgeDarkTheme, navigator }),
+      template: '<ThemeProvider :theme="forgeDarkTheme"><DataClientProvider :client="client"><WorkspaceDockShowcase :navigator="navigator" /></DataClientProvider></ThemeProvider>',
     })
 
     expect(wrapper.findAll('[data-dock-id]')).toHaveLength(2)
