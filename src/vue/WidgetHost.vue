@@ -13,11 +13,16 @@ interface WidgetHostProps {
 
 let nextGeneratedInstanceId = 0
 
+function createGeneratedInstanceId(): string {
+  nextGeneratedInstanceId += 1
+  return `wf-widget-${nextGeneratedInstanceId}`
+}
+
 const props = withDefaults(defineProps<WidgetHostProps>(), {
   parameters: () => ({}),
 })
 
-const generatedInstanceId = `wf-widget-${++nextGeneratedInstanceId}`
+const generatedInstanceId = createGeneratedInstanceId()
 const instanceId = props.instanceId ?? generatedInstanceId
 
 const resolution = computed<{ resolved: ResolvedWidget | null; error: string | null }>(() => {
@@ -36,13 +41,15 @@ const resolution = computed<{ resolved: ResolvedWidget | null; error: string | n
 })
 
 const widgetId = computed(() => props.widgetId)
-const parameters = computed<Readonly<Record<string, unknown>>>(() => resolution.value.resolved?.parameters ?? {})
+const contextParameters = computed<Readonly<Record<string, unknown>>>(
+  () => resolution.value.resolved?.parameters ?? {},
+)
 const component = computed(() => resolution.value.resolved?.manifest.component ?? null)
 
 const context: WidgetContext = {
   instanceId,
   widgetId,
-  parameters,
+  parameters: contextParameters,
 }
 
 provide(widgetContextKey, context)
