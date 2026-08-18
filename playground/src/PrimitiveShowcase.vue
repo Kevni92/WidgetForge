@@ -1,5 +1,30 @@
 <script setup lang="ts">
-import { InfoPopover, KeyValueGroup, KeyValueRow, StatValue } from 'widgetforge'
+import {
+  InfoPopover,
+  KeyValueGroup,
+  KeyValueRow,
+  SimpleTable,
+  StatValue,
+  type SimpleTableColumn,
+} from 'widgetforge'
+
+interface CargoRow {
+  material: string
+  amount: number
+  price: number
+}
+
+const cargoRows: CargoRow[] = [
+  { material: 'Steel', amount: 120, price: 42.5 },
+  { material: 'Water', amount: 480, price: 3.2 },
+  { material: 'Electronics', amount: 36, price: 186.4 },
+]
+
+const cargoColumns: SimpleTableColumn<CargoRow>[] = [
+  { id: 'material', header: 'Material', field: 'material' },
+  { id: 'amount', header: 'Amount', field: 'amount', align: 'end', format: (value) => `${value} t` },
+  { id: 'price', header: 'Price', field: 'price', align: 'end', format: (value) => `${value} cr` },
+]
 </script>
 
 <template>
@@ -50,6 +75,21 @@ import { InfoPopover, KeyValueGroup, KeyValueRow, StatValue } from 'widgetforge'
         </template>
       </KeyValueRow>
     </KeyValueGroup>
+
+    <SimpleTable
+      class="primitive-showcase__table"
+      :rows="cargoRows"
+      :columns="cargoColumns"
+      caption="Compact cargo manifest"
+      compact
+    >
+      <template #cell-material="{ value }">
+        <InfoPopover :label="`Commodity ${value}`">
+          <template #trigger>{{ value }}</template>
+          <span>Consumer-provided commodity information for {{ value }}.</span>
+        </InfoPopover>
+      </template>
+    </SimpleTable>
   </section>
 </template>
 
@@ -68,5 +108,9 @@ import { InfoPopover, KeyValueGroup, KeyValueRow, StatValue } from 'widgetforge'
   color: var(--wf-color-info);
   font-size: var(--wf-font-size-sm);
   font-weight: var(--wf-font-weight-medium);
+}
+
+.primitive-showcase__table {
+  margin-top: var(--wf-space-lg);
 }
 </style>
