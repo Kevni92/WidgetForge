@@ -56,6 +56,19 @@ Der Playground bleibt dabei serverlos. Ein konkretes Serverprotokoll ist nicht T
 
 28. #28 Öffentliche API konsolidieren und npm-Paket vorbereiten
 
+## Phase 9 – Composable Workspace
+
+60. #60 Pane- und Layout-Modell für verschachtelbare Workspace-Inhalte einführen
+61. #61 Rekursiven PaneHost für Widgets und Split-Layouts implementieren
+62. #62 Windows auf Root-Panes migrieren und Pane-basierte Inhalte unterstützen
+63. #63 Window-Layer und konfigurierbare Window-Präsentation implementieren
+64. #64 Workspace-Docks für Top-, Bottom- und Sidebars implementieren
+65. #65 Window-Snap mit Edge-Vorschau und Snap-Zuständen implementieren
+66. #66 Window-Docking und Pane-Edit-Mode per Drag & Drop implementieren
+67. #67 Playground als realistische fullscreen Workspace-Demo umbauen
+
+`Pane` ist dabei die allgemeine Content-/Layout-Einheit. Windows und Docks hosten Pane-Bäume; Widgets selbst kennen weder Window-, Dock- noch Pane-Management.
+
 ## Arbeitsregel
 
 Grundsätzlich wird ein Issue abgeschlossen, getestet und – sofern visuell relevant – im GitHub-Pages-Playground demonstriert, bevor der nächste darauf aufbauende Schritt begonnen wird. Die verbindlichen Qualitäts- und Architekturregeln stehen in `AGENTS.md` und `docs/DEVELOPMENT_WORKFLOW.md`.
