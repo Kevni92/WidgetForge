@@ -1,68 +1,61 @@
 # Roadmap
 
-Die Roadmap ist absichtlich inkrementell. Jedes Thema wird als eigenes GitHub Issue umgesetzt und baut möglichst nur auf bereits abgeschlossenen Grundlagen auf.
+WidgetForge wird inkrementell über GitHub Issues umgesetzt. Die Issues sind bewusst klein gehalten und enthalten ihre konkreten Akzeptanzkriterien und Abhängigkeiten.
 
 ## Phase 1 – Projektbasis
 
-1. Vue-3-/TypeScript-Library und Playground grundlegend aufsetzen.
-2. Test-, Typecheck-, Lint- und Build-Pipeline einrichten.
-3. Playground über GitHub Pages veröffentlichen.
-4. Design-Token-/Theme-Grundlage definieren.
+1. #1 Projektgrundgerüst für Vue 3 + TypeScript + Library aufsetzen
+2. #2 Test-, Lint-, Typecheck- und Build-Pipeline einrichten
+3. #3 Playground-App erstellen und über GitHub Pages veröffentlichen
+4. #4 Design-Token- und Theme-Grundlage definieren
 
 ## Phase 2 – Widget-Kern
 
-5. Widget Contract und Manifest definieren.
-6. Widget Registry implementieren.
-7. Typisierte Widget-Parameter und Validierung implementieren.
-8. Basis-Widget-Kontext für Vue bereitstellen.
+5. #5 Widget Contract und Manifest definieren
+6. #6 Widget Registry und Parameter-Validierung implementieren
+7. #7 Vue Widget Host und Widget Context implementieren
 
 ## Phase 3 – Fenstersystem
 
-9. Window Shell implementieren.
-10. Window Manager für Instanzen, Fokus und Z-Reihenfolge implementieren.
-11. Verschieben und Resize implementieren.
-12. Minimieren/Wiederherstellen implementieren.
-13. Mehrere Instanzen und optionales Singleton-Verhalten unterstützen.
-14. Widget-/Window-Lifecycle definieren und testen.
+8. #8 Window Shell als generischen Widget-Rahmen implementieren
+9. #9 Window Manager für Instanzen, Fokus und Z-Reihenfolge implementieren
+10. #10 Fenster verschiebbar und skalierbar machen
+11. #11 Fensterzustände: Minimieren, Wiederherstellen und Instanzregeln
+12. #12 Widget- und Window-Lifecycle definieren und implementieren
 
 ## Phase 4 – Navigation und Commands
 
-15. Interne Navigation zum Öffnen parametrisierter Widgets implementieren.
-16. Command Registry und Parser implementieren.
-17. Command-Eingabe im Playground integrieren.
+13. #13 Interne Widget-Navigation implementieren
+14. #14 Command Registry und Parser implementieren
+15. #15 Command-Eingabe als Framework-Komponente integrieren
 
 ## Phase 5 – Workspace
 
-18. Workspace-State serialisierbar machen.
-19. Workspace lokal speichern und wiederherstellen.
-20. Gespeicherte Layouts/Workspaces vorbereiten.
+16. #16 Workspace-State serialisieren, speichern und wiederherstellen
 
-## Phase 6 – Datenebene
+## Phase 6 – Daten und Live-Updates
 
-21. Abstrakte Reactive Data API definieren.
-22. Cache und geteilte Subscriptions implementieren.
-23. Mock Data Provider für Playground und Tests implementieren.
-24. Live-Änderungen im Playground simulieren.
-25. Transport-Schnittstelle für externe Echtzeitverbindungen definieren.
-26. Referenz-WebSocket-Adapter implementieren, ohne ein konkretes Spielprotokoll vorzuschreiben.
+17. #17 Abstrakte Reactive Data API für Widgets definieren
+18. #18 Data Cache und geteilte Subscriptions implementieren
+19. #19 Mock Data Provider mit simulierten Live-Updates implementieren
+20. #20 Austauschbare Echtzeit-Transport-Schnittstelle definieren
+
+Der Playground bleibt dabei serverlos. Ein konkretes Serverprotokoll ist nicht Teil von WidgetForge.
 
 ## Phase 7 – Simulations-UI-Primitives
 
-Erst nach stabilem Kern:
-
-27. Key/Value- und Statistikdarstellungen.
-28. Einfache Tabelle.
-29. Komplexe Datentabelle mit Sortierung/Filterung.
-30. Standardisierte Loading-/Empty-/Error-States.
-31. Verschachtelbares Tooltip-/Glossarsystem.
-32. Notification-System.
-33. Context-Menu- und Confirmation-Primitives.
+21. #21 Verschachtelbares Tooltip- und Glossarsystem implementieren
+22. #22 Key/Value- und Statistik-Primitives implementieren
+23. #23 Einfache Tabellen-Komponente implementieren
+24. #24 Komplexe DataTable für große Simulationsdaten implementieren
+25. #25 Standardisierte Loading-, Empty- und Error-States implementieren
+26. #26 Notification-System implementieren
+27. #27 Context-Menu- und Confirmation-Primitives implementieren
 
 ## Phase 8 – Distribution
 
-34. Öffentliche API konsolidieren.
-35. Paket-Build und Exports prüfen.
-36. Dokumentation und Integrationsbeispiel für ein externes Vue-Projekt erstellen.
-37. npm-Publishing vorbereiten.
+28. #28 Öffentliche API konsolidieren und npm-Paket vorbereiten
 
-Die GitHub Issues sind die operative Planung. Diese Roadmap beschreibt nur Reihenfolge und Abhängigkeiten auf hoher Ebene.
+## Arbeitsregel
+
+Grundsätzlich wird ein Issue abgeschlossen, getestet und – sofern visuell relevant – im GitHub-Pages-Playground demonstriert, bevor der nächste darauf aufbauende Schritt begonnen wird. Die verbindlichen Qualitäts- und Architekturregeln stehen in `AGENTS.md` und `docs/DEVELOPMENT_WORKFLOW.md`.
