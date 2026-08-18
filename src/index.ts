@@ -38,6 +38,13 @@ export type {
   DataStateRef,
   DataUnsubscribe,
 } from './data/data-client'
+export {
+  createMockDataProvider,
+  DuplicateMockDataResourceError,
+  MockDataProvider,
+  UnknownMockDataResourceError,
+} from './data/mock-data-provider'
+export type { MockDataResourceDefinition } from './data/mock-data-provider'
 export { defineWidget, WidgetDefinitionError } from './core/widget'
 export type {
   InferWidgetParameters,

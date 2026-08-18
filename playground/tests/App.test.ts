@@ -1,17 +1,35 @@
 import { mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../src/App.vue'
 
 describe('Playground App', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    vi.useFakeTimers()
   })
 
-  it('demonstrates window state, internal navigation and command execution', async () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('demonstrates window state, commands and synchronized serverless live data', async () => {
     const wrapper = mount(App)
     const select = wrapper.get('select')
 
-    expect(wrapper.findAll('.wf-window-shell')).toHaveLength(3)
+    expect(wrapper.findAll('.wf-window-shell')).toHaveLength(6)
+    const powerWidgets = wrapper.findAll('[data-resource-id="grid-power"]')
+    expect(powerWidgets).toHaveLength(2)
+    expect(powerWidgets.map((widget) => widget.text())).toEqual([
+      expect.stringContaining('118.0 MW'),
+      expect.stringContaining('118.0 MW'),
+    ])
+
+    vi.advanceTimersByTime(1_200)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('[data-resource-id="grid-power"]').map((widget) => widget.text())).toEqual([
+      expect.stringContaining('118.5 MW'),
+      expect.stringContaining('118.5 MW'),
+    ])
 
     await wrapper.get('[data-window-instance-id="planet-alpha"] .wf-window-shell__minimize').trigger('click')
     expect(wrapper.get('.wf-window-frame[data-window-instance-id="planet-alpha"]').attributes('data-window-mode')).toBe('minimized')
@@ -43,6 +61,7 @@ describe('Playground App', () => {
 
     await select.setValue('forge-dark')
     expect(wrapper.get('.wf-theme').attributes('style')).toContain('--wf-color-canvas: #070b12')
+    wrapper.unmount()
   })
 
   it('restores the saved window workspace after remounting the playground', async () => {
@@ -53,9 +72,11 @@ describe('Playground App', () => {
 
     const second = mount(App)
 
-    expect(second.findAll('.wf-window-frame')).toHaveLength(2)
+    expect(second.findAll('.wf-window-frame')).toHaveLength(5)
     expect(second.get('.wf-window-frame[data-window-instance-id="planet-alpha"]').attributes('data-window-mode')).toBe('minimized')
     expect(second.find('.wf-window-frame[data-window-instance-id="market-metals"]').exists()).toBe(false)
     expect(second.text()).toContain('ARC-02')
+    expect(second.findAll('[data-resource-id="grid-power"]')).toHaveLength(2)
+    second.unmount()
   })
 })
