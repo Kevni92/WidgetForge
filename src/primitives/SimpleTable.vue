@@ -13,7 +13,7 @@ const props = withDefaults(defineProps<{
 })
 
 function rawValue(column: SimpleTableColumn<TRow>, row: TRow): unknown {
-  return 'value' in column && column.value ? column.value(row) : row[column.field]
+  return 'field' in column ? row[column.field] : column.value(row)
 }
 
 function displayValue(column: SimpleTableColumn<TRow>, row: TRow): string | number {
