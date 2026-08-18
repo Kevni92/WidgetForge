@@ -20,7 +20,6 @@ interface WindowShellProps {
 
 const props = withDefaults(defineProps<WindowShellProps>(), {
   parameters: () => ({}),
-  title: undefined,
   focused: false,
   closable: true,
 })
