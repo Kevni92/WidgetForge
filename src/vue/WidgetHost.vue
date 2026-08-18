@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<WidgetHostProps>(), {
 const generatedInstanceId = createGeneratedInstanceId()
 const instanceId = props.instanceId ?? generatedInstanceId
 const externalLifecycle = props.lifecycle ? markRaw(toRaw(props.lifecycle)) : null
-const lifecycle = externalLifecycle ?? markRaw(createWidgetLifecycle(instanceId))
+const lifecycleController = externalLifecycle ?? markRaw(createWidgetLifecycle(instanceId))
 
 const resolution = computed<{ resolved: ResolvedWidget | null; error: string | null }>(() => {
   try {
@@ -54,26 +54,26 @@ const context: WidgetContext = {
   instanceId,
   widgetId,
   parameters: contextParameters,
-  lifecycle,
+  lifecycle: lifecycleController,
 }
 
 provide(widgetContextKey, context)
 
 onMounted(() => {
-  if (!externalLifecycle) lifecycle.activate()
-  lifecycle.mount()
+  if (!externalLifecycle) lifecycleController.activate()
+  lifecycleController.mount()
 })
 
 onBeforeUnmount(() => {
-  lifecycle.unmount()
+  lifecycleController.unmount()
 
   if (externalLifecycle) {
-    if (lifecycle.state === 'closed') lifecycle.destroy()
+    if (lifecycleController.state === 'closed') lifecycleController.destroy()
     return
   }
 
-  lifecycle.close()
-  lifecycle.destroy()
+  lifecycleController.close()
+  lifecycleController.destroy()
 })
 </script>
 
