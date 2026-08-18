@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, markRaw, provide, toRaw } from 'vue'
+import { computed, markRaw, onBeforeUnmount, onMounted, provide, toRaw } from 'vue'
 import type { WidgetId } from '../core/widget'
+import { createWidgetLifecycle, type WidgetLifecycleController } from '../core/widget-lifecycle'
 import type { ResolvedWidget, WidgetRegistry } from '../core/widget-registry'
 import { widgetContextKey, type WidgetContext } from './widget-context'
 
@@ -9,6 +10,7 @@ interface WidgetHostProps {
   widgetId: WidgetId
   parameters?: Readonly<Record<string, unknown>>
   instanceId?: string
+  lifecycle?: WidgetLifecycleController
 }
 
 let nextGeneratedInstanceId = 0
@@ -24,6 +26,8 @@ const props = withDefaults(defineProps<WidgetHostProps>(), {
 
 const generatedInstanceId = createGeneratedInstanceId()
 const instanceId = props.instanceId ?? generatedInstanceId
+const externalLifecycle = props.lifecycle ? markRaw(toRaw(props.lifecycle)) : null
+const lifecycle = externalLifecycle ?? markRaw(createWidgetLifecycle(instanceId))
 
 const resolution = computed<{ resolved: ResolvedWidget | null; error: string | null }>(() => {
   try {
@@ -50,9 +54,27 @@ const context: WidgetContext = {
   instanceId,
   widgetId,
   parameters: contextParameters,
+  lifecycle,
 }
 
 provide(widgetContextKey, context)
+
+onMounted(() => {
+  if (!externalLifecycle) lifecycle.activate()
+  lifecycle.mount()
+})
+
+onBeforeUnmount(() => {
+  lifecycle.unmount()
+
+  if (externalLifecycle) {
+    if (lifecycle.state === 'closed') lifecycle.destroy()
+    return
+  }
+
+  lifecycle.close()
+  lifecycle.destroy()
+})
 </script>
 
 <template>

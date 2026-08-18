@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, toRaw } from 'vue'
+import type { WidgetLifecycleController } from '../core/widget-lifecycle'
 import type { WidgetRegistry } from '../core/widget-registry'
 import {
   moveWindow,
@@ -16,6 +17,7 @@ interface WindowFrameProps {
   manager: WindowManager
   registry: WidgetRegistry
   containerSize: WindowSize
+  lifecycle: WidgetLifecycleController
 }
 
 interface InteractionSession {
@@ -196,6 +198,7 @@ onBeforeUnmount(finishInteraction)
       :title="window.title"
       :focused="window.focused"
       :minimized="window.mode === 'minimized'"
+      :lifecycle="lifecycle"
       @focus="focusWindow"
       @close="closeWindow"
       @minimize="minimizeWindow"

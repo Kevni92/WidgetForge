@@ -52,6 +52,7 @@ onBeforeUnmount(() => {
       :manager="manager"
       :registry="registry"
       :container-size="containerSize"
+      :lifecycle="manager.getLifecycle(window.instanceId)"
     />
   </div>
 </template>
