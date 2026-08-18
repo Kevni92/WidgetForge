@@ -84,7 +84,7 @@ function showKeyboardMenu(): void {
     <p class="interaction-showcase__description">
       Top- und Bottom-Dock verwenden dieselben verschachtelbaren Panes wie Windows. Die Dock-Größe reduziert die verbleibende Floating-Fläche.
     </p>
-    <WorkspaceDockShowcase />
+    <WorkspaceDockShowcase :navigator="props.navigator" />
   </section>
 </template>
 
