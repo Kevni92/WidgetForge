@@ -3,14 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../src/App.vue'
 
 describe('Playground App', () => {
-  beforeEach(() => {
-    window.localStorage.clear()
-    vi.useFakeTimers()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+  beforeEach(() => { window.localStorage.clear(); vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
 
   it('demonstrates panes, window state, commands and synchronized serverless live data', async () => {
     const wrapper = mount(App)
@@ -20,22 +14,20 @@ describe('Playground App', () => {
     expect(wrapper.findAll('.pane-playground-area [data-widget-instance-id]')).toHaveLength(3)
     expect(wrapper.text()).toContain('PANE-01')
     expect(wrapper.text()).toContain('ENERGY')
+    expect(wrapper.findAll('[data-workspace-dock-showcase] .wf-window-frame')).toHaveLength(2)
+    expect(wrapper.text()).toContain('Hold Ctrl and drag a pane')
 
-    expect(wrapper.findAll('.wf-window-shell')).toHaveLength(6)
+    expect(wrapper.findAll('.window-playground-area .wf-window-shell')).toHaveLength(6)
     const powerWidgets = wrapper.findAll('[data-resource-id="grid-power"]')
     expect(powerWidgets).toHaveLength(3)
     expect(powerWidgets.map((widget) => widget.text())).toEqual([
-      expect.stringContaining('118.0 MW'),
-      expect.stringContaining('118.0 MW'),
-      expect.stringContaining('118.0 MW'),
+      expect.stringContaining('118.0 MW'), expect.stringContaining('118.0 MW'), expect.stringContaining('118.0 MW'),
     ])
 
     vi.advanceTimersByTime(1_200)
     await wrapper.vm.$nextTick()
     expect(wrapper.findAll('[data-resource-id="grid-power"]').map((widget) => widget.text())).toEqual([
-      expect.stringContaining('118.5 MW'),
-      expect.stringContaining('118.5 MW'),
-      expect.stringContaining('118.5 MW'),
+      expect.stringContaining('118.5 MW'), expect.stringContaining('118.5 MW'), expect.stringContaining('118.5 MW'),
     ])
 
     await wrapper.get('[data-window-instance-id="planet-alpha"] .wf-window-shell__minimize').trigger('click')
@@ -46,7 +38,7 @@ describe('Playground App', () => {
     expect(wrapper.find('.wf-window-frame[data-window-instance-id="market-metals"]').exists()).toBe(false)
 
     await wrapper.get('[data-window-instance-id="planet-alpha"] [data-navigation="market"]').trigger('click')
-    const marketWindows = wrapper.findAll('.wf-window-frame').filter((frame) => frame.text().includes('Market Ticker'))
+    const marketWindows = wrapper.findAll('.window-playground-area .wf-window-frame').filter((frame) => frame.text().includes('Market Ticker'))
     expect(marketWindows).toHaveLength(1)
     expect(wrapper.text()).toContain('METALS')
 
@@ -56,13 +48,13 @@ describe('Playground App', () => {
     expect(wrapper.text()).toContain('ARC-CMD')
     expect(wrapper.get('.wf-command-input__feedback').text()).toContain('Opened planet.summary')
 
-    const currentMarket = wrapper.findAll('.wf-window-frame').find((frame) => frame.text().includes('Market Ticker'))
+    const currentMarket = wrapper.findAll('.window-playground-area .wf-window-frame').find((frame) => frame.text().includes('Market Ticker'))
     expect(currentMarket).toBeDefined()
     await currentMarket?.get('.wf-window-shell__close').trigger('click')
 
     await commandInput.setValue('mkt 8')
     await wrapper.get('.wf-command-input').trigger('submit')
-    const commandMarkets = wrapper.findAll('.wf-window-frame').filter((frame) => frame.text().includes('Market Ticker'))
+    const commandMarkets = wrapper.findAll('.window-playground-area .wf-window-frame').filter((frame) => frame.text().includes('Market Ticker'))
     expect(commandMarkets).toHaveLength(1)
     expect(wrapper.text()).toContain('METALS')
 
@@ -78,8 +70,7 @@ describe('Playground App', () => {
     first.unmount()
 
     const second = mount(App)
-
-    expect(second.findAll('.wf-window-frame')).toHaveLength(5)
+    expect(second.findAll('.window-playground-area .wf-window-frame')).toHaveLength(5)
     expect(second.get('.wf-window-frame[data-window-instance-id="planet-alpha"]').attributes('data-window-mode')).toBe('minimized')
     expect(second.find('.wf-window-frame[data-window-instance-id="market-metals"]').exists()).toBe(false)
     expect(second.text()).toContain('ARC-02')
