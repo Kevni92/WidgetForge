@@ -1,16 +1,48 @@
 # WidgetForge
 
-WidgetForge ist ein wiederverwendbares Vue-3-/TypeScript-UI-Framework für komplexe Browser- und Simulationsspiele.
+WidgetForge ist ein wiederverwendbares Vue-3-/TypeScript-UI-Framework für fensterbasierte Widget-Oberflächen in Browser- und Simulationsspielen.
 
-Der Kern ist ein fensterbasiertes Widget-System: Spiele registrieren fachliche Widgets, WidgetForge übernimmt deren Darstellung, Instanziierung, Fensterverwaltung und gemeinsame UI-Infrastruktur.
+Spiele registrieren ihre fachlichen Vue-Widgets. WidgetForge übernimmt Registry, Fensterinstanzen, Navigation, Workspace-State, Data-Abstraktion, Themes und generische Simulations-UI-Primitives.
 
-## Status
+## Getting Started
 
-WidgetForge befindet sich im frühen Aufbau. Die Umsetzung erfolgt inkrementell über GitHub Issues; öffentliche APIs werden nur eingeführt, wenn das jeweilige Issue sie benötigt.
+Voraussetzung ist Vue 3.5+ und Node.js `^20.19.0 || ^22.13.0 || >=24.0.0`.
+
+Nach Veröffentlichung des npm-Pakets:
+
+```bash
+npm install widgetforge vue
+```
+
+Framework-Styles einmal im App-Entry importieren:
+
+```ts
+import 'widgetforge/style.css'
+```
+
+Die Runtime-API kommt ausschließlich aus dem Package-Root:
+
+```ts
+import {
+  WindowManagerHost,
+  createWidgetRegistry,
+  createWindowManager,
+  defineWidget,
+} from 'widgetforge'
+```
+
+Ein Consumer definiert sein eigenes Vue-Widget mit `defineWidget`, registriert es über `createWidgetRegistry`, erzeugt einen `createWindowManager` und öffnet es anhand seiner Widget-ID. Ein vollständiges, gegen das gepackte npm-Artefakt validiertes Beispiel liegt unter `examples/minimal-consumer`.
+
+## Package Contract
+
+- ESM-only
+- Vue ist Peer Dependency und wird nicht gebündelt
+- JavaScript/TypeScript API: `widgetforge`
+- Styles: `widgetforge/style.css`
+- keine öffentlichen internen Source-Subpaths
+- TypeScript-Declarations werden mit dem Package ausgeliefert
 
 ## Entwicklung
-
-Voraussetzung ist Node.js `^20.19.0 || ^22.13.0 || >=24.0.0`.
 
 ```bash
 npm install
@@ -18,38 +50,28 @@ npm run lint
 npm run test
 npm run typecheck
 npm run build
+npm run pack:check
 ```
 
-Der Build erzeugt das veröffentlichbare Library-Artefakt unter `dist/`. Vue bleibt Peer Dependency und wird nicht in WidgetForge eingebündelt.
-
-## Playground
-
-Der Playground ist ein eigenständiger Consumer der öffentlichen WidgetForge-Package-API.
+Der Playground ist ein eigenständiger Consumer der öffentlichen API:
 
 ```bash
-npm install
-npm run build
 npm install --prefix playground
-npm run dev --prefix playground
-```
-
-Tests und Production-Build des Playgrounds:
-
-```bash
 npm run test --prefix playground
 npm run build --prefix playground
 ```
 
-Nach erfolgreichem Deployment ist der Playground unter `https://kevni92.github.io/WidgetForge/` erreichbar.
+Nach erfolgreichem Deployment ist er unter `https://kevni92.github.io/WidgetForge/` erreichbar.
 
 ## Struktur
 
-- `src/index.ts` – einziger öffentlicher Package-Entry-Point
-- `src/core/` – frameworknahe, möglichst UI-unabhängige Kernlogik
-- `src/vue/` – Vue-spezifische Integration und Komponenten
+- `src/index.ts` – einziger JavaScript-/TypeScript-Package-Entry-Point
+- `src/core/` – UI-unabhängige Kernlogik
+- `src/vue/` – Vue-Integration und Hosts
 - `src/data/` – transportunabhängige reaktive Datenebene
 - `src/primitives/` – generische UI-Primitives
-- `docs/` – Konzept, Architektur, Roadmap und Workflow
-- `playground/` – eigenständige Demo-/Referenzanwendung und GitHub-Pages-Ausgabe
+- `playground/` – Referenz-/Demo-Anwendung
+- `examples/minimal-consumer/` – npm-Tarball-Consumer für Package-Validierung
+- `docs/` – Konzept, Architektur und Distribution
 
-Siehe `docs/CONCEPT.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md` und `AGENTS.md`.
+Siehe insbesondere `docs/CONCEPT.md`, `docs/ARCHITECTURE.md`, `docs/DISTRIBUTION.md` und `AGENTS.md`.

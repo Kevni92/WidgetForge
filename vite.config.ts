@@ -8,6 +8,7 @@ export default defineConfig({
       entry: 'src/index.ts',
       formats: ['es'],
       fileName: () => 'index.js',
+      cssFileName: 'widgetforge',
     },
     rolldownOptions: {
       external: ['vue'],

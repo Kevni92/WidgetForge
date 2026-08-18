@@ -1,7 +1,6 @@
 {
   "name": "widgetforge",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Reusable Vue 3 UI framework for window-based widget interfaces in browser and simulation games.",
   "type": "module",
   "files": [
@@ -14,14 +13,38 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./style.css": "./dist/widgetforge.css"
+  },
+  "sideEffects": [
+    "./dist/widgetforge.css"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kevni92/WidgetForge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Kevni92/WidgetForge/issues"
+  },
+  "homepage": "https://kevni92.github.io/WidgetForge/",
+  "keywords": [
+    "vue",
+    "typescript",
+    "ui-framework",
+    "simulation",
+    "widgets",
+    "window-manager"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "vite build && vue-tsc -p tsconfig.build.json --declaration --emitDeclarationOnly --outDir dist",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "pack:check": "npm pack --dry-run"
   },
   "peerDependencies": {
     "vue": "^3.5.0"

@@ -34,6 +34,26 @@ jobs:
       - name: Build library
         run: npm run build
 
+      - name: Check npm package contents
+        run: npm run pack:check
+
+      - name: Pack npm package
+        run: |
+          mkdir -p .package-test
+          npm pack --pack-destination .package-test
+
+      - name: Install minimal consumer dependencies
+        run: npm install --prefix examples/minimal-consumer --no-audit --no-fund
+
+      - name: Install packed WidgetForge in minimal consumer
+        run: npm install --prefix examples/minimal-consumer --no-audit --no-fund --no-save "$GITHUB_WORKSPACE/.package-test/widgetforge-0.1.0.tgz"
+
+      - name: Typecheck minimal consumer
+        run: npm run typecheck --prefix examples/minimal-consumer
+
+      - name: Build minimal consumer
+        run: npm run build --prefix examples/minimal-consumer
+
       - name: Install playground dependencies
         run: npm install --prefix playground --no-audit --no-fund
 
