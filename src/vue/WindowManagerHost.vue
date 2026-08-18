@@ -5,19 +5,15 @@ import type { WidgetRegistry } from '../core/widget-registry'
 import type { WindowGeometry, WindowPosition, WindowSize } from '../core/window-geometry'
 import type { WindowManager, WindowState } from '../core/window-manager'
 import { detectWindowSnapZone, snapWindowGeometry, type WindowSnapZone } from '../core/window-snap'
-import {
-  detectWorkspaceDropZone,
-  dockWindowIntoWindow,
-  workspaceDropPreviewRect,
-  type WorkspaceDropRect,
-} from '../core/workspace-docking'
+import { detectWorkspaceDropZone, dockWindowIntoWindow, type WorkspaceDropRect } from '../core/workspace-docking'
+import DockingOverlay from './DockingOverlay.vue'
 import { observeElementSize } from './observe-element-size'
 import { provideWidgetNavigation } from './widget-navigation'
 import WindowFrame, { type WindowDropTarget } from './WindowFrame.vue'
 
 interface WindowManagerHostProps { manager: WindowManager; registry: WidgetRegistry }
 interface SnapPreviewState { readonly instanceId: string; readonly zone: WindowSnapZone; readonly geometry: WindowGeometry }
-interface WindowDockPreviewState { readonly sourceInstanceId: string; readonly target: WindowDropTarget; readonly rect: WorkspaceDropRect }
+interface WindowDockPreviewState { readonly sourceInstanceId: string; readonly target: WindowDropTarget; readonly targetRect: WorkspaceDropRect }
 
 const props = defineProps<WindowManagerHostProps>()
 const manager = toRaw(props.manager)
@@ -96,8 +92,7 @@ function resolveWindowDrop(sourceInstanceId: string, clientX: number, clientY: n
   if (!paneElement || !targetInstanceId || !targetPaneId) return null
   const rect = paneElement.getBoundingClientRect()
   const zone = detectWorkspaceDropZone({ x: clientX, y: clientY }, { x: rect.left, y: rect.top, width: rect.width, height: rect.height })
-  if (!zone || (zone === 'center' && paneElement.dataset.paneKind === 'split')) return null
-  return { targetInstanceId, targetPaneId, zone }
+  return zone ? { targetInstanceId, targetPaneId, zone } : null
 }
 function previewWindowDrop(sourceInstanceId: string, target: WindowDropTarget | null): void {
   if (!target) { if (windowDockPreview.value?.sourceInstanceId === sourceInstanceId) windowDockPreview.value = null; return }
@@ -106,15 +101,18 @@ function previewWindowDrop(sourceInstanceId: string, target: WindowDropTarget | 
   const paneElement = targetWindow ? findPaneElement(targetWindow, target.targetPaneId) : null
   if (!host || !paneElement) return
   const hostRect = host.getBoundingClientRect(); const paneRect = paneElement.getBoundingClientRect()
-  const preview = workspaceDropPreviewRect(target.zone, { x: paneRect.left, y: paneRect.top, width: paneRect.width, height: paneRect.height })
-  windowDockPreview.value = { sourceInstanceId, target, rect: { x: preview.x - hostRect.left, y: preview.y - hostRect.top, width: preview.width, height: preview.height } }
+  windowDockPreview.value = {
+    sourceInstanceId,
+    target,
+    targetRect: { x: paneRect.left - hostRect.left, y: paneRect.top - hostRect.top, width: paneRect.width, height: paneRect.height },
+  }
 }
 function commitWindowDrop(sourceInstanceId: string, target: WindowDropTarget): void {
   windowDockPreview.value = null; windowDockSequence += 1
   dockWindowIntoWindow(manager, sourceInstanceId, target.targetInstanceId, target.targetPaneId, target.zone, `window-dock-${windowDockSequence}`)
 }
 function geometryStyle(geometry: WindowGeometry): Record<string, string> { return { left: `${geometry.position.x}px`, top: `${geometry.position.y}px`, width: `${geometry.size.width}px`, height: `${geometry.size.height}px` } }
-function rectStyle(rect: WorkspaceDropRect): Record<string, string> { return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` } }
+function onKeyDown(event: KeyboardEvent): void { if (event.key === 'Escape') windowDockPreview.value = null }
 
 onMounted(() => {
   if (!hostElement.value) return
@@ -123,20 +121,23 @@ onMounted(() => {
     if (snapPreview.value) snapPreview.value = { ...snapPreview.value, geometry: snapWindowGeometry(snapPreview.value.zone, size) }
     for (const window of manager.list()) manager.constrainToContainer(window.instanceId, size)
   })
+  globalThis.window.addEventListener('keydown', onKeyDown)
 })
-onBeforeUnmount(() => { snapPreview.value = null; windowDockPreview.value = null; disposeSizeObserver?.(); disposeSizeObserver = null; unsubscribe() })
+onBeforeUnmount(() => {
+  snapPreview.value = null; windowDockPreview.value = null; disposeSizeObserver?.(); disposeSizeObserver = null; unsubscribe()
+  globalThis.window.removeEventListener('keydown', onKeyDown)
+})
 </script>
 
 <template>
   <div ref="hostElement" class="wf-window-manager-host">
     <div v-if="snapPreview" class="wf-window-snap-preview" :data-window-snap-preview="snapPreview.instanceId" :data-window-snap-zone="snapPreview.zone" :style="geometryStyle(snapPreview.geometry)" aria-hidden="true" />
-    <div v-if="windowDockPreview" class="wf-window-dock-preview" :data-window-dock-preview="windowDockPreview.sourceInstanceId" :data-window-dock-target="windowDockPreview.target.targetInstanceId" :data-window-dock-zone="windowDockPreview.target.zone" :style="rectStyle(windowDockPreview.rect)" aria-hidden="true" />
+    <DockingOverlay v-if="windowDockPreview" :target-rect="windowDockPreview.targetRect" :active-zone="windowDockPreview.target.zone" :source-id="windowDockPreview.sourceInstanceId" :target-id="windowDockPreview.target.targetInstanceId" />
     <WindowFrame v-for="window in windows" :key="window.instanceId" :window="window" :manager="manager" :registry="registry" :container-size="containerSize" :lifecycle="manager.getLifecycle(window.instanceId)" :resolve-snap-zone="resolveSnapZone" :preview-snap="previewSnap" :commit-snap="commitSnap" :unsnap-for-pointer="unsnapForPointer" :resolve-window-drop="resolveWindowDrop" :preview-window-drop="previewWindowDrop" :commit-window-drop="commitWindowDrop" />
   </div>
 </template>
 
 <style scoped>
 .wf-window-manager-host{position:relative;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden}
-.wf-window-snap-preview,.wf-window-dock-preview{position:absolute;z-index:var(--wf-layer-overlay);pointer-events:none;border:1px solid var(--wf-color-focus);border-radius:var(--wf-radius-sm);background:var(--wf-color-selected);box-shadow:inset 0 0 0 1px var(--wf-color-border)}
-.wf-window-dock-preview{outline:1px dashed var(--wf-color-accent);outline-offset:-3px}
+.wf-window-snap-preview{position:absolute;z-index:var(--wf-layer-overlay);pointer-events:none;border:1px solid var(--wf-color-focus);border-radius:var(--wf-radius-sm);background:var(--wf-color-selected);box-shadow:inset 0 0 0 1px var(--wf-color-border)}
 </style>
