@@ -78,7 +78,9 @@ function startResize(event: PointerEvent, split: SplitPane, dividerIndex: number
   const rect = host.getBoundingClientRect()
   const availablePx = split.axis === 'horizontal' ? rect.width : rect.height
   const startSplit = split
-  if (pointerId !== undefined && typeof target.setPointerCapture === 'function') { try { target.setPointerCapture(pointerId) } catch {} }
+  if (pointerId !== undefined && typeof target.setPointerCapture === 'function') {
+    try { target.setPointerCapture(pointerId) } catch { /* Global listeners keep the resize session functional. */ }
+  }
   const matches = (next: PointerEvent): boolean => pointerId === undefined || typeof next.pointerId !== 'number' || next.pointerId === pointerId
   const move = (next: PointerEvent): void => {
     if (!matches(next)) return
@@ -87,7 +89,9 @@ function startResize(event: PointerEvent, split: SplitPane, dividerIndex: number
   }
   const cleanup = (): void => {
     globalThis.window.removeEventListener('pointermove', move); globalThis.window.removeEventListener('pointerup', end); globalThis.window.removeEventListener('pointercancel', end)
-    if (pointerId !== undefined && typeof target.releasePointerCapture === 'function') { try { target.releasePointerCapture(pointerId) } catch {} }
+    if (pointerId !== undefined && typeof target.releasePointerCapture === 'function') {
+      try { target.releasePointerCapture(pointerId) } catch { /* Capture may already have been released by the browser. */ }
+    }
     if (disposeResize === cleanup) disposeResize = null
   }
   const end = (next: PointerEvent): void => { if (matches(next)) cleanup() }
