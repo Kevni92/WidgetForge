@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, toRaw } from 'vue'
+import { markRaw, onBeforeUnmount, ref, toRaw } from 'vue'
 import type { WidgetRegistry } from '../core/widget-registry'
 import {
   moveWindow,
@@ -29,6 +29,7 @@ interface InteractionSession {
 
 const props = defineProps<WindowFrameProps>()
 const manager = toRaw(props.manager)
+const lifecycle = markRaw(manager.getLifecycle(props.window.instanceId))
 const interactionKind = ref<'move' | 'resize' | null>(null)
 let disposeInteraction: (() => void) | null = null
 
@@ -196,6 +197,7 @@ onBeforeUnmount(finishInteraction)
       :title="window.title"
       :focused="window.focused"
       :minimized="window.mode === 'minimized'"
+      :lifecycle="lifecycle"
       @focus="focusWindow"
       @close="closeWindow"
       @minimize="minimizeWindow"
