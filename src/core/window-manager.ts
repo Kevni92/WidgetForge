@@ -371,11 +371,11 @@ export class WindowManager {
       pane: PaneNode
       instanceId: WindowInstanceId
       title: string
-      position?: WindowPosition
-      size?: WindowSize
-      minSize?: WindowSize
-      maxSize?: WindowSize
-      defaultSize?: WindowSize
+      position?: WindowPosition | undefined
+      size?: WindowSize | undefined
+      minSize?: WindowSize | undefined
+      maxSize?: WindowSize | undefined
+      defaultSize?: WindowSize | undefined
     },
     origin: WindowOperationOrigin,
   ): WindowState {
