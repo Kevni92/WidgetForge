@@ -61,6 +61,18 @@ export type {
   WidgetNavigator,
 } from './core/navigation'
 export {
+  CommandDefinitionError,
+  CommandParseError,
+  CommandRegistry,
+  createCommandRegistry,
+} from './core/commands'
+export type {
+  CommandArgumentDefinition,
+  CommandArgumentType,
+  CommandDefinition,
+  CommandParseErrorCode,
+} from './core/commands'
+export {
   createWindowManager,
   DuplicateWindowInstanceError,
   UnknownWindowInstanceError,
