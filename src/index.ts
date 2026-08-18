@@ -19,6 +19,18 @@ export type {
   WidgetWindowMetadata,
 } from './core/widget'
 export {
+  createWidgetLifecycle,
+  InvalidWidgetLifecycleTransitionError,
+  WidgetLifecycle,
+} from './core/widget-lifecycle'
+export type {
+  WidgetLifecycleCleanup,
+  WidgetLifecycleEvent,
+  WidgetLifecycleListener,
+  WidgetLifecycleState,
+  WidgetLifecycleTransition,
+} from './core/widget-lifecycle'
+export {
   createWidgetRegistry,
   DuplicateWidgetIdError,
   UnknownWidgetError,
