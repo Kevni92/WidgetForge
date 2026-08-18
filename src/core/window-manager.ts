@@ -1,3 +1,4 @@
+import { clonePaneTree, createWidgetPane, validatePaneTree, type PaneNode, type PaneParameters } from './pane'
 import type { WidgetId } from './widget'
 import { createWidgetLifecycle, type WidgetLifecycleController } from './widget-lifecycle'
 import type { WidgetRegistry } from './widget-registry'
@@ -16,13 +17,12 @@ import {
 export type WindowInstanceId = string
 export type WindowOperationOrigin = 'api' | 'user'
 export type WindowMode = 'normal' | 'minimized'
-export type WindowManagerChangeKind = 'open' | 'focus' | 'close' | 'geometry' | 'minimize' | 'restore'
+export type WindowManagerChangeKind = 'open' | 'focus' | 'close' | 'geometry' | 'pane' | 'minimize' | 'restore'
 
 export interface WindowState {
   readonly instanceId: WindowInstanceId
-  readonly widgetId: WidgetId
   readonly title: string
-  readonly parameters: Readonly<Record<string, unknown>>
+  readonly rootPane: PaneNode
   readonly focused: boolean
   readonly zIndex: number
   readonly mode: WindowMode
@@ -37,6 +37,16 @@ export interface OpenWindowRequest {
   title?: string
   position?: WindowPosition
   size?: WindowSize
+}
+
+export interface OpenPaneWindowRequest {
+  pane: PaneNode
+  instanceId?: WindowInstanceId
+  title?: string
+  position?: WindowPosition
+  size?: WindowSize
+  minSize?: WindowSize
+  maxSize?: WindowSize
 }
 
 export interface WindowManagerChange {
@@ -69,7 +79,7 @@ function cloneSize(size: WindowSize): WindowSize {
 function cloneWindow(window: WindowState): WindowState {
   return {
     ...window,
-    parameters: { ...window.parameters },
+    rootPane: clonePaneTree(window.rootPane),
     geometry: {
       position: { ...window.geometry.position },
       size: cloneSize(window.geometry.size),
@@ -87,6 +97,41 @@ function topNormalWindowId(windows: readonly WindowState[]): WindowInstanceId | 
     if (candidate?.mode === 'normal') return candidate.instanceId
   }
   return undefined
+}
+
+function paneParameters(parameters: Readonly<Record<string, unknown>>): PaneParameters {
+  const result: Record<string, string | number | boolean> = {}
+  for (const [key, value] of Object.entries(parameters)) {
+    if (typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) {
+      result[key] = value
+    }
+  }
+  return result
+}
+
+function normalizePane(registry: WidgetRegistry, pane: PaneNode): PaneNode {
+  validatePaneTree(pane)
+  if (pane.kind === 'widget') {
+    const resolved = registry.resolve(pane.widgetId, pane.parameters)
+    return {
+      ...clonePaneTree(pane),
+      parameters: paneParameters(resolved.parameters),
+    }
+  }
+
+  return {
+    ...clonePaneTree(pane),
+    children: pane.children.map((child) => normalizePane(registry, child)),
+  }
+}
+
+function defaultPaneTitle(registry: WidgetRegistry, pane: PaneNode): string {
+  if (pane.kind === 'widget') return registry.get(pane.widgetId).title
+  return 'Workspace'
+}
+
+function rootWidgetId(window: WindowState): WidgetId | undefined {
+  return window.rootPane.kind === 'widget' ? window.rootPane.widgetId : undefined
 }
 
 export class WindowManager {
@@ -118,7 +163,7 @@ export class WindowManager {
     const manifestWindow = resolved.manifest.window
 
     if (manifestWindow?.singleton) {
-      const existing = this.windows.find((window) => window.widgetId === request.widgetId)
+      const existing = this.windows.find((window) => rootWidgetId(window) === request.widgetId)
       if (existing) {
         return existing.mode === 'minimized'
           ? this.restore(existing.instanceId, origin)
@@ -127,42 +172,37 @@ export class WindowManager {
     }
 
     const instanceId = request.instanceId ?? this.createInstanceId()
-    if (this.windows.some((window) => window.instanceId === instanceId)) {
-      throw new DuplicateWindowInstanceError(instanceId)
-    }
-
-    const constraints: WindowSizeConstraints = {
-      minSize: cloneSize(manifestWindow?.minSize ?? DEFAULT_MIN_WINDOW_SIZE),
-      maxSize: manifestWindow?.maxSize ? cloneSize(manifestWindow.maxSize) : null,
-    }
-    const size = constrainSize(request.size ?? manifestWindow?.defaultSize ?? DEFAULT_WINDOW_SIZE, constraints)
-    const cascade = 24 + this.windows.length * 24
-    const position = request.position ?? { x: cascade, y: cascade }
-
-    const unfocused = this.windows.map((window) => ({ ...window, focused: false }))
-    const opened: WindowState = {
-      instanceId,
+    const pane = createWidgetPane({
+      id: `${instanceId}.root`,
       widgetId: request.widgetId,
-      title: request.title ?? resolved.manifest.title,
-      parameters: { ...resolved.parameters },
-      focused: true,
-      zIndex: unfocused.length,
-      mode: 'normal',
-      geometry: {
-        position: {
-          x: Number.isFinite(position.x) ? position.x : cascade,
-          y: Number.isFinite(position.y) ? position.y : cascade,
-        },
-        size,
-      },
-      constraints,
-    }
+      instanceId,
+      parameters: paneParameters(resolved.parameters),
+    })
 
-    this.createLifecycle(instanceId)
-    this.windows = [...unfocused, opened]
-    this.setActiveLifecycle(instanceId)
-    this.emit('open', origin, instanceId)
-    return cloneWindow(opened)
+    return this.openPaneState({
+      pane,
+      instanceId,
+      title: request.title ?? resolved.manifest.title,
+      position: request.position,
+      size: request.size,
+      minSize: manifestWindow?.minSize,
+      maxSize: manifestWindow?.maxSize,
+      defaultSize: manifestWindow?.defaultSize,
+    }, origin)
+  }
+
+  openPane(request: OpenPaneWindowRequest, origin: WindowOperationOrigin = 'api'): WindowState {
+    const instanceId = request.instanceId ?? this.createInstanceId()
+    const pane = normalizePane(this.registry, request.pane)
+    return this.openPaneState({
+      pane,
+      instanceId,
+      title: request.title ?? defaultPaneTitle(this.registry, pane),
+      position: request.position,
+      size: request.size,
+      minSize: request.minSize,
+      maxSize: request.maxSize,
+    }, origin)
   }
 
   focus(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'api'): WindowState {
@@ -264,6 +304,19 @@ export class WindowManager {
     if (!lifecycle.mounted) lifecycle.destroy()
   }
 
+  setRootPane(instanceId: WindowInstanceId, pane: PaneNode, origin: WindowOperationOrigin = 'api'): WindowState {
+    const index = this.windows.findIndex((window) => window.instanceId === instanceId)
+    if (index < 0) throw new UnknownWindowInstanceError(instanceId)
+    const current = this.windows[index]
+    if (!current) throw new UnknownWindowInstanceError(instanceId)
+
+    const normalized = normalizePane(this.registry, pane)
+    const updated: WindowState = { ...current, rootPane: normalized }
+    this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window)
+    this.emit('pane', origin, instanceId)
+    return cloneWindow(updated)
+  }
+
   setGeometry(
     instanceId: WindowInstanceId,
     geometry: WindowGeometry,
@@ -311,6 +364,55 @@ export class WindowManager {
 
   snapshot(): { windows: readonly WindowState[] } {
     return { windows: this.list() }
+  }
+
+  private openPaneState(
+    request: {
+      pane: PaneNode
+      instanceId: WindowInstanceId
+      title: string
+      position?: WindowPosition
+      size?: WindowSize
+      minSize?: WindowSize
+      maxSize?: WindowSize
+      defaultSize?: WindowSize
+    },
+    origin: WindowOperationOrigin,
+  ): WindowState {
+    if (this.windows.some((window) => window.instanceId === request.instanceId)) {
+      throw new DuplicateWindowInstanceError(request.instanceId)
+    }
+
+    const constraints: WindowSizeConstraints = {
+      minSize: cloneSize(request.minSize ?? DEFAULT_MIN_WINDOW_SIZE),
+      maxSize: request.maxSize ? cloneSize(request.maxSize) : null,
+    }
+    const size = constrainSize(request.size ?? request.defaultSize ?? DEFAULT_WINDOW_SIZE, constraints)
+    const cascade = 24 + this.windows.length * 24
+    const position = request.position ?? { x: cascade, y: cascade }
+    const unfocused = this.windows.map((window) => ({ ...window, focused: false }))
+    const opened: WindowState = {
+      instanceId: request.instanceId,
+      title: request.title,
+      rootPane: clonePaneTree(request.pane),
+      focused: true,
+      zIndex: unfocused.length,
+      mode: 'normal',
+      geometry: {
+        position: {
+          x: Number.isFinite(position.x) ? position.x : cascade,
+          y: Number.isFinite(position.y) ? position.y : cascade,
+        },
+        size,
+      },
+      constraints,
+    }
+
+    this.createLifecycle(request.instanceId)
+    this.windows = [...unfocused, opened]
+    this.setActiveLifecycle(request.instanceId)
+    this.emit('open', origin, request.instanceId)
+    return cloneWindow(opened)
   }
 
   private createInstanceId(): WindowInstanceId {
