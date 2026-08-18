@@ -39,7 +39,7 @@ describe('WorkspaceHost history integration', () => {
     history.dispose()
   })
 
-  it('supports Ctrl+Z and Ctrl+Y without intercepting editable controls', async () => {
+  it('supports Ctrl+Z and Ctrl+Y through bubbled workspace keyboard events', async () => {
     const registry = createWidgetRegistry([defineWidget({ id: 'history.widget', title: 'History', component: Widget })])
     const windows = createWindowManager(registry)
     const docks = createDockManager(registry)
@@ -47,11 +47,13 @@ describe('WorkspaceHost history integration', () => {
     const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, history }, attachTo: document.body })
     windows.open({ widgetId: 'history.widget', instanceId: 'window' })
     await nextTick()
+    expect(history.state.undoDepth).toBe(1)
 
-    globalThis.window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))
+    await wrapper.get('.wf-workspace-host').trigger('keydown', { key: 'z', ctrlKey: true })
     await nextTick()
     expect(windows.list()).toHaveLength(0)
-    globalThis.window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true }))
+    expect(history.state.canRedo).toBe(true)
+    await wrapper.get('.wf-workspace-host').trigger('keydown', { key: 'y', ctrlKey: true })
     await nextTick()
     expect(windows.list()).toHaveLength(1)
 
