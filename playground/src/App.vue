@@ -2,9 +2,13 @@
 import { computed, markRaw, ref } from 'vue'
 import {
   CommandInput,
+  DataClientProvider,
   ThemeProvider,
   WindowManagerHost,
   createCommandRegistry,
+  createDataClient,
+  createDataKey,
+  createMockDataProvider,
   createWidgetNavigator,
   createWindowManager,
   defaultTheme,
@@ -18,7 +22,13 @@ import { playgroundWidgetRegistry, playgroundWidgets } from './playground-widget
 
 type ThemeName = 'neutral' | 'forge-dark' | 'forge-light'
 
-const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.workspace.v1'
+interface DemoMetric {
+  label: string
+  value: number
+  unit: string
+}
+
+const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.workspace.v2'
 
 const themeName = ref<ThemeName>('neutral')
 const themes: Record<ThemeName, WidgetForgeTheme> = {
@@ -27,6 +37,23 @@ const themes: Record<ThemeName, WidgetForgeTheme> = {
   'forge-light': forgeLightTheme,
 }
 const activeTheme = computed(() => themes[themeName.value])
+
+const mockProvider = markRaw(createMockDataProvider())
+const gridPowerKey = createDataKey<DemoMetric>('demo.metric', 'grid-power')
+const warehouseKey = createDataKey<DemoMetric>('demo.metric', 'warehouse-stock')
+mockProvider.register({
+  key: gridPowerKey,
+  initial: { label: 'Grid Power', value: 118.0, unit: 'MW' },
+  intervalMs: 1_200,
+  update: (current) => ({ ...current, value: current.value + 0.5 }),
+})
+mockProvider.register({
+  key: warehouseKey,
+  initial: { label: 'Warehouse Stock', value: 640, unit: 't' },
+  intervalMs: 1_800,
+  update: (current, tick) => ({ ...current, value: current.value + (tick % 2 === 0 ? 4 : -2) }),
+})
+const dataClient = markRaw(createDataClient(mockProvider, { cacheTimeMs: 5_000 }))
 
 const windowManager = markRaw(createWindowManager(playgroundWidgetRegistry))
 const commandNavigator = markRaw(createWidgetNavigator(playgroundWidgetRegistry, windowManager))
@@ -84,6 +111,24 @@ function openDefaultWorkspace(): void {
     parameters: { commodity: 'METALS', rows: 6 },
     position: { x: 390, y: 70 },
   })
+  windowManager.open({
+    widgetId: 'demo.live-metric',
+    instanceId: 'metric-power-a',
+    parameters: { resourceId: 'grid-power' },
+    position: { x: 32, y: 420 },
+  })
+  windowManager.open({
+    widgetId: 'demo.live-metric',
+    instanceId: 'metric-power-b',
+    parameters: { resourceId: 'grid-power' },
+    position: { x: 310, y: 420 },
+  })
+  windowManager.open({
+    widgetId: 'demo.live-metric',
+    instanceId: 'metric-warehouse',
+    parameters: { resourceId: 'warehouse-stock' },
+    position: { x: 588, y: 420 },
+  })
 }
 
 const storedWorkspace = readStoredWorkspace()
@@ -106,58 +151,60 @@ function openMarket(): void {
 
 <template>
   <ThemeProvider :theme="activeTheme">
-    <main class="playground-shell">
-      <section class="playground-card">
-        <header class="playground-header">
-          <div>
-            <p class="eyebrow">WidgetForge</p>
-            <h1>Floating Window Playground</h1>
-          </div>
-          <label class="theme-picker">
-            Theme
-            <select v-model="themeName">
-              <option value="neutral">Neutral</option>
-              <option value="forge-dark">Forge Dark</option>
-              <option value="forge-light">Forge Light</option>
-            </select>
-          </label>
-        </header>
+    <DataClientProvider :client="dataClient">
+      <main class="playground-shell">
+        <section class="playground-card">
+          <header class="playground-header">
+            <div>
+              <p class="eyebrow">WidgetForge</p>
+              <h1>Floating Window Playground</h1>
+            </div>
+            <label class="theme-picker">
+              Theme
+              <select v-model="themeName">
+                <option value="neutral">Neutral</option>
+                <option value="forge-dark">Forge Dark</option>
+                <option value="forge-light">Forge Light</option>
+              </select>
+            </label>
+          </header>
 
-        <p class="intro">Fenster lassen sich verschieben und skalieren. Widgets können intern navigieren und registrierte Textbefehle öffnen dieselben Widgets über die normale Navigation. Das Workspace-Layout wird lokal im Browser gespeichert.</p>
+          <p class="intro">Fenster lassen sich verschieben und skalieren. Widgets können intern navigieren, Commands öffnen dieselben Widgets und die Live-Metric-Fenster erhalten serverlose Mock-Updates über exakt dieselbe Data API wie ein späterer externer Provider. Das Workspace-Layout wird lokal im Browser gespeichert.</p>
 
-        <section class="demo-section command-demo">
-          <h2>Commands</h2>
-          <CommandInput :commands="commands" :navigator="commandNavigator" placeholder="planet ARC-03" />
-          <p class="manifest-meta">Beispiele: <code>planet ARC-03</code>, <code>p "New Terra" true</code>, <code>market 8</code></p>
+          <section class="demo-section command-demo">
+            <h2>Commands</h2>
+            <CommandInput :commands="commands" :navigator="commandNavigator" placeholder="planet ARC-03" />
+            <p class="manifest-meta">Beispiele: <code>planet ARC-03</code>, <code>p "New Terra" true</code>, <code>market 8</code></p>
+          </section>
+
+          <section class="demo-section">
+            <h2>Window Manager</h2>
+            <div class="playground-actions">
+              <button type="button" data-action="open-planet" @click="openPlanet">Open Planet</button>
+              <button type="button" data-action="open-market" @click="openMarket">Open Market</button>
+            </div>
+            <div class="window-playground-area">
+              <WindowManagerHost :manager="windowManager" :registry="playgroundWidgetRegistry" />
+            </div>
+          </section>
+
+          <section class="demo-section">
+            <h2>Widget Manifests</h2>
+            <div class="manifest-grid">
+              <article v-for="widget in playgroundWidgets" :key="widget.id" class="manifest-card">
+                <strong>{{ widget.title }}</strong>
+                <code>{{ widget.id }}</code>
+                <span class="manifest-meta">
+                  Parameter: {{ Object.keys(widget.parameters ?? {}).join(', ') || 'keine' }}
+                </span>
+                <span v-if="widget.window?.defaultSize" class="manifest-meta">
+                  Default: {{ widget.window.defaultSize.width }} × {{ widget.window.defaultSize.height }}
+                </span>
+              </article>
+            </div>
+          </section>
         </section>
-
-        <section class="demo-section">
-          <h2>Window Manager</h2>
-          <div class="playground-actions">
-            <button type="button" data-action="open-planet" @click="openPlanet">Open Planet</button>
-            <button type="button" data-action="open-market" @click="openMarket">Open Market</button>
-          </div>
-          <div class="window-playground-area">
-            <WindowManagerHost :manager="windowManager" :registry="playgroundWidgetRegistry" />
-          </div>
-        </section>
-
-        <section class="demo-section">
-          <h2>Widget Manifests</h2>
-          <div class="manifest-grid">
-            <article v-for="widget in playgroundWidgets" :key="widget.id" class="manifest-card">
-              <strong>{{ widget.title }}</strong>
-              <code>{{ widget.id }}</code>
-              <span class="manifest-meta">
-                Parameter: {{ Object.keys(widget.parameters ?? {}).join(', ') || 'keine' }}
-              </span>
-              <span v-if="widget.window?.defaultSize" class="manifest-meta">
-                Default: {{ widget.window.defaultSize.width }} × {{ widget.window.defaultSize.height }}
-              </span>
-            </article>
-          </div>
-        </section>
-      </section>
-    </main>
+      </main>
+    </DataClientProvider>
   </ThemeProvider>
 </template>
