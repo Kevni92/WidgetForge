@@ -1,4 +1,5 @@
 import { createWidgetRegistry, defineWidget } from 'widgetforge'
+import LiveMetricWidget from './widgets/LiveMetricWidget.vue'
 import MarketTickerWidget from './widgets/MarketTickerWidget.vue'
 import PlanetSummaryWidget from './widgets/PlanetSummaryWidget.vue'
 
@@ -32,5 +33,19 @@ export const marketTickerWidget = defineWidget({
   },
 })
 
-export const playgroundWidgets = [planetSummaryWidget, marketTickerWidget]
+export const liveMetricWidget = defineWidget({
+  id: 'demo.live-metric',
+  title: 'Live Metric',
+  component: LiveMetricWidget,
+  parameters: {
+    resourceId: { type: 'string', required: true },
+  },
+  window: {
+    defaultSize: { width: 260, height: 170 },
+    minSize: { width: 220, height: 140 },
+    maxSize: { width: 460, height: 320 },
+  },
+})
+
+export const playgroundWidgets = [planetSummaryWidget, marketTickerWidget, liveMetricWidget]
 export const playgroundWidgetRegistry = createWidgetRegistry(playgroundWidgets)
