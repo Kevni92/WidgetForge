@@ -1,21 +1,25 @@
 <script setup lang="ts">
-import { computed, markRaw, ref } from 'vue'
+import { computed, markRaw, ref, shallowRef } from 'vue'
 import {
   CommandInput,
   DataClientProvider,
+  PaneHost,
   ThemeProvider,
   WindowManagerHost,
   createCommandRegistry,
   createDataClient,
   createDataKey,
   createMockDataProvider,
+  createSplitPane,
   createWidgetNavigator,
+  createWidgetPane,
   createWindowManager,
   defaultTheme,
   forgeDarkTheme,
   forgeLightTheme,
   restoreWorkspace,
   serializeWorkspace,
+  type PaneNode,
   type WidgetForgeTheme,
 } from 'widgetforge'
 import InteractionShowcase from './InteractionShowcase.vue'
@@ -57,6 +61,42 @@ mockProvider.register({
   update: (current, tick) => ({ ...current, value: current.value + (tick % 2 === 0 ? 4 : -2) }),
 })
 const dataClient = markRaw(createDataClient(mockProvider, { cacheTimeMs: 5_000 }))
+
+const paneDemo = shallowRef<PaneNode>(createSplitPane({
+  id: 'pane-demo-root',
+  axis: 'horizontal',
+  weights: [1.15, 1],
+  children: [
+    createWidgetPane({
+      id: 'pane-demo-planet',
+      widgetId: 'planet.summary',
+      instanceId: 'pane-demo-planet-widget',
+      parameters: { planetId: 'PANE-01', compact: true },
+      settings: { minSize: 220, background: 'surface' },
+    }),
+    createSplitPane({
+      id: 'pane-demo-right',
+      axis: 'vertical',
+      weights: [1, 0.8],
+      children: [
+        createWidgetPane({
+          id: 'pane-demo-market',
+          widgetId: 'market.ticker',
+          instanceId: 'pane-demo-market-widget',
+          parameters: { commodity: 'ENERGY', rows: 4 },
+          settings: { minSize: 150, background: 'surface-raised' },
+        }),
+        createWidgetPane({
+          id: 'pane-demo-metric',
+          widgetId: 'demo.live-metric',
+          instanceId: 'pane-demo-metric-widget',
+          parameters: { resourceId: 'grid-power' },
+          settings: { minSize: 120, background: 'canvas' },
+        }),
+      ],
+    }),
+  ],
+}))
 
 const windowManager = markRaw(createWindowManager(playgroundWidgetRegistry))
 const commandNavigator = markRaw(createWidgetNavigator(playgroundWidgetRegistry, windowManager))
@@ -182,6 +222,14 @@ function openMarket(): void {
             <h2>Commands</h2>
             <CommandInput :commands="commands" :navigator="commandNavigator" placeholder="planet ARC-03" />
             <p class="manifest-meta">Beispiele: <code>planet ARC-03</code>, <code>p "New Terra" true</code>, <code>market 8</code></p>
+          </section>
+
+          <section class="demo-section">
+            <h2>Pane Layout</h2>
+            <p class="manifest-meta">Ein rekursiver Pane-Baum enthält drei normale Widgets. Die Divider verändern ausschließlich die Split-Gewichte.</p>
+            <div class="pane-playground-area">
+              <PaneHost v-model:pane="paneDemo" :registry="playgroundWidgetRegistry" />
+            </div>
           </section>
 
           <section class="demo-section">
