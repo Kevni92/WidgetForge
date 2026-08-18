@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, markRaw, provide, toRaw } from 'vue'
+import { computed, markRaw, onBeforeUnmount, onMounted, provide, toRaw } from 'vue'
 import type { WidgetId } from '../core/widget'
+import { createWidgetLifecycle, type WidgetLifecycle } from '../core/widget-lifecycle'
 import type { ResolvedWidget, WidgetRegistry } from '../core/widget-registry'
 import { widgetContextKey, type WidgetContext } from './widget-context'
 
@@ -9,6 +10,7 @@ interface WidgetHostProps {
   widgetId: WidgetId
   parameters?: Readonly<Record<string, unknown>>
   instanceId?: string
+  lifecycle?: WidgetLifecycle
 }
 
 let nextGeneratedInstanceId = 0
@@ -24,6 +26,7 @@ const props = withDefaults(defineProps<WidgetHostProps>(), {
 
 const generatedInstanceId = createGeneratedInstanceId()
 const instanceId = props.instanceId ?? generatedInstanceId
+const lifecycle = props.lifecycle ? markRaw(toRaw(props.lifecycle)) : createWidgetLifecycle()
 
 const resolution = computed<{ resolved: ResolvedWidget | null; error: string | null }>(() => {
   try {
@@ -53,10 +56,25 @@ const context: WidgetContext = {
 }
 
 provide(widgetContextKey, context)
+
+onMounted(() => {
+  lifecycle.transitionIfPossible('mount')
+  lifecycle.transitionIfPossible('activate')
+})
+
+onBeforeUnmount(() => {
+  lifecycle.transitionIfPossible('close')
+  lifecycle.transitionIfPossible('destroy')
+})
 </script>
 
 <template>
-  <div class="wf-widget-host" :data-widget-instance-id="instanceId" :data-widget-id="widgetId">
+  <div
+    class="wf-widget-host"
+    :data-widget-instance-id="instanceId"
+    :data-widget-id="widgetId"
+    :data-widget-lifecycle="lifecycle.state"
+  >
     <component :is="component" v-if="component" :key="instanceId" />
     <div v-else class="wf-widget-host__error" role="alert">
       {{ resolution.error }}
