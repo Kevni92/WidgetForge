@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, useId } from 'vue'
 
 export type InfoPopoverPlacement = 'top' | 'right' | 'bottom' | 'left'
 
@@ -10,8 +10,7 @@ const props = withDefaults(defineProps<{
   placement: 'bottom',
 })
 
-let nextPopoverId = 0
-const panelId = `wf-info-popover-${++nextPopoverId}`
+const panelId = `${useId()}-wf-info-popover`
 const root = ref<HTMLElement | null>(null)
 const open = ref(false)
 
