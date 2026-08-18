@@ -12,14 +12,20 @@ describe('Playground App', () => {
     vi.useRealTimers()
   })
 
-  it('demonstrates window state, commands and synchronized serverless live data', async () => {
+  it('demonstrates panes, window state, commands and synchronized serverless live data', async () => {
     const wrapper = mount(App)
     const select = wrapper.get('select')
 
+    expect(wrapper.get('[data-pane-id="pane-demo-root"]').attributes('data-pane-kind')).toBe('split')
+    expect(wrapper.findAll('.pane-playground-area [data-widget-instance-id]')).toHaveLength(3)
+    expect(wrapper.text()).toContain('PANE-01')
+    expect(wrapper.text()).toContain('ENERGY')
+
     expect(wrapper.findAll('.wf-window-shell')).toHaveLength(6)
     const powerWidgets = wrapper.findAll('[data-resource-id="grid-power"]')
-    expect(powerWidgets).toHaveLength(2)
+    expect(powerWidgets).toHaveLength(3)
     expect(powerWidgets.map((widget) => widget.text())).toEqual([
+      expect.stringContaining('118.0 MW'),
       expect.stringContaining('118.0 MW'),
       expect.stringContaining('118.0 MW'),
     ])
@@ -27,6 +33,7 @@ describe('Playground App', () => {
     vi.advanceTimersByTime(1_200)
     await wrapper.vm.$nextTick()
     expect(wrapper.findAll('[data-resource-id="grid-power"]').map((widget) => widget.text())).toEqual([
+      expect.stringContaining('118.5 MW'),
       expect.stringContaining('118.5 MW'),
       expect.stringContaining('118.5 MW'),
     ])
@@ -76,7 +83,7 @@ describe('Playground App', () => {
     expect(second.get('.wf-window-frame[data-window-instance-id="planet-alpha"]').attributes('data-window-mode')).toBe('minimized')
     expect(second.find('.wf-window-frame[data-window-instance-id="market-metals"]').exists()).toBe(false)
     expect(second.text()).toContain('ARC-02')
-    expect(second.findAll('[data-resource-id="grid-power"]')).toHaveLength(2)
+    expect(second.findAll('[data-resource-id="grid-power"]')).toHaveLength(3)
     second.unmount()
   })
 })

@@ -26,6 +26,14 @@ Tree-Operationen sind pure Funktionen und erzeugen neue Bäume. Unterstützt wer
 
 Pane-IDs müssen innerhalb eines Baums eindeutig sein. Ein Pane darf nicht in einen eigenen Descendant verschoben werden. Der Root-Pane darf nicht in sich selbst reparented werden.
 
+## PaneHost
+
+`PaneHost` ist der generische Vue-Renderer des Pane-Baums. Widget-Panes werden über den bestehenden `WidgetHost` gerendert; Split-Panes rekursiv über weitere `PaneHost`-Instanzen. Der Host kennt weder WindowManager noch Docks.
+
+Split-Divider verändern ausschließlich die Gewichte des betroffenen Split-Panes und emittieren einen neuen Pane-Baum. Die Resize-Mathematik liegt in einer puren Core-Funktion und berücksichtigt Min-/Max-Größen der beiden benachbarten Panes. Pointer-Listener werden bei Ende, Abbruch und Unmount deterministisch entfernt.
+
+Stabile Pane- und Widget-Instanz-IDs sorgen dafür, dass reine Layoutänderungen keine Widget-Remounts verursachen.
+
 ## Architekturgrenze
 
-#60 enthält keinerlei Vue-, Pointer-, Window- oder Dock-Logik. `PaneHost` folgt separat. Window-/Dock-Hosts sollen später ausschließlich den Root-Pane kennen und Rendering an `PaneHost` delegieren.
+Pane-Modell und Resize-Mathematik bleiben DOM-freier Core. `PaneHost` ist ausschließlich Renderer und Input-Adapter. Window-/Dock-Hosts sollen ausschließlich den Root-Pane kennen und Rendering an `PaneHost` delegieren. Pane-Reparenting und Edit-Mode folgen in separaten Workspace-Issues.
