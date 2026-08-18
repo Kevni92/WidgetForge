@@ -40,7 +40,10 @@ const windows = markRaw(createWindowManager(playgroundWidgetRegistry))
 const docks = markRaw(createDockManager(playgroundWidgetRegistry))
 const navigator = markRaw(createWidgetNavigator(playgroundWidgetRegistry, windows))
 provideWidgetNavigation(navigator)
-function persistWorkspace(): void { try { window.localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(windows, docks)) } catch {} }
+function persistWorkspace(): void {
+  try { window.localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(windows, docks)) }
+  catch { /* Demo persistence is best-effort. */ }
+}
 
 function openReferenceLayout(): void {
   docks.add({ id: 'workspace-top', position: 'top', thickness: 58, minThickness: 50, maxThickness: 86, resizable: true, pane: createSplitPane({ id: 'workspace-top-root', axis: 'horizontal', weights: [4, 1], settings: { resizable: true, background: 'surface' }, children: [createWidgetPane({ id: 'workspace-nav-pane', widgetId: 'demo.workspace-topbar', instanceId: 'workspace-nav-widget', settings: { minSize: 520, background: 'surface' } }), createWidgetPane({ id: 'workspace-top-metric-pane', widgetId: 'demo.live-metric', instanceId: 'workspace-top-metric-widget', parameters: { resourceId: 'grid-power' }, settings: { minSize: 180, background: 'surface-raised' } })] }) })
@@ -67,9 +70,25 @@ function openReferenceLayout(): void {
     }),
   })
 }
-function restoreReferenceLayout(): void { let stored:string|null=null;try{stored=window.localStorage.getItem(WORKSPACE_STORAGE_KEY)}catch{};const restored=stored?restoreWorkspace(windows,stored,docks):null;if(!restored?.valid||restored.restoredDocks.length===0)openReferenceLayout() }
-async function resetWorkspace(): Promise<void> { for(const window of [...windows.list()])windows.close(window.instanceId,'user');for(const dock of [...docks.list()])docks.remove(dock.id);try{window.localStorage.removeItem(WORKSPACE_STORAGE_KEY)}catch{};await nextTick();openReferenceLayout();persistWorkspace() }
-function setTheme(theme:DemoThemeName):void{themeName.value=theme;try{window.localStorage.setItem(THEME_STORAGE_KEY,theme)}catch{}}
+function restoreReferenceLayout(): void {
+  let stored: string | null = null
+  try { stored = window.localStorage.getItem(WORKSPACE_STORAGE_KEY) }
+  catch { /* Storage may be unavailable in embedded/private contexts. */ }
+  const restored = stored ? restoreWorkspace(windows, stored, docks) : null
+  if (!restored?.valid || restored.restoredDocks.length === 0) openReferenceLayout()
+}
+async function resetWorkspace(): Promise<void> {
+  for (const window of [...windows.list()]) windows.close(window.instanceId, 'user')
+  for (const dock of [...docks.list()]) docks.remove(dock.id)
+  try { window.localStorage.removeItem(WORKSPACE_STORAGE_KEY) }
+  catch { /* Reset remains functional without storage. */ }
+  await nextTick(); openReferenceLayout(); persistWorkspace()
+}
+function setTheme(theme: DemoThemeName): void {
+  themeName.value = theme
+  try { window.localStorage.setItem(THEME_STORAGE_KEY, theme) }
+  catch { /* Theme switching remains functional without storage. */ }
+}
 provideDemoControls({theme:()=>themeName.value,setTheme,resetWorkspace})
 restoreReferenceLayout();persistWorkspace();windows.subscribe(persistWorkspace);docks.subscribe(persistWorkspace)
 </script>
