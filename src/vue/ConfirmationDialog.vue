@@ -22,7 +22,6 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-const dialog = ref<HTMLElement | null>(null)
 const cancelButton = ref<HTMLButtonElement | null>(null)
 const confirmButton = ref<HTMLButtonElement | null>(null)
 const uid = useId()
@@ -31,7 +30,8 @@ const messageId = `${uid}-message`
 let previousFocus: HTMLElement | null = null
 
 function close(kind: 'confirm' | 'cancel'): void {
-  emit(kind)
+  if (kind === 'confirm') emit('confirm')
+  else emit('cancel')
   emit('update:open', false)
 }
 
@@ -79,7 +79,6 @@ watch(() => props.open, async (open) => {
     @mousedown="handleBackdrop"
   >
     <section
-      ref="dialog"
       class="wf-confirmation-dialog"
       role="dialog"
       aria-modal="true"
