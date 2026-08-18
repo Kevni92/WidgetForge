@@ -10,6 +10,16 @@ import WorkspaceHost from '../src/vue/WorkspaceHost.vue'
 
 const Widget = defineComponent({ template: '<span>history</span>' })
 function pointer(target: EventTarget, type: string, x: number, y: number): void { target.dispatchEvent(new MouseEvent(type, { button: 0, clientX: x, clientY: y, bubbles: true, cancelable: true })) }
+function shortcut(target: EventTarget, key: string): void {
+  const event = new Event('keydown', { bubbles: true, cancelable: true })
+  Object.defineProperties(event, {
+    key: { value: key },
+    ctrlKey: { value: true },
+    metaKey: { value: false },
+    shiftKey: { value: false },
+  })
+  target.dispatchEvent(event)
+}
 
 describe('WorkspaceHost history integration', () => {
   it('records a full window drag as exactly one undo operation', async () => {
@@ -19,45 +29,21 @@ describe('WorkspaceHost history integration', () => {
     windows.open({ widgetId: 'history.widget', instanceId: 'window', position: { x: 20, y: 30 }, size: { width: 300, height: 200 } })
     const history = createWorkspaceHistory(windows, docks)
     const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, history }, attachTo: document.body })
-
     const handle = wrapper.get('[data-window-instance-id="window"] [data-window-drag-handle]').element
-    pointer(handle, 'pointerdown', 100, 50)
-    pointer(globalThis.window, 'pointermove', 140, 80)
-    pointer(globalThis.window, 'pointermove', 180, 100)
-    pointer(globalThis.window, 'pointermove', 220, 120)
-    pointer(globalThis.window, 'pointerup', 220, 120)
-    await Promise.resolve()
-    await nextTick()
-
-    expect(history.state.undoDepth).toBe(1)
-    expect(windows.get('window').geometry.position).toEqual({ x: 140, y: 100 })
-    history.undo()
-    await nextTick()
-    expect(windows.get('window').geometry.position).toEqual({ x: 20, y: 30 })
-
-    wrapper.unmount()
-    history.dispose()
+    pointer(handle, 'pointerdown', 100, 50); pointer(globalThis.window, 'pointermove', 140, 80); pointer(globalThis.window, 'pointermove', 180, 100); pointer(globalThis.window, 'pointermove', 220, 120); pointer(globalThis.window, 'pointerup', 220, 120)
+    await Promise.resolve(); await nextTick()
+    expect(history.state.undoDepth).toBe(1); expect(windows.get('window').geometry.position).toEqual({ x: 140, y: 100 })
+    history.undo(); await nextTick(); expect(windows.get('window').geometry.position).toEqual({ x: 20, y: 30 })
+    wrapper.unmount(); history.dispose()
   })
 
-  it('supports Ctrl+Z and Ctrl+Y through bubbled workspace keyboard events', async () => {
+  it('supports Ctrl+Z and Ctrl+Y through workspace keyboard events', async () => {
     const registry = createWidgetRegistry([defineWidget({ id: 'history.widget', title: 'History', component: Widget })])
-    const windows = createWindowManager(registry)
-    const docks = createDockManager(registry)
-    const history = createWorkspaceHistory(windows, docks)
+    const windows = createWindowManager(registry); const docks = createDockManager(registry); const history = createWorkspaceHistory(windows, docks)
     const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, history }, attachTo: document.body })
-    windows.open({ widgetId: 'history.widget', instanceId: 'window' })
-    await nextTick()
-    expect(history.state.undoDepth).toBe(1)
-
-    await wrapper.get('.wf-workspace-host').trigger('keydown', { key: 'z', ctrlKey: true })
-    await nextTick()
-    expect(windows.list()).toHaveLength(0)
-    expect(history.state.canRedo).toBe(true)
-    await wrapper.get('.wf-workspace-host').trigger('keydown', { key: 'y', ctrlKey: true })
-    await nextTick()
-    expect(windows.list()).toHaveLength(1)
-
-    wrapper.unmount()
-    history.dispose()
+    windows.open({ widgetId: 'history.widget', instanceId: 'window' }); await nextTick(); expect(history.state.undoDepth).toBe(1)
+    shortcut(wrapper.get('.wf-workspace-host').element, 'z'); await nextTick(); expect(windows.list()).toHaveLength(0); expect(history.state.canRedo).toBe(true)
+    shortcut(wrapper.get('.wf-workspace-host').element, 'y'); await nextTick(); expect(windows.list()).toHaveLength(1)
+    wrapper.unmount(); history.dispose()
   })
 })
