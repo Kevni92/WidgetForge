@@ -57,7 +57,8 @@ describe('window states and instance rules', () => {
     const singletonB = manager.open({ widgetId: 'test.singleton', instanceId: 'singleton-b' })
 
     expect(singletonB.instanceId).toBe(singletonA.instanceId)
-    expect(manager.list().filter((window) => window.widgetId === 'test.singleton')).toHaveLength(1)
+    expect(manager.list().filter((window) =>
+      window.rootPane.kind === 'widget' && window.rootPane.widgetId === 'test.singleton')).toHaveLength(1)
     expect(manager.get(singletonA.instanceId).mode).toBe('normal')
     expect(manager.get(singletonA.instanceId).focused).toBe(true)
   })
