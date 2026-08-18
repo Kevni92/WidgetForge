@@ -86,6 +86,8 @@ describe('CommandRegistry', () => {
 
     expect(() => registry.register({ name: 'planet', widgetId: 'other' })).toThrow(CommandDefinitionError)
     expect(() => registry.register({ name: 'other', aliases: ['p'], widgetId: 'other' })).toThrow(CommandDefinitionError)
+    expect(() => registry.register({ name: 'other', aliases: ['other'], widgetId: 'other' })).toThrow(CommandDefinitionError)
+    expect(() => registry.register({ name: 'other', aliases: ['x', 'X'], widgetId: 'other' })).toThrow(CommandDefinitionError)
   })
 
   it('rejects invalid schemas before they reach the parser', () => {
