@@ -2,79 +2,81 @@ import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../src/App.vue'
 
-describe('Playground App', () => {
-  beforeEach(() => { window.localStorage.clear(); vi.useFakeTimers() })
-  afterEach(() => { vi.useRealTimers() })
+const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.fullscreen.v2'
 
-  it('demonstrates panes, window state, commands and synchronized serverless live data', async () => {
+describe('Fullscreen Playground App', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('renders a cohesive fullscreen simulation workspace with docks, panes and window states', async () => {
     const wrapper = mount(App)
-    const select = wrapper.get('select')
 
-    expect(wrapper.get('[data-pane-id="pane-demo-root"]').attributes('data-pane-kind')).toBe('split')
-    expect(wrapper.findAll('.pane-playground-area [data-widget-instance-id]')).toHaveLength(3)
-    expect(wrapper.text()).toContain('PANE-01')
-    expect(wrapper.text()).toContain('ENERGY')
-    expect(wrapper.findAll('[data-workspace-dock-showcase] .wf-window-frame')).toHaveLength(2)
-    expect(wrapper.text()).toContain('Hold Ctrl and drag a pane')
+    expect(wrapper.get('[data-fullscreen-workspace-demo]').exists()).toBe(true)
+    expect(wrapper.findAll('.wf-dock-host')).toHaveLength(2)
+    expect(wrapper.get('[data-dock-id="workspace-top"]').attributes('data-dock-position')).toBe('top')
+    expect(wrapper.get('[data-dock-id="workspace-bottom"]').attributes('data-dock-position')).toBe('bottom')
+    expect(wrapper.get('[data-pane-id="workspace-top-root"]').attributes('data-pane-kind')).toBe('split')
+    expect(wrapper.text()).toContain('Orbital Exchange')
+    expect(wrapper.get('[data-dock-id="workspace-bottom"] .wf-command-input__field').exists()).toBe(true)
 
-    expect(wrapper.findAll('.window-playground-area .wf-window-shell')).toHaveLength(6)
+    expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
+    expect(wrapper.get('[data-window-instance-id="telemetry-power"]').attributes('data-window-layer')).toBe('always-on-top')
+    expect(wrapper.get('[data-window-instance-id="operations-main"] [data-pane-id="operations-root"]').attributes('data-pane-kind')).toBe('split')
+    expect(wrapper.get('[data-pane-id="operations-metrics"]').attributes('data-pane-kind')).toBe('split')
+    expect(wrapper.findAll('[data-window-instance-id="market-main"] .wf-data-table__row')).toHaveLength(14)
+
+    const snapshot = JSON.parse(window.localStorage.getItem(WORKSPACE_STORAGE_KEY) ?? '{}') as {
+      windows?: Array<{ instanceId: string; snap?: { zone?: string } | null }>
+      docks?: unknown[]
+    }
+    expect(snapshot.docks).toHaveLength(2)
+    expect(snapshot.windows?.find((window) => window.instanceId === 'market-main')?.snap?.zone).toBe('left')
+
     const powerWidgets = wrapper.findAll('[data-resource-id="grid-power"]')
     expect(powerWidgets).toHaveLength(3)
-    expect(powerWidgets.map((widget) => widget.text())).toEqual([
-      expect.stringContaining('118.0 MW'), expect.stringContaining('118.0 MW'), expect.stringContaining('118.0 MW'),
-    ])
-
+    expect(powerWidgets.every((widget) => widget.text().includes('118.0 MW'))).toBe(true)
     vi.advanceTimersByTime(1_200)
     await wrapper.vm.$nextTick()
-    expect(wrapper.findAll('[data-resource-id="grid-power"]').map((widget) => widget.text())).toEqual([
-      expect.stringContaining('118.5 MW'), expect.stringContaining('118.5 MW'), expect.stringContaining('118.5 MW'),
-    ])
+    expect(wrapper.findAll('[data-resource-id="grid-power"]').every((widget) => widget.text().includes('118.5 MW'))).toBe(true)
 
-    await wrapper.get('[data-window-instance-id="planet-alpha"] .wf-window-shell__minimize').trigger('click')
-    expect(wrapper.get('.wf-window-frame[data-window-instance-id="planet-alpha"]').attributes('data-window-mode')).toBe('minimized')
-    await wrapper.get('[data-window-instance-id="planet-alpha"] .wf-window-shell__minimize').trigger('click')
-
-    await wrapper.get('[data-window-instance-id="market-metals"] .wf-window-shell__close').trigger('click')
-    expect(wrapper.find('.wf-window-frame[data-window-instance-id="market-metals"]').exists()).toBe(false)
-
-    await wrapper.get('[data-window-instance-id="planet-alpha"] [data-navigation="market"]').trigger('click')
-    const marketWindows = wrapper.findAll('.window-playground-area .wf-window-frame').filter((frame) => frame.text().includes('Market Ticker'))
-    expect(marketWindows).toHaveLength(1)
-    expect(wrapper.text()).toContain('METALS')
-
-    const commandInput = wrapper.get('.wf-command-input__field')
-    await commandInput.setValue('planet ARC-CMD true')
-    await wrapper.get('.wf-command-input').trigger('submit')
-    expect(wrapper.text()).toContain('ARC-CMD')
-    expect(wrapper.get('.wf-command-input__feedback').text()).toContain('Opened planet.summary')
-
-    const currentMarket = wrapper.findAll('.window-playground-area .wf-window-frame').find((frame) => frame.text().includes('Market Ticker'))
-    expect(currentMarket).toBeDefined()
-    await currentMarket?.get('.wf-window-shell__close').trigger('click')
-
-    await commandInput.setValue('mkt 8')
-    await wrapper.get('.wf-command-input').trigger('submit')
-    const commandMarkets = wrapper.findAll('.window-playground-area .wf-window-frame').filter((frame) => frame.text().includes('Market Ticker'))
-    expect(commandMarkets).toHaveLength(1)
-    expect(wrapper.text()).toContain('METALS')
-
-    await select.setValue('forge-dark')
-    expect(wrapper.get('.wf-theme').attributes('style')).toContain('--wf-color-canvas: #070b12')
+    await wrapper.get('select[aria-label="Theme"]').setValue('forge-light')
+    expect(wrapper.get('.wf-theme').attributes('style')).toContain('--wf-color-canvas: #e9eef3')
     wrapper.unmount()
   })
 
-  it('restores the saved window workspace after remounting the playground', async () => {
+  it('restores changed window and dock layout after remounting', async () => {
     const first = mount(App)
-    await first.get('[data-window-instance-id="planet-alpha"] .wf-window-shell__minimize').trigger('click')
-    await first.get('[data-window-instance-id="market-metals"] .wf-window-shell__close').trigger('click')
+    await first.get('[data-window-instance-id="alerts-main"] .wf-window-shell__close').trigger('click')
+    await first.get('[data-window-instance-id="colony-main"] .wf-window-shell__minimize').trigger('click')
     first.unmount()
 
     const second = mount(App)
-    expect(second.findAll('.window-playground-area .wf-window-frame')).toHaveLength(5)
-    expect(second.get('.wf-window-frame[data-window-instance-id="planet-alpha"]').attributes('data-window-mode')).toBe('minimized')
-    expect(second.find('.wf-window-frame[data-window-instance-id="market-metals"]').exists()).toBe(false)
-    expect(second.text()).toContain('ARC-02')
-    expect(second.findAll('[data-resource-id="grid-power"]')).toHaveLength(3)
+    expect(second.findAll('.wf-dock-host')).toHaveLength(2)
+    expect(second.find('[data-window-instance-id="alerts-main"]').exists()).toBe(false)
+    expect(second.get('[data-window-instance-id="colony-main"]').attributes('data-window-mode')).toBe('minimized')
+    expect(second.findAll('.wf-window-frame')).toHaveLength(4)
     second.unmount()
+  })
+
+  it('reset restores the defined reference layout', async () => {
+    const wrapper = mount(App)
+    await wrapper.get('[data-window-instance-id="alerts-main"] .wf-window-shell__close').trigger('click')
+    expect(wrapper.findAll('.wf-window-frame')).toHaveLength(4)
+
+    await wrapper.get('[data-demo-action="reset"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.findAll('.wf-dock-host')).toHaveLength(2)
+    expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
+    expect(wrapper.get('[data-window-instance-id="alerts-main"]').exists()).toBe(true)
+    expect(wrapper.get('[data-pane-id="operations-root"]').exists()).toBe(true)
+    wrapper.unmount()
   })
 })
