@@ -6,19 +6,10 @@ export { default as WidgetHost } from './vue/WidgetHost.vue'
 export { default as PaneHost } from './vue/PaneHost.vue'
 export { useWidgetContext } from './vue/widget-context'
 export type { WidgetContext } from './vue/widget-context'
-export {
-  provideWidgetNavigation,
-  useWidgetNavigation,
-  WidgetNavigationUnavailableError,
-} from './vue/widget-navigation'
+export { provideWidgetNavigation, useWidgetNavigation, WidgetNavigationUnavailableError } from './vue/widget-navigation'
 export { default as CommandInput } from './vue/CommandInput.vue'
 export { default as DataClientProvider } from './vue/DataClientProvider.vue'
-export {
-  DataClientUnavailableError,
-  provideDataClient,
-  useData,
-  useDataClient,
-} from './vue/data-context'
+export { DataClientUnavailableError, provideDataClient, useData, useDataClient } from './vue/data-context'
 export { default as WindowShell } from './vue/WindowShell.vue'
 export { default as WindowManagerHost } from './vue/WindowManagerHost.vue'
 export { default as NotificationToastHost } from './vue/NotificationToastHost.vue'
@@ -34,225 +25,39 @@ export { default as StatValue } from './primitives/StatValue.vue'
 export { default as SimpleTable } from './primitives/SimpleTable.vue'
 export type { SimpleTableAlign, SimpleTableColumn } from './primitives/simple-table'
 export { default as DataTable } from './primitives/DataTable.vue'
-export {
-  filterDataTableRows,
-  nextDataTableSort,
-  processDataTableRows,
-  sortDataTableRows,
-  visibleDataTableColumns,
-} from './primitives/data-table'
-export type {
-  DataTableColumn,
-  DataTableRowId,
-  DataTableSort,
-  DataTableSortDirection,
-} from './primitives/data-table'
+export { filterDataTableRows, nextDataTableSort, processDataTableRows, sortDataTableRows, visibleDataTableColumns } from './primitives/data-table'
+export type { DataTableColumn, DataTableRowId, DataTableSort, DataTableSortDirection } from './primitives/data-table'
 export { default as LoadingState } from './primitives/LoadingState.vue'
 export { default as EmptyState } from './primitives/EmptyState.vue'
 export { default as ErrorState } from './primitives/ErrorState.vue'
-export {
-  createDataClient,
-  createDataKey,
-  dataKeyId,
-  DataClient,
-  InvalidDataKeyError,
-} from './data/data-client'
-export type {
-  DataClientOptions,
-  DataHandle,
-  DataKey,
-  DataObserver,
-  DataProvider,
-  DataState,
-  DataStateRef,
-  DataUnsubscribe,
-} from './data/data-client'
-export {
-  createMockDataProvider,
-  DuplicateMockDataResourceError,
-  MockDataProvider,
-  UnknownMockDataResourceError,
-} from './data/mock-data-provider'
+export { createDataClient, createDataKey, dataKeyId, DataClient, InvalidDataKeyError } from './data/data-client'
+export type { DataClientOptions, DataHandle, DataKey, DataObserver, DataProvider, DataState, DataStateRef, DataUnsubscribe } from './data/data-client'
+export { createMockDataProvider, DuplicateMockDataResourceError, MockDataProvider, UnknownMockDataResourceError } from './data/mock-data-provider'
 export type { MockDataResourceDefinition } from './data/mock-data-provider'
-export {
-  createRealtimeDataProvider,
-  RealtimeDataProvider,
-} from './data/realtime-transport'
-export type {
-  RealtimeConnectionListener,
-  RealtimeConnectionState,
-  RealtimeConnectionStateRef,
-  RealtimeConnectionStatus,
-  RealtimeResourceObserver,
-  RealtimeTransport,
-} from './data/realtime-transport'
+export { createRealtimeDataProvider, RealtimeDataProvider } from './data/realtime-transport'
+export type { RealtimeConnectionListener, RealtimeConnectionState, RealtimeConnectionStateRef, RealtimeConnectionStatus, RealtimeResourceObserver, RealtimeTransport } from './data/realtime-transport'
 export { defineWidget, WidgetDefinitionError } from './core/widget'
-export type {
-  InferWidgetParameters,
-  WidgetId,
-  WidgetManifest,
-  WidgetParameterDefinition,
-  WidgetParameterSchema,
-  WidgetSize,
-  WidgetWindowMetadata,
-} from './core/widget'
-export {
-  createWidgetPane,
-  createSplitPane,
-  clonePaneTree,
-  validatePaneTree,
-  findPane,
-  containsPane,
-  replacePane,
-  removePane,
-  splitPaneAt,
-  movePane,
-  setSplitWeights,
-  PaneDefinitionError,
-  UnknownPaneError,
-  InvalidPaneOperationError,
-} from './core/pane'
-export type {
-  PaneId,
-  PaneAxis,
-  PaneOverflow,
-  PaneBackground,
-  PaneParameterValue,
-  PaneParameters,
-  PaneSplitEdge,
-  PaneSettings,
-  WidgetPane,
-  SplitPane,
-  PaneNode,
-  CreateWidgetPaneOptions,
-  CreateSplitPaneOptions,
-  RemovePaneResult,
-} from './core/pane'
+export type { InferWidgetParameters, WidgetId, WidgetManifest, WidgetParameterDefinition, WidgetParameterSchema, WidgetSize, WidgetWindowMetadata } from './core/widget'
+export { createWidgetPane, createSplitPane, clonePaneTree, validatePaneTree, findPane, containsPane, replacePane, removePane, splitPaneAt, movePane, setSplitWeights, PaneDefinitionError, UnknownPaneError, InvalidPaneOperationError } from './core/pane'
+export type { PaneId, PaneAxis, PaneOverflow, PaneBackground, PaneParameterValue, PaneParameters, PaneSplitEdge, PaneSettings, WidgetPane, SplitPane, PaneNode, CreateWidgetPaneOptions, CreateSplitPaneOptions, RemovePaneResult } from './core/pane'
 export { resizePaneSplitWeights } from './core/pane-layout'
-export {
-  createWidgetLifecycle,
-  InvalidWidgetLifecycleTransitionError,
-  WidgetLifecycleController,
-} from './core/widget-lifecycle'
-export type {
-  WidgetLifecycle,
-  WidgetLifecycleEvent,
-  WidgetLifecycleEventKind,
-  WidgetLifecycleListener,
-  WidgetLifecycleState,
-} from './core/widget-lifecycle'
-export {
-  createWidgetRegistry,
-  DuplicateWidgetIdError,
-  UnknownWidgetError,
-  validateWidgetParameters,
-  WidgetParameterValidationError,
-  WidgetRegistry,
-} from './core/widget-registry'
-export type {
-  ResolvedWidget,
-  WidgetParameterIssue,
-  WidgetParameterIssueCode,
-  WidgetParameterValidationResult,
-} from './core/widget-registry'
-export {
-  createWidgetNavigator,
-  WidgetNavigationError,
-  WidgetNavigatorService,
-} from './core/navigation'
-export type {
-  NavigationIntent,
-  NavigationResult,
-  WidgetNavigationErrorCode,
-  WidgetNavigator,
-} from './core/navigation'
-export {
-  createNotificationStore,
-  NotificationDefinitionError,
-  NotificationStore,
-} from './core/notifications'
-export type {
-  NotificationId,
-  NotificationInput,
-  NotificationItem,
-  NotificationSeverity,
-  NotificationStoreListener,
-  NotificationStoreOptions,
-  NotificationStoreUnsubscribe,
-} from './core/notifications'
-export {
-  ContextMenuController,
-  ContextMenuDefinitionError,
-  createContextMenuController,
-} from './core/context-menu'
-export type {
-  ContextMenuItem,
-  ContextMenuItemTone,
-  ContextMenuListener,
-  ContextMenuRequest,
-  ContextMenuState,
-  ContextMenuUnsubscribe,
-} from './core/context-menu'
-export {
-  CommandDefinitionError,
-  CommandParseError,
-  CommandRegistry,
-  createCommandRegistry,
-} from './core/commands'
-export type {
-  CommandArgumentDefinition,
-  CommandArgumentType,
-  CommandDefinition,
-  CommandParseErrorCode,
-} from './core/commands'
-export {
-  captureWorkspace,
-  restoreWorkspace,
-  serializeWorkspace,
-  WORKSPACE_VERSION,
-  WorkspaceSerializationError,
-} from './core/workspace'
-export type {
-  WorkspaceParameters,
-  WorkspaceParameterValue,
-  WorkspaceRestoreIssue,
-  WorkspaceRestoreIssueCode,
-  WorkspaceRestoreResult,
-  WorkspaceSnapshot,
-  WorkspaceWindowSnapshot,
-} from './core/workspace'
-export {
-  createWindowManager,
-  DuplicateWindowInstanceError,
-  UnknownWindowInstanceError,
-  WindowManager,
-} from './core/window-manager'
-export type {
-  OpenPaneWindowRequest,
-  OpenWindowRequest,
-  WindowInstanceId,
-  WindowManagerChange,
-  WindowManagerChangeKind,
-  WindowManagerListener,
-  WindowMode,
-  WindowOperationOrigin,
-  WindowState,
-} from './core/window-manager'
-export {
-  DEFAULT_MIN_VISIBLE,
-  DEFAULT_MIN_WINDOW_SIZE,
-  DEFAULT_WINDOW_SIZE,
-  constrainGeometry,
-  constrainPosition,
-  constrainSize,
-  moveWindow,
-  resizeWindow,
-  sameGeometry,
-} from './core/window-geometry'
-export type {
-  ResizeHandle,
-  WindowGeometry,
-  WindowPosition,
-  WindowSize,
-  WindowSizeConstraints,
-} from './core/window-geometry'
+export { createWidgetLifecycle, InvalidWidgetLifecycleTransitionError, WidgetLifecycleController } from './core/widget-lifecycle'
+export type { WidgetLifecycle, WidgetLifecycleEvent, WidgetLifecycleEventKind, WidgetLifecycleListener, WidgetLifecycleState } from './core/widget-lifecycle'
+export { createWidgetRegistry, DuplicateWidgetIdError, UnknownWidgetError, validateWidgetParameters, WidgetParameterValidationError, WidgetRegistry } from './core/widget-registry'
+export type { ResolvedWidget, WidgetParameterIssue, WidgetParameterIssueCode, WidgetParameterValidationResult } from './core/widget-registry'
+export { createWidgetNavigator, WidgetNavigationError, WidgetNavigatorService } from './core/navigation'
+export type { NavigationIntent, NavigationResult, WidgetNavigationErrorCode, WidgetNavigator } from './core/navigation'
+export { createNotificationStore, NotificationDefinitionError, NotificationStore } from './core/notifications'
+export type { NotificationId, NotificationInput, NotificationItem, NotificationSeverity, NotificationStoreListener, NotificationStoreOptions, NotificationStoreUnsubscribe } from './core/notifications'
+export { ContextMenuController, ContextMenuDefinitionError, createContextMenuController } from './core/context-menu'
+export type { ContextMenuItem, ContextMenuItemTone, ContextMenuListener, ContextMenuRequest, ContextMenuState, ContextMenuUnsubscribe } from './core/context-menu'
+export { CommandDefinitionError, CommandParseError, CommandRegistry, createCommandRegistry } from './core/commands'
+export type { CommandArgumentDefinition, CommandArgumentType, CommandDefinition, CommandParseErrorCode } from './core/commands'
+export { captureWorkspace, restoreWorkspace, serializeWorkspace, WORKSPACE_VERSION, WorkspaceSerializationError } from './core/workspace'
+export type { WorkspaceParameters, WorkspaceParameterValue, WorkspaceRestoreIssue, WorkspaceRestoreIssueCode, WorkspaceRestoreResult, WorkspaceSnapshot, WorkspaceWindowSnapshot } from './core/workspace'
+export { createWindowManager, DuplicateWindowInstanceError, UnknownWindowInstanceError, WindowManager } from './core/window-manager'
+export type { OpenPaneWindowRequest, OpenWindowRequest, WindowInstanceId, WindowManagerChange, WindowManagerChangeKind, WindowManagerListener, WindowMode, WindowOperationOrigin, WindowState } from './core/window-manager'
+export { createWindowOptions, defaultWindowOptions, WindowOptionsError } from './core/window-options'
+export type { WindowHeaderMode, WindowLayer, WindowOptions, WindowOptionsOverride } from './core/window-options'
+export { DEFAULT_MIN_VISIBLE, DEFAULT_MIN_WINDOW_SIZE, DEFAULT_WINDOW_SIZE, constrainGeometry, constrainPosition, constrainSize, moveWindow, resizeWindow, sameGeometry } from './core/window-geometry'
+export type { ResizeHandle, WindowGeometry, WindowPosition, WindowSize, WindowSizeConstraints } from './core/window-geometry'
