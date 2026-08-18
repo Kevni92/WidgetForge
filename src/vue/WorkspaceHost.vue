@@ -49,7 +49,6 @@ function ownerRoot(owner: Owner): PaneNode { return owner.kind === 'window' ? wi
 function setOwnerRoot(owner: Owner, pane: PaneNode): void { if (owner.kind === 'window') windowManager.setRootPane(owner.id, pane, 'user'); else dockManager.setRootPane(owner.id, pane) }
 function sameOwner(left: Owner, right: Owner): boolean { return left.kind === right.kind && left.id === right.id }
 function containsPoint(rect: DOMRect, clientX: number, clientY: number): boolean { return rect.width > 0 && rect.height > 0 && clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom }
-
 function findDropTarget(session: PaneDragSession, clientX: number, clientY: number): PaneDropTarget | null {
   const workspace = root.value
   if (!workspace) return null
@@ -75,58 +74,59 @@ function findDropTarget(session: PaneDragSession, clientX: number, clientY: numb
   }
   return null
 }
-function localTargetRect(target: PaneDropTarget): WorkspaceDropRect { const workspace=root.value;if(!workspace)return target.rect;const rootRect=workspace.getBoundingClientRect();return{x:target.rect.x-rootRect.left,y:target.rect.y-rootRect.top,width:target.rect.width,height:target.rect.height} }
+function localTargetRect(target: PaneDropTarget): WorkspaceDropRect { const workspace = root.value; if (!workspace) return target.rect; const rootRect = workspace.getBoundingClientRect(); return { x: target.rect.x - rootRect.left, y: target.rect.y - rootRect.top, width: target.rect.width, height: target.rect.height } }
 function commitPaneDrop(session: PaneDragSession, target: PaneDropTarget): void {
-  dropSequence += 1; const containerId=`workspace-drop-${dropSequence}`
-  if(sameOwner(session.sourceOwner,target.owner)){setOwnerRoot(session.sourceOwner,movePaneToTarget(ownerRoot(session.sourceOwner),session.sourcePaneId,target.paneId,target.zone,containerId));return}
-  if(session.sourceOwner.kind==='dock'&&ownerRoot(session.sourceOwner).id===session.sourcePaneId)return
-  const result=relocatePaneBetweenTrees(ownerRoot(session.sourceOwner),session.sourcePaneId,ownerRoot(target.owner),target.paneId,target.zone,containerId);setOwnerRoot(target.owner,result.targetRoot)
-  if(result.sourceRoot)setOwnerRoot(session.sourceOwner,result.sourceRoot);else if(session.sourceOwner.kind==='window')windowManager.close(session.sourceOwner.id,'user')
+  dropSequence += 1; const containerId = `workspace-drop-${dropSequence}`
+  if (sameOwner(session.sourceOwner, target.owner)) { setOwnerRoot(session.sourceOwner, movePaneToTarget(ownerRoot(session.sourceOwner), session.sourcePaneId, target.paneId, target.zone, containerId)); return }
+  if (session.sourceOwner.kind === 'dock' && ownerRoot(session.sourceOwner).id === session.sourcePaneId) return
+  const result = relocatePaneBetweenTrees(ownerRoot(session.sourceOwner), session.sourcePaneId, ownerRoot(target.owner), target.paneId, target.zone, containerId); setOwnerRoot(target.owner, result.targetRoot)
+  if (result.sourceRoot) setOwnerRoot(session.sourceOwner, result.sourceRoot); else if (session.sourceOwner.kind === 'window') windowManager.close(session.sourceOwner.id, 'user')
 }
-function finishPaneDrag():void{disposePaneDrag?.()}
-function startPaneDrag(event:PointerEvent):void{
-  if(!event.ctrlKey||event.button!==0)return
-  const target=event.target;if(!(target instanceof HTMLElement)||target.closest('[data-pane-divider-index], [data-window-resize-handle], [data-dock-resize]'))return
-  const tabButton=target.closest<HTMLElement>('[data-tab-pane-id]');const paneElement=target.closest<HTMLElement>('.wf-pane-host[data-pane-id]');if(!paneElement?.dataset.paneId)return
-  const owner=ownerFromElement(paneElement);if(!owner)return;const sourcePaneId=tabButton?.dataset.tabPaneId??paneElement.dataset.paneId;const sourceRoot=ownerRoot(owner)
-  if(!sourcePaneId||!findPane(sourceRoot,sourcePaneId))return;if(owner.kind==='dock'&&sourceRoot.id===sourcePaneId)return
-  event.preventDefault();event.stopPropagation();finishPaneDrag();paneDragActive.value=true
-  const session:PaneDragSession={sourceOwner:owner,sourcePaneId,sourceElement:tabButton??paneElement,pointerId:typeof event.pointerId==='number'?event.pointerId:undefined}
-  const matches=(next:PointerEvent):boolean=>session.pointerId===undefined||typeof next.pointerId!=='number'||next.pointerId===session.pointerId
-  const move=(next:PointerEvent):void=>{if(matches(next))paneDropPreview.value=findDropTarget(session,next.clientX,next.clientY)}
-  const cleanup=():void=>{globalThis.window.removeEventListener('pointermove',move);globalThis.window.removeEventListener('pointerup',end);globalThis.window.removeEventListener('pointercancel',end);paneDropPreview.value=null;paneDragActive.value=false;if(disposePaneDrag===cleanup)disposePaneDrag=null}
-  const end=(next:PointerEvent):void=>{if(!matches(next))return;const targetDrop=paneDropPreview.value;if(next.type==='pointerup'&&targetDrop)commitPaneDrop(session,targetDrop);cleanup()}
-  disposePaneDrag=cleanup;globalThis.window.addEventListener('pointermove',move);globalThis.window.addEventListener('pointerup',end);globalThis.window.addEventListener('pointercancel',end)
+function finishPaneDrag(): void { disposePaneDrag?.() }
+function startPaneDrag(event: PointerEvent): void {
+  if (!event.ctrlKey || event.button !== 0) return
+  const target = event.target; if (!(target instanceof HTMLElement) || target.closest('[data-pane-divider-index], [data-window-resize-handle], [data-dock-resize]')) return
+  const tabButton = target.closest<HTMLElement>('[data-tab-pane-id]'); const paneElement = target.closest<HTMLElement>('.wf-pane-host[data-pane-id]'); if (!paneElement?.dataset.paneId) return
+  const owner = ownerFromElement(paneElement); if (!owner) return; const sourcePaneId = tabButton?.dataset.tabPaneId ?? paneElement.dataset.paneId; const sourceRoot = ownerRoot(owner)
+  if (!sourcePaneId || !findPane(sourceRoot, sourcePaneId)) return; if (owner.kind === 'dock' && sourceRoot.id === sourcePaneId) return
+  event.preventDefault(); event.stopPropagation(); finishPaneDrag(); paneDragActive.value = true
+  const session: PaneDragSession = { sourceOwner: owner, sourcePaneId, sourceElement: tabButton ?? paneElement, pointerId: typeof event.pointerId === 'number' ? event.pointerId : undefined }
+  const matches = (next: PointerEvent): boolean => session.pointerId === undefined || typeof next.pointerId !== 'number' || next.pointerId === session.pointerId
+  const move = (next: PointerEvent): void => { if (matches(next)) paneDropPreview.value = findDropTarget(session, next.clientX, next.clientY) }
+  const cleanup = (): void => { globalThis.window.removeEventListener('pointermove', move); globalThis.window.removeEventListener('pointerup', end); globalThis.window.removeEventListener('pointercancel', end); paneDropPreview.value = null; paneDragActive.value = false; if (disposePaneDrag === cleanup) disposePaneDrag = null }
+  const end = (next: PointerEvent): void => { if (!matches(next)) return; const targetDrop = paneDropPreview.value; if (next.type === 'pointerup' && targetDrop) commitPaneDrop(session, targetDrop); cleanup() }
+  disposePaneDrag = cleanup; globalThis.window.addEventListener('pointermove', move); globalThis.window.addEventListener('pointerup', end); globalThis.window.addEventListener('pointercancel', end)
 }
-function isLayoutPointer(event:PointerEvent):boolean{
-  if(event.button!==0||!history)return false
-  const target=event.target;if(!(target instanceof HTMLElement))return false
-  if(target.closest('[data-window-drag-handle], [data-window-resize-handle], [data-dock-resize], [data-pane-divider-index]'))return true
-  return event.ctrlKey&&target.closest('.wf-pane-host[data-pane-id]')!==null
+function isLayoutPointer(event: PointerEvent): boolean {
+  if (event.button !== 0 || !history) return false
+  const target = event.target; if (!(target instanceof HTMLElement)) return false
+  if (target.closest('[data-window-drag-handle], [data-window-resize-handle], [data-dock-resize], [data-pane-divider-index]')) return true
+  return event.ctrlKey && target.closest('.wf-pane-host[data-pane-id]') !== null
 }
-function handlePointerDown(event:PointerEvent):void{if(isLayoutPointer(event)){history?.beginTransaction();historyPointerActive=true}startPaneDrag(event)}
-function finishHistoryPointer():void{if(!historyPointerActive)return;historyPointerActive=false;queueMicrotask(()=>history?.commitTransaction())}
-function isEditableTarget(target:EventTarget|null):boolean{return target instanceof HTMLElement&&(target.matches('input,textarea,select,[contenteditable="true"]')||target.closest('[contenteditable="true"]')!==null)}
-function onKeyDown(event:KeyboardEvent):void{
-  if(history&&props.historyShortcuts!==false&&(event.ctrlKey||event.metaKey)&&!isEditableTarget(event.target)){
-    const key=event.key.toLowerCase();if(key==='z'){event.preventDefault();if(event.shiftKey)history.redo();else history.undo();return}if(key==='y'){event.preventDefault();history.redo();return}
-  }
-  if(event.key==='Escape'){finishPaneDrag();paneDropPreview.value=null;return}if(event.key==='Control')controlPressed.value=true
+function handlePointerDown(event: PointerEvent): void { if (isLayoutPointer(event)) { history?.beginTransaction(); historyPointerActive = true } startPaneDrag(event) }
+function finishHistoryPointer(): void { if (!historyPointerActive) return; historyPointerActive = false; queueMicrotask(() => history?.commitTransaction()) }
+function isEditableTarget(target: EventTarget | null): boolean { return target instanceof HTMLElement && (target.matches('input,textarea,select,[contenteditable="true"]') || target.closest('[contenteditable="true"]') !== null) }
+function onWorkspaceKeyDown(event: KeyboardEvent): void {
+  if (!history || props.historyShortcuts === false || !(event.ctrlKey || event.metaKey) || isEditableTarget(event.target)) return
+  const key = event.key.toLowerCase()
+  if (key === 'z') { event.preventDefault(); if (event.shiftKey) history.redo(); else history.undo() }
+  else if (key === 'y') { event.preventDefault(); history.redo() }
 }
-function onKeyUp(event:KeyboardEvent):void{if(event.key==='Control')controlPressed.value=false}
-function onBlur():void{controlPressed.value=false;finishPaneDrag();finishHistoryPointer()}
+function onGlobalKeyDown(event: KeyboardEvent): void { if (event.key === 'Escape') { finishPaneDrag(); paneDropPreview.value = null; return } if (event.key === 'Control') controlPressed.value = true }
+function onKeyUp(event: KeyboardEvent): void { if (event.key === 'Control') controlPressed.value = false }
+function onBlur(): void { controlPressed.value = false; finishPaneDrag(); finishHistoryPointer() }
 
-onMounted(()=>{
-  if(root.value)disposeSize=observeElementSize(root.value,(next)=>{size.value=next})
-  globalThis.window.addEventListener('keydown',onKeyDown);globalThis.window.addEventListener('keyup',onKeyUp);globalThis.window.addEventListener('blur',onBlur);globalThis.window.addEventListener('pointerup',finishHistoryPointer);globalThis.window.addEventListener('pointercancel',finishHistoryPointer)
+onMounted(() => {
+  if (root.value) disposeSize = observeElementSize(root.value, (next) => { size.value = next })
+  globalThis.window.addEventListener('keydown', onGlobalKeyDown); globalThis.window.addEventListener('keyup', onKeyUp); globalThis.window.addEventListener('blur', onBlur); globalThis.window.addEventListener('pointerup', finishHistoryPointer); globalThis.window.addEventListener('pointercancel', finishHistoryPointer)
 })
-onBeforeUnmount(()=>{
-  finishPaneDrag();finishHistoryPointer();disposeSize?.();disposeSize=null;unsubscribe();globalThis.window.removeEventListener('keydown',onKeyDown);globalThis.window.removeEventListener('keyup',onKeyUp);globalThis.window.removeEventListener('blur',onBlur);globalThis.window.removeEventListener('pointerup',finishHistoryPointer);globalThis.window.removeEventListener('pointercancel',finishHistoryPointer)
+onBeforeUnmount(() => {
+  finishPaneDrag(); finishHistoryPointer(); disposeSize?.(); disposeSize = null; unsubscribe(); globalThis.window.removeEventListener('keydown', onGlobalKeyDown); globalThis.window.removeEventListener('keyup', onKeyUp); globalThis.window.removeEventListener('blur', onBlur); globalThis.window.removeEventListener('pointerup', finishHistoryPointer); globalThis.window.removeEventListener('pointercancel', finishHistoryPointer)
 })
 </script>
 
 <template>
-  <div ref="root" class="wf-workspace-host" :class="{ 'wf-workspace-host--edit': editMode }" :data-workspace-edit-mode="editMode" @pointerdown.capture="handlePointerDown">
+  <div ref="root" class="wf-workspace-host" :class="{ 'wf-workspace-host--edit': editMode }" :data-workspace-edit-mode="editMode" @pointerdown.capture="handlePointerDown" @keydown="onWorkspaceKeyDown">
     <div class="wf-workspace-host__floating" :style="rectStyle(layout.floating)" data-workspace-floating><WindowManagerHost :manager="windowManager" :registry="registry" /></div>
     <DockHost v-for="dock in dockStates" :key="dock.id" :dock="dock" :rect="layout.docks[dock.id] ?? { x:0,y:0,width:0,height:0 }" :manager="dockManager" :registry="registry" />
     <DockingOverlay v-if="paneDropPreview" :target-rect="localTargetRect(paneDropPreview)" :active-zone="paneDropPreview.zone" :source-id="paneDropPreview.owner.id" :target-id="paneDropPreview.paneId" />
