@@ -65,3 +65,5 @@ export { createWindowOptions, defaultWindowOptions, WindowOptionsError } from '.
 export type { WindowHeaderMode, WindowLayer, WindowOptions, WindowOptionsOverride } from './core/window-options'
 export { DEFAULT_MIN_VISIBLE, DEFAULT_MIN_WINDOW_SIZE, DEFAULT_WINDOW_SIZE, constrainGeometry, constrainPosition, constrainSize, moveWindow, resizeWindow, sameGeometry } from './core/window-geometry'
 export type { ResizeHandle, WindowGeometry, WindowPosition, WindowSize, WindowSizeConstraints } from './core/window-geometry'
+export { detectWorkspaceDropZone, workspaceDropPreviewRect, dropPaneAt, movePaneToTarget, relocatePaneBetweenTrees, dockWindowIntoWindow } from './core/workspace-docking'
+export type { WorkspaceDropZone, WorkspaceDropRect, WorkspacePoint, RelocatePaneResult } from './core/workspace-docking'
