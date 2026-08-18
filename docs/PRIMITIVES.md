@@ -37,3 +37,20 @@ The row markup uses `dt`/`dd` and is intended to be composed inside `KeyValueGro
 - the compact variant only changes density
 
 Sorting, filtering, row selection and other data-grid behavior intentionally do not belong to `SimpleTable`; those capabilities are provided by the separate `DataTable` primitive.
+
+## DataTable
+
+`DataTable` is the controlled table primitive for larger, interactive simulation data sets.
+
+- every row receives a stable consumer-defined ID through `rowId(row)`; array indexes are never used as row identity
+- columns declare value extraction, formatting, sorting/filtering capability, visibility and optional custom compare/filter logic
+- `sort`, `filterQuery` and `selectedRowId` are controlled values with matching `update:*` events
+- sorting and filtering are implemented as pure exported functions and never mutate the input rows
+- equal sort values preserve original row order
+- headers expose native sort buttons and `aria-sort`
+- selectable rows support pointer plus Enter/Space keyboard interaction
+- `cell-<columnId>` slots remain available for consumer navigation, `InfoPopover` or other domain renderers
+- hidden columns do not participate in display or default filtering
+- the table uses a sticky header and computed transformations so rows are processed once per relevant reactive change
+
+The component intentionally does not include a transport, pagination protocol or server-query model. Consumers can perform server-side filtering/sorting by supplying already processed rows and controlling the same public state. Virtualization is not part of the current primitive; it should only be introduced when measured dataset sizes require it.
