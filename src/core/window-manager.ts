@@ -1,4 +1,5 @@
 import type { WidgetId } from './widget'
+import { createWidgetLifecycle, type WidgetLifecycle } from './widget-lifecycle'
 import type { WidgetRegistry } from './widget-registry'
 import {
   DEFAULT_MIN_WINDOW_SIZE,
@@ -91,6 +92,7 @@ function topNormalWindowId(windows: readonly WindowState[]): WindowInstanceId | 
 export class WindowManager {
   private windows: WindowState[] = []
   private readonly listeners = new Set<WindowManagerListener>()
+  private readonly lifecycles = new Map<WindowInstanceId, WidgetLifecycle>()
   private nextInstanceNumber = 0
 
   constructor(private readonly registry: WidgetRegistry) {}
@@ -103,6 +105,12 @@ export class WindowManager {
     const window = this.windows.find((candidate) => candidate.instanceId === instanceId)
     if (!window) throw new UnknownWindowInstanceError(instanceId)
     return cloneWindow(window)
+  }
+
+  getLifecycle(instanceId: WindowInstanceId): WidgetLifecycle {
+    const lifecycle = this.lifecycles.get(instanceId)
+    if (!lifecycle) throw new UnknownWindowInstanceError(instanceId)
+    return lifecycle
   }
 
   open(request: OpenWindowRequest, origin: WindowOperationOrigin = 'api'): WindowState {
@@ -150,6 +158,7 @@ export class WindowManager {
       constraints,
     }
 
+    this.lifecycles.set(instanceId, createWidgetLifecycle())
     this.windows = [...unfocused, opened]
     this.emit('open', origin, instanceId)
     return cloneWindow(opened)
@@ -196,6 +205,7 @@ export class WindowManager {
       return { ...window, focused: window.instanceId === nextFocusedId }
     })
 
+    this.getLifecycle(instanceId).transitionIfPossible('minimize')
     this.emit('minimize', origin, instanceId)
     return this.get(instanceId)
   }
@@ -216,6 +226,7 @@ export class WindowManager {
       zIndex,
     }))
 
+    this.getLifecycle(instanceId).transitionIfPossible('restore')
     this.emit('restore', origin, instanceId)
     return this.get(instanceId)
   }
@@ -236,6 +247,13 @@ export class WindowManager {
       zIndex,
     }))
 
+    const lifecycle = this.getLifecycle(instanceId)
+    lifecycle.transitionIfPossible('close')
+    try {
+      lifecycle.transitionIfPossible('destroy')
+    } finally {
+      this.lifecycles.delete(instanceId)
+    }
     this.emit('close', origin, instanceId)
   }
 
