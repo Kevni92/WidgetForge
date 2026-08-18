@@ -47,3 +47,21 @@ export type {
   WindowOperationOrigin,
   WindowState,
 } from './core/window-manager'
+export {
+  DEFAULT_MIN_VISIBLE,
+  DEFAULT_MIN_WINDOW_SIZE,
+  DEFAULT_WINDOW_SIZE,
+  constrainGeometry,
+  constrainPosition,
+  constrainSize,
+  moveWindow,
+  resizeWindow,
+  sameGeometry,
+} from './core/window-geometry'
+export type {
+  ResizeHandle,
+  WindowGeometry,
+  WindowPosition,
+  WindowSize,
+  WindowSizeConstraints,
+} from './core/window-geometry'

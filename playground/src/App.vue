@@ -22,9 +22,24 @@ const themes: Record<ThemeName, WidgetForgeTheme> = {
 const activeTheme = computed(() => themes[themeName.value])
 
 const windowManager = markRaw(createWindowManager(playgroundWidgetRegistry))
-windowManager.open({ widgetId: 'planet.summary', instanceId: 'planet-alpha', parameters: { planetId: 'ARC-01' } })
-windowManager.open({ widgetId: 'planet.summary', instanceId: 'planet-beta', parameters: { planetId: 'ARC-02', compact: true } })
-windowManager.open({ widgetId: 'market.ticker', instanceId: 'market-metals', parameters: { commodity: 'METALS', rows: 6 } })
+windowManager.open({
+  widgetId: 'planet.summary',
+  instanceId: 'planet-alpha',
+  parameters: { planetId: 'ARC-01' },
+  position: { x: 32, y: 32 },
+})
+windowManager.open({
+  widgetId: 'planet.summary',
+  instanceId: 'planet-beta',
+  parameters: { planetId: 'ARC-02', compact: true },
+  position: { x: 190, y: 250 },
+})
+windowManager.open({
+  widgetId: 'market.ticker',
+  instanceId: 'market-metals',
+  parameters: { commodity: 'METALS', rows: 6 },
+  position: { x: 390, y: 70 },
+})
 
 let nextPlanet = 3
 
@@ -45,7 +60,7 @@ function openMarket(): void {
         <header class="playground-header">
           <div>
             <p class="eyebrow">WidgetForge</p>
-            <h1>Window Manager Playground</h1>
+            <h1>Floating Window Playground</h1>
           </div>
           <label class="theme-picker">
             Theme
@@ -57,7 +72,7 @@ function openMarket(): void {
           </label>
         </header>
 
-        <p class="intro">Fenster werden ausschließlich über die öffentliche WindowManager-API geöffnet, fokussiert und geschlossen.</p>
+        <p class="intro">Fenster lassen sich an der Titelbar verschieben und an allen Kanten und Ecken skalieren. Fokus, Geometrie und Z-Reihenfolge bleiben im WindowManager-State.</p>
 
         <section class="demo-section">
           <h2>Window Manager</h2>
@@ -65,7 +80,9 @@ function openMarket(): void {
             <button type="button" data-action="open-planet" @click="openPlanet">Open Planet</button>
             <button type="button" data-action="open-market" @click="openMarket">Open Market</button>
           </div>
-          <WindowManagerHost :manager="windowManager" :registry="playgroundWidgetRegistry" />
+          <div class="window-playground-area">
+            <WindowManagerHost :manager="windowManager" :registry="playgroundWidgetRegistry" />
+          </div>
         </section>
 
         <section class="demo-section">
