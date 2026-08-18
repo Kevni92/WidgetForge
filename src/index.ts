@@ -3,6 +3,7 @@ export { createTheme, defaultTheme, themeToCssVariables } from './vue/theme'
 export type { DeepPartial, WidgetForgeTheme, WidgetForgeThemeOverride } from './vue/theme'
 export { useTheme } from './vue/theme-context'
 export { default as WidgetHost } from './vue/WidgetHost.vue'
+export { default as PaneHost } from './vue/PaneHost.vue'
 export { useWidgetContext } from './vue/widget-context'
 export type { WidgetContext } from './vue/widget-context'
 export {
@@ -127,6 +128,7 @@ export type {
   CreateSplitPaneOptions,
   RemovePaneResult,
 } from './core/pane'
+export { resizePaneSplitWeights } from './core/pane-layout'
 export {
   createWidgetLifecycle,
   InvalidWidgetLifecycleTransitionError,
