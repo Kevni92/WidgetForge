@@ -5,15 +5,9 @@ import { containsPane, findPane, type PaneNode } from '../core/pane'
 import type { WidgetRegistry } from '../core/widget-registry'
 import type { WindowSize } from '../core/window-geometry'
 import type { WindowManager } from '../core/window-manager'
-import {
-  detectWorkspaceDropZone,
-  movePaneToTarget,
-  relocatePaneBetweenTrees,
-  workspaceDropPreviewRect,
-  type WorkspaceDropRect,
-  type WorkspaceDropZone,
-} from '../core/workspace-docking'
+import { detectWorkspaceDropZone, movePaneToTarget, relocatePaneBetweenTrees, type WorkspaceDropRect, type WorkspaceDropZone } from '../core/workspace-docking'
 import DockHost from './DockHost.vue'
+import DockingOverlay from './DockingOverlay.vue'
 import { observeElementSize } from './observe-element-size'
 import WindowManagerHost from './WindowManagerHost.vue'
 
@@ -40,9 +34,7 @@ const unsubscribe = dockManager.subscribe((change) => { dockStates.value = chang
 const layout = computed(() => calculateWorkspaceDockLayout(size.value, dockStates.value))
 const editMode = computed(() => controlPressed.value || paneDragActive.value)
 
-function rectStyle(rect: { x: number; y: number; width: number; height: number }): Record<string, string> {
-  return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` }
-}
+function rectStyle(rect: { x: number; y: number; width: number; height: number }): Record<string, string> { return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` } }
 function ownerFromElement(element: Element): Owner | null {
   const windowElement = element.closest<HTMLElement>('[data-window-instance-id]')
   if (windowElement?.dataset.windowInstanceId) return { kind: 'window', id: windowElement.dataset.windowInstanceId }
@@ -61,22 +53,15 @@ function findDropTarget(session: PaneDragSession, clientX: number, clientY: numb
   const sourceRoot = ownerRoot(session.sourceOwner)
   const sourcePane = findPane(sourceRoot, session.sourcePaneId)
   if (!sourcePane) return null
-
   const candidates = [...workspace.querySelectorAll<HTMLElement>('.wf-pane-host[data-pane-id]')]
     .filter((element) => !session.sourceElement.contains(element))
     .filter((element) => containsPoint(element.getBoundingClientRect(), clientX, clientY))
-    .sort((left, right) => {
-      const a = left.getBoundingClientRect(); const b = right.getBoundingClientRect()
-      return a.width * a.height - b.width * b.height
-    })
-
+    .sort((left, right) => { const a = left.getBoundingClientRect(); const b = right.getBoundingClientRect(); return a.width * a.height - b.width * b.height })
   for (const candidate of candidates) {
     const candidateRect = candidate.getBoundingClientRect()
     const zone = detectWorkspaceDropZone({ x: clientX, y: clientY }, { x: candidateRect.left, y: candidateRect.top, width: candidateRect.width, height: candidateRect.height })
     if (!zone) continue
-    const element = zone === 'center'
-      ? (candidate.closest<HTMLElement>('.wf-pane-host[data-pane-kind="tabs"]') ?? candidate)
-      : candidate
+    const element = zone === 'center' ? (candidate.closest<HTMLElement>('.wf-pane-host[data-pane-kind="tabs"]') ?? candidate) : candidate
     const paneId = element.dataset.paneId
     const owner = ownerFromElement(element)
     if (!paneId || !owner) continue
@@ -87,21 +72,16 @@ function findDropTarget(session: PaneDragSession, clientX: number, clientY: numb
   }
   return null
 }
-
-function previewLocalRect(target: PaneDropTarget): WorkspaceDropRect {
+function localTargetRect(target: PaneDropTarget): WorkspaceDropRect {
   const workspace = root.value
   if (!workspace) return target.rect
   const rootRect = workspace.getBoundingClientRect()
-  const preview = workspaceDropPreviewRect(target.zone, target.rect)
-  return { x: preview.x - rootRect.left, y: preview.y - rootRect.top, width: preview.width, height: preview.height }
+  return { x: target.rect.x - rootRect.left, y: target.rect.y - rootRect.top, width: target.rect.width, height: target.rect.height }
 }
 function commitPaneDrop(session: PaneDragSession, target: PaneDropTarget): void {
   dropSequence += 1
   const containerId = `workspace-drop-${dropSequence}`
-  if (sameOwner(session.sourceOwner, target.owner)) {
-    setOwnerRoot(session.sourceOwner, movePaneToTarget(ownerRoot(session.sourceOwner), session.sourcePaneId, target.paneId, target.zone, containerId))
-    return
-  }
+  if (sameOwner(session.sourceOwner, target.owner)) { setOwnerRoot(session.sourceOwner, movePaneToTarget(ownerRoot(session.sourceOwner), session.sourcePaneId, target.paneId, target.zone, containerId)); return }
   if (session.sourceOwner.kind === 'dock' && ownerRoot(session.sourceOwner).id === session.sourcePaneId) return
   const result = relocatePaneBetweenTrees(ownerRoot(session.sourceOwner), session.sourcePaneId, ownerRoot(target.owner), target.paneId, target.zone, containerId)
   setOwnerRoot(target.owner, result.targetRoot)
@@ -122,7 +102,6 @@ function startPaneDrag(event: PointerEvent): void {
   const sourceRoot = ownerRoot(owner)
   if (!sourcePaneId || !findPane(sourceRoot, sourcePaneId)) return
   if (owner.kind === 'dock' && sourceRoot.id === sourcePaneId) return
-
   event.preventDefault(); event.stopPropagation(); finishPaneDrag(); paneDragActive.value = true
   const session: PaneDragSession = { sourceOwner: owner, sourcePaneId, sourceElement: tabButton ?? paneElement, pointerId: typeof event.pointerId === 'number' ? event.pointerId : undefined }
   const matches = (next: PointerEvent): boolean => session.pointerId === undefined || typeof next.pointerId !== 'number' || next.pointerId === session.pointerId
@@ -135,9 +114,12 @@ function startPaneDrag(event: PointerEvent): void {
   disposePaneDrag = cleanup
   globalThis.window.addEventListener('pointermove', move); globalThis.window.addEventListener('pointerup', end); globalThis.window.addEventListener('pointercancel', end)
 }
-function onKeyDown(event: KeyboardEvent): void { if (event.key === 'Control') controlPressed.value = true }
+function onKeyDown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') { finishPaneDrag(); paneDropPreview.value = null; return }
+  if (event.key === 'Control') controlPressed.value = true
+}
 function onKeyUp(event: KeyboardEvent): void { if (event.key === 'Control') controlPressed.value = false }
-function onBlur(): void { controlPressed.value = false }
+function onBlur(): void { controlPressed.value = false; finishPaneDrag() }
 
 onMounted(() => {
   if (root.value) disposeSize = observeElementSize(root.value, (next) => { size.value = next })
@@ -153,7 +135,7 @@ onBeforeUnmount(() => {
   <div ref="root" class="wf-workspace-host" :class="{ 'wf-workspace-host--edit': editMode }" :data-workspace-edit-mode="editMode" @pointerdown.capture="startPaneDrag">
     <div class="wf-workspace-host__floating" :style="rectStyle(layout.floating)" data-workspace-floating><WindowManagerHost :manager="windowManager" :registry="registry" /></div>
     <DockHost v-for="dock in dockStates" :key="dock.id" :dock="dock" :rect="layout.docks[dock.id] ?? { x:0,y:0,width:0,height:0 }" :manager="dockManager" :registry="registry" />
-    <div v-if="paneDropPreview" class="wf-workspace-pane-drop-preview" :data-pane-drop-target="paneDropPreview.paneId" :data-pane-drop-zone="paneDropPreview.zone" :style="rectStyle(previewLocalRect(paneDropPreview))" aria-hidden="true" />
+    <DockingOverlay v-if="paneDropPreview" :target-rect="localTargetRect(paneDropPreview)" :active-zone="paneDropPreview.zone" :source-id="paneDropPreview.owner.id" :target-id="paneDropPreview.paneId" />
   </div>
 </template>
 
@@ -161,5 +143,4 @@ onBeforeUnmount(() => {
 .wf-workspace-host{position:relative;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;background:var(--wf-color-canvas)}
 .wf-workspace-host__floating{position:absolute;min-width:0;min-height:0;overflow:hidden}
 .wf-workspace-host--edit :deep(.wf-pane-host){outline:1px dashed var(--wf-color-border);outline-offset:-1px}.wf-workspace-host--edit :deep(.wf-pane-host:hover){outline-color:var(--wf-color-focus)}
-.wf-workspace-pane-drop-preview{position:absolute;z-index:var(--wf-layer-overlay);pointer-events:none;border:1px solid var(--wf-color-focus);background:var(--wf-color-selected);box-shadow:inset 0 0 0 1px var(--wf-color-border);outline:1px dashed var(--wf-color-accent);outline-offset:-3px}
 </style>
