@@ -54,7 +54,7 @@ function startInteraction(event: PointerEvent): void {
   }
   interactionKind.value = session.handle ? 'resize' : 'move'
   if (session.pointerId !== undefined && typeof session.captureTarget.setPointerCapture === 'function') {
-    try { session.captureTarget.setPointerCapture(session.pointerId) } catch { /* global listeners remain active */ }
+    try { session.captureTarget.setPointerCapture(session.pointerId) } catch { /* Pointer capture is optional. */ }
   }
   const pointerMatches = (pointerEvent: PointerEvent): boolean => session.pointerId === undefined || typeof pointerEvent.pointerId !== 'number' || pointerEvent.pointerId === session.pointerId
   const onPointerMove = (pointerEvent: PointerEvent): void => {
@@ -68,7 +68,7 @@ function startInteraction(event: PointerEvent): void {
   const cleanup = (): void => {
     globalThis.window.removeEventListener('pointermove', onPointerMove); globalThis.window.removeEventListener('pointerup', onPointerEnd); globalThis.window.removeEventListener('pointercancel', onPointerEnd)
     if (session.pointerId !== undefined && typeof session.captureTarget.releasePointerCapture === 'function') {
-      try { session.captureTarget.releasePointerCapture(session.pointerId) } catch { /* browser may already have released it */ }
+      try { session.captureTarget.releasePointerCapture(session.pointerId) } catch { /* Browser may already have released capture. */ }
     }
     if (disposeInteraction === cleanup) disposeInteraction = null
     interactionKind.value = null
