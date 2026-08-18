@@ -17,7 +17,7 @@ interface WindowFrameProps {
   manager: WindowManager
   registry: WidgetRegistry
   containerSize: WindowSize
-  lifecycle: WidgetLifecycleController
+  lifecycle?: WidgetLifecycleController
 }
 
 interface InteractionSession {
@@ -31,6 +31,7 @@ interface InteractionSession {
 
 const props = defineProps<WindowFrameProps>()
 const manager = toRaw(props.manager)
+const lifecycleController = props.lifecycle ?? manager.getLifecycle(props.window.instanceId)
 const interactionKind = ref<'move' | 'resize' | null>(null)
 let disposeInteraction: (() => void) | null = null
 
@@ -198,7 +199,7 @@ onBeforeUnmount(finishInteraction)
       :title="window.title"
       :focused="window.focused"
       :minimized="window.mode === 'minimized'"
-      :lifecycle="lifecycle"
+      :lifecycle="lifecycleController"
       @focus="focusWindow"
       @close="closeWindow"
       @minimize="minimizeWindow"
