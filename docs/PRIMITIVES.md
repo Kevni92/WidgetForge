@@ -14,3 +14,13 @@ WidgetForge primitives are domain-neutral building blocks. They use semantic `--
 - placement is explicitly selectable with `top`, `right`, `bottom` or `left`
 
 Because the content may itself be interactive, the panel uses dialog semantics rather than a passive tooltip role. Concrete glossary terms and explanations belong to the consuming product, not the framework.
+
+## Key/value and statistics
+
+`KeyValueGroup` groups compact simulation-style label/value pairs and provides one- or two-column layouts. The compact variant only changes density; at narrow viewport widths the group falls back to one column.
+
+`KeyValueRow` separates label and value into independent slots. Consumers can therefore place an `InfoPopover`, navigation control or any custom renderer on either side without coupling the primitive to those services.
+
+`StatValue` renders a number or string with an optional unit and semantic tone (`neutral`, `success`, `warning`, `danger`, `info`). It uses tabular numbers and accepts an accessible label for abbreviated values.
+
+The row markup uses `dt`/`dd` and is intended to be composed inside `KeyValueGroup`'s `dl` element.
