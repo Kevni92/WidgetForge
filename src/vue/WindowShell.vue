@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, markRaw, toRaw } from 'vue'
+import { createWidgetPane, type PaneNode } from '../core/pane'
 import type { WidgetId } from '../core/widget'
 import type { WidgetLifecycleController } from '../core/widget-lifecycle'
 import type { WidgetRegistry } from '../core/widget-registry'
-import WidgetHost from './WidgetHost.vue'
+import PaneHost from './PaneHost.vue'
 
 interface WindowShellEvent {
   instanceId: string
@@ -11,9 +12,10 @@ interface WindowShellEvent {
 
 interface WindowShellProps {
   registry: WidgetRegistry
-  widgetId: WidgetId
+  pane?: PaneNode
+  widgetId?: WidgetId
   instanceId: string
-  parameters?: Readonly<Record<string, unknown>>
+  parameters?: Readonly<Record<string, string | number | boolean>>
   title?: string
   focused?: boolean
   closable?: boolean
@@ -35,15 +37,30 @@ const emit = defineEmits<{
   close: [event: WindowShellEvent]
   minimize: [event: WindowShellEvent]
   restore: [event: WindowShellEvent]
+  'update:pane': [pane: PaneNode]
 }>()
+
+const contentPane = computed<PaneNode | null>(() => {
+  if (props.pane) return props.pane
+  if (!props.widgetId) return null
+  return createWidgetPane({
+    id: `${props.instanceId}.root`,
+    widgetId: props.widgetId,
+    instanceId: props.instanceId,
+    parameters: props.parameters,
+  })
+})
 
 const resolvedTitle = computed(() => {
   if (props.title) return props.title
+  const pane = contentPane.value
+  if (!pane) return 'Window'
+  if (pane.kind !== 'widget') return 'Workspace'
 
   try {
-    return markRaw(toRaw(props.registry)).get(props.widgetId).title
+    return markRaw(toRaw(props.registry)).get(pane.widgetId).title
   } catch {
-    return props.widgetId
+    return pane.widgetId
   }
 })
 
@@ -110,12 +127,12 @@ function toggleMinimized(): void {
 
     <div v-show="!minimized" class="wf-window-shell__content" :aria-hidden="minimized ? 'true' : undefined">
       <slot>
-        <WidgetHost
+        <PaneHost
+          v-if="contentPane"
+          :pane="contentPane"
           :registry="registry"
-          :widget-id="widgetId"
-          :instance-id="instanceId"
-          :parameters="parameters"
           :lifecycle="lifecycle"
+          @update:pane="emit('update:pane', $event)"
         />
       </slot>
     </div>
@@ -202,5 +219,10 @@ function toggleMinimized(): void {
   min-height: 0;
   flex: 1;
   padding: var(--wf-space-md);
+}
+
+.wf-window-shell__content :deep(.wf-pane-host) {
+  width: 100%;
+  height: 100%;
 }
 </style>
