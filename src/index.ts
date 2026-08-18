@@ -29,6 +29,7 @@ export {
   InvalidDataKeyError,
 } from './data/data-client'
 export type {
+  DataClientOptions,
   DataHandle,
   DataKey,
   DataObserver,
