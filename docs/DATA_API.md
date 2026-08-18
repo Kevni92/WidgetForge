@@ -28,7 +28,7 @@ Jede neue zugrunde liegende Subscription besitzt eine interne Generation. Versp�
 
 ## Provider-Vertrag
 
-Ein `DataProvider` implementiert ausschließlich `subscribe(key, observer)` und liefert eine Unsubscribe-Funktion zurück. Der Vertrag enthält bewusst noch keine konkrete Transport- oder Connection-Logik.
+Ein `DataProvider` implementiert ausschließlich `subscribe(key, observer)` und liefert eine Unsubscribe-Funktion zurück. Widgets und `DataClient` arbeiten immer gegen diesen Vertrag.
 
 ## MockDataProvider
 
@@ -43,6 +43,26 @@ Für Tests und Demos stehen kontrollierte Methoden zur Verfügung:
 
 Diese Funktionen gehören nur zum Mock Provider. Widgets kennen sie nicht und bleiben vollständig provider-unabhängig.
 
+## RealtimeTransport
+
+Ein externer Echtzeitkanal wird über `RealtimeTransport` angebunden. Der Vertrag enthält nur generische Infrastruktur:
+
+- `connect()` / `disconnect()`
+- beobachtbarer Connection-State: `disconnected`, `connecting`, `connected`, `reconnecting`, `error`
+- Resource-Subscriptions anhand desselben `DataKey<T>`
+- getrennte `snapshot`- und `update`-Zustellung
+- Resource-Fehler
+
+Snapshot und Update liefern jeweils einen vollständigen aktuellen Wert `T`. Protokollspezifische Deltas müssen vom konkreten Consumer-Transport vor der Übergabe materialisiert werden. WidgetForge interpretiert keine fachlichen Payloads.
+
+`RealtimeDataProvider` adaptiert einen solchen Transport auf den normalen `DataProvider`. Aktive Data-Consumer bleiben bei Verbindungsunterbrechungen registriert. Transport-Subscriptions werden entfernt und nach dem nächsten `connected` automatisch wiederhergestellt. Bereits freigegebene Ressourcen werden nicht erneut subscribed.
+
+Der Connection-State ist bewusst separat vom Resource-State verfügbar. Widgets müssen ihn nicht kennen; eine Anwendung kann ihn beispielsweise für globale Verbindungsanzeigen verwenden.
+
+WidgetForge enthält keine WebSocket-, REST- oder sonstige protokollspezifische Implementierung. Verbindungsdetails, Authentifizierung und Serverprotokoll gehören in den Consumer-Transport.
+
 ## Vue
 
 `DataClientProvider` stellt einen Client im Vue-Tree bereit. Widgets verwenden `useData(key)`. Das Composable ruft beim Vue-Unmount automatisch `release()` auf. Minimieren eines Widgets unmountet den Widget-Inhalt nicht und beendet daher auch keine Data-Subscription; Close/Destroy führt über den normalen Vue-Unmount zum Cleanup.
+
+Der Playground verwendet weiterhin ausschließlich `MockDataProvider` und bleibt vollständig serverlos.

@@ -45,6 +45,18 @@ export {
   UnknownMockDataResourceError,
 } from './data/mock-data-provider'
 export type { MockDataResourceDefinition } from './data/mock-data-provider'
+export {
+  createRealtimeDataProvider,
+  RealtimeDataProvider,
+} from './data/realtime-transport'
+export type {
+  RealtimeConnectionListener,
+  RealtimeConnectionState,
+  RealtimeConnectionStateRef,
+  RealtimeConnectionStatus,
+  RealtimeResourceObserver,
+  RealtimeTransport,
+} from './data/realtime-transport'
 export { defineWidget, WidgetDefinitionError } from './core/widget'
 export type {
   InferWidgetParameters,
