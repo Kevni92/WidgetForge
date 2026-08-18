@@ -314,8 +314,12 @@ export class WindowManager {
   }
 
   private createInstanceId(): WindowInstanceId {
-    this.nextInstanceNumber += 1
-    return `wf-window-${this.nextInstanceNumber}`
+    let instanceId: WindowInstanceId
+    do {
+      this.nextInstanceNumber += 1
+      instanceId = `wf-window-${this.nextInstanceNumber}`
+    } while (this.windows.some((window) => window.instanceId === instanceId))
+    return instanceId
   }
 
   private createLifecycle(instanceId: WindowInstanceId): WidgetLifecycleController {
