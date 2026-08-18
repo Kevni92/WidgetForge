@@ -74,6 +74,22 @@ export type {
   CommandParseErrorCode,
 } from './core/commands'
 export {
+  captureWorkspace,
+  restoreWorkspace,
+  serializeWorkspace,
+  WORKSPACE_VERSION,
+  WorkspaceSerializationError,
+} from './core/workspace'
+export type {
+  WorkspaceParameters,
+  WorkspaceParameterValue,
+  WorkspaceRestoreIssue,
+  WorkspaceRestoreIssueCode,
+  WorkspaceRestoreResult,
+  WorkspaceSnapshot,
+  WorkspaceWindowSnapshot,
+} from './core/workspace'
+export {
   createWindowManager,
   DuplicateWindowInstanceError,
   UnknownWindowInstanceError,

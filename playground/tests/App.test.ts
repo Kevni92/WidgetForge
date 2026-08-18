@@ -1,8 +1,12 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../src/App.vue'
 
 describe('Playground App', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
   it('demonstrates window state, internal navigation and command execution', async () => {
     const wrapper = mount(App)
     const select = wrapper.get('select')
@@ -39,5 +43,19 @@ describe('Playground App', () => {
 
     await select.setValue('forge-dark')
     expect(wrapper.get('.wf-theme').attributes('style')).toContain('--wf-color-canvas: #070b12')
+  })
+
+  it('restores the saved window workspace after remounting the playground', async () => {
+    const first = mount(App)
+    await first.get('[data-window-instance-id="planet-alpha"] .wf-window-shell__minimize').trigger('click')
+    await first.get('[data-window-instance-id="market-metals"] .wf-window-shell__close').trigger('click')
+    first.unmount()
+
+    const second = mount(App)
+
+    expect(second.findAll('.wf-window-frame')).toHaveLength(2)
+    expect(second.get('.wf-window-frame[data-window-instance-id="planet-alpha"]').attributes('data-window-mode')).toBe('minimized')
+    expect(second.find('.wf-window-frame[data-window-instance-id="market-metals"]').exists()).toBe(false)
+    expect(second.text()).toContain('ARC-02')
   })
 })
