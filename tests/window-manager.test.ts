@@ -1,5 +1,6 @@
 import { defineComponent } from 'vue'
 import { describe, expect, it } from 'vitest'
+import { createSplitPane, createWidgetPane } from '../src/core/pane'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import {
@@ -26,7 +27,7 @@ function createRegistry() {
 }
 
 describe('WindowManager', () => {
-  it('opens multiple normalized widget instances with stable IDs and a single focus', () => {
+  it('opens multiple normalized widget instances as root panes with stable IDs and a single focus', () => {
     const manager = createWindowManager(createRegistry())
 
     const first = manager.open({ widgetId: 'test.planet', parameters: { planetId: 'A' } })
@@ -34,11 +35,36 @@ describe('WindowManager', () => {
 
     expect(first.instanceId).toBe('wf-window-1')
     expect(second.instanceId).toBe('wf-window-2')
-    expect(first.parameters).toEqual({ planetId: 'A', compact: false })
+    expect(first.rootPane).toMatchObject({
+      kind: 'widget',
+      id: 'wf-window-1.root',
+      widgetId: 'test.planet',
+      instanceId: 'wf-window-1',
+      parameters: { planetId: 'A', compact: false },
+    })
     expect(manager.list().map((window) => [window.instanceId, window.focused, window.zIndex])).toEqual([
       ['wf-window-1', false, 0],
       ['wf-window-2', true, 1],
     ])
+  })
+
+  it('opens and updates a complete nested pane tree without duplicating direct widget state', () => {
+    const manager = createWindowManager(createRegistry())
+    const pane = createSplitPane({
+      id: 'root',
+      axis: 'horizontal',
+      children: [
+        createWidgetPane({ id: 'planet', widgetId: 'test.planet', instanceId: 'planet-leaf', parameters: { planetId: 'P1' } }),
+        createWidgetPane({ id: 'market', widgetId: 'test.market', instanceId: 'market-leaf' }),
+      ],
+    })
+
+    const opened = manager.openPane({ pane, instanceId: 'multi', title: 'Operations' })
+    expect(opened.rootPane.kind).toBe('split')
+    expect('widgetId' in opened).toBe(false)
+
+    const updated = manager.setRootPane('multi', { ...pane, weights: [2, 1] }, 'user')
+    expect(updated.rootPane.kind === 'split' ? updated.rootPane.weights : []).toEqual([2, 1])
   })
 
   it('focuses deterministically by moving only the requested instance to the front', () => {
