@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import {
   ThemeProvider,
-  WidgetHost,
+  WindowShell,
   defaultTheme,
   forgeDarkTheme,
   forgeLightTheme,
@@ -29,7 +29,7 @@ const activeTheme = computed(() => themes[themeName.value])
         <header class="playground-header">
           <div>
             <p class="eyebrow">WidgetForge</p>
-            <h1>Widget Host Playground</h1>
+            <h1>Window Shell Playground</h1>
           </div>
           <label class="theme-picker">
             Theme
@@ -41,35 +41,30 @@ const activeTheme = computed(() => themes[themeName.value])
           </label>
         </header>
 
-        <p class="intro">Registrierte Widgets werden über die öffentliche WidgetHost-API als isolierte Instanzen gerendert.</p>
+        <p class="intro">WindowShell stellt generisches Fenster-Chrome bereit und hält den Widget-Inhalt davon getrennt.</p>
 
         <section class="demo-section">
-          <h2>Live Widget Hosts</h2>
+          <h2>Window Shells</h2>
           <div class="manifest-grid">
-            <article class="manifest-card">
-              <WidgetHost
-                :registry="playgroundWidgetRegistry"
-                widget-id="planet.summary"
-                instance-id="planet-alpha"
-                :parameters="{ planetId: 'ARC-01' }"
-              />
-            </article>
-            <article class="manifest-card">
-              <WidgetHost
-                :registry="playgroundWidgetRegistry"
-                widget-id="planet.summary"
-                instance-id="planet-beta"
-                :parameters="{ planetId: 'ARC-02', compact: true }"
-              />
-            </article>
-            <article class="manifest-card">
-              <WidgetHost
-                :registry="playgroundWidgetRegistry"
-                widget-id="market.ticker"
-                instance-id="market-metals"
-                :parameters="{ commodity: 'METALS', rows: 6 }"
-              />
-            </article>
+            <WindowShell
+              :registry="playgroundWidgetRegistry"
+              widget-id="planet.summary"
+              instance-id="planet-alpha"
+              :parameters="{ planetId: 'ARC-01' }"
+              focused
+            />
+            <WindowShell
+              :registry="playgroundWidgetRegistry"
+              widget-id="planet.summary"
+              instance-id="planet-beta"
+              :parameters="{ planetId: 'ARC-02', compact: true }"
+            />
+            <WindowShell
+              :registry="playgroundWidgetRegistry"
+              widget-id="market.ticker"
+              instance-id="market-metals"
+              :parameters="{ commodity: 'METALS', rows: 6 }"
+            />
           </div>
         </section>
 
