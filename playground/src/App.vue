@@ -7,6 +7,7 @@ import {
   forgeLightTheme,
   type WidgetForgeTheme,
 } from 'widgetforge'
+import { playgroundWidgets } from './playground-widgets'
 
 type ThemeName = 'neutral' | 'forge-dark' | 'forge-light'
 
@@ -27,7 +28,7 @@ const activeTheme = computed(() => themes[themeName.value])
         <header class="playground-header">
           <div>
             <p class="eyebrow">WidgetForge</p>
-            <h1>Theme Playground</h1>
+            <h1>Widget Contract Playground</h1>
           </div>
           <label class="theme-picker">
             Theme
@@ -39,12 +40,31 @@ const activeTheme = computed(() => themes[themeName.value])
           </label>
         </header>
 
-        <p class="intro">Forge ist ein offizielles Preset auf derselben generischen Theme-API wie das neutrale Standard-Theme.</p>
+        <p class="intro">Widgets werden deklarativ über ein kleines, domänenfreies Manifest beschrieben.</p>
 
-        <div class="token-demo">
-          <div class="demo-surface">Surface</div>
-          <div class="demo-surface raised">Raised surface</div>
-        </div>
+        <section class="demo-section">
+          <h2>Dummy Widgets</h2>
+          <div class="manifest-grid">
+            <article v-for="widget in playgroundWidgets" :key="widget.id" class="manifest-card">
+              <strong>{{ widget.title }}</strong>
+              <code>{{ widget.id }}</code>
+              <span class="manifest-meta">
+                Parameter: {{ Object.keys(widget.parameters ?? {}).join(', ') || 'keine' }}
+              </span>
+              <span v-if="widget.window?.defaultSize" class="manifest-meta">
+                Default: {{ widget.window.defaultSize.width }} × {{ widget.window.defaultSize.height }}
+              </span>
+            </article>
+          </div>
+        </section>
+
+        <section class="demo-section">
+          <h2>Theme Tokens</h2>
+          <div class="token-demo">
+            <div class="demo-surface">Surface</div>
+            <div class="demo-surface raised">Raised surface</div>
+          </div>
+        </section>
 
         <section class="demo-section">
           <h2>Semantische Zustände</h2>
@@ -53,15 +73,6 @@ const activeTheme = computed(() => themes[themeName.value])
             <span class="state warning">Warning</span>
             <span class="state info">Info</span>
             <span class="state danger">Danger</span>
-          </div>
-        </section>
-
-        <section class="demo-section">
-          <h2>Interaktion</h2>
-          <div class="interaction-grid">
-            <button class="interaction hover">Hover</button>
-            <button class="interaction selected">Selected</button>
-            <button class="interaction focus">Focus</button>
           </div>
         </section>
       </section>
