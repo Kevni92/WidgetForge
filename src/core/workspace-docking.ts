@@ -3,9 +3,10 @@ import {
   containsPane,
   findPane,
   movePane,
+  movePaneToTabs,
   removePane,
-  replacePane,
   splitPaneAt,
+  tabPaneAt,
   type PaneNode,
   type PaneSplitEdge,
 } from './pane'
@@ -59,17 +60,14 @@ export function dropPaneAt(
   targetId: string,
   incoming: PaneNode,
   zone: WorkspaceDropZone,
-  splitId: string,
+  containerId: string,
 ): PaneNode {
   const target = findPane(root, targetId)
   if (!target) throw new InvalidPaneOperationError(`target pane "${targetId}" does not exist`)
   if (containsPane(incoming, targetId)) throw new InvalidPaneOperationError('incoming pane must not contain the target pane')
 
-  if (zone === 'center') {
-    if (target.kind === 'split') throw new InvalidPaneOperationError('center drop requires a leaf pane')
-    return replacePane(root, targetId, incoming)
-  }
-  return splitPaneAt(root, targetId, incoming, zone, splitId)
+  if (zone === 'center') return tabPaneAt(root, targetId, incoming, containerId)
+  return splitPaneAt(root, targetId, incoming, zone, containerId)
 }
 
 export function movePaneToTarget(
@@ -77,7 +75,7 @@ export function movePaneToTarget(
   sourceId: string,
   targetId: string,
   zone: WorkspaceDropZone,
-  splitId: string,
+  containerId: string,
 ): PaneNode {
   if (sourceId === targetId) throw new InvalidPaneOperationError('source and target pane must differ')
   const source = findPane(root, sourceId)
@@ -86,15 +84,8 @@ export function movePaneToTarget(
   if (!target) throw new InvalidPaneOperationError(`target pane "${targetId}" does not exist`)
   if (containsPane(source, targetId)) throw new InvalidPaneOperationError('a pane cannot be moved into one of its descendants')
 
-  if (zone !== 'center') return movePane(root, sourceId, targetId, zone, splitId)
-  if (source.id === root.id) throw new InvalidPaneOperationError('the root pane cannot be moved inside itself')
-  if (target.kind === 'split') throw new InvalidPaneOperationError('center drop requires a leaf pane')
-
-  const removed = removePane(root, sourceId)
-  if (!removed.root || !findPane(removed.root, targetId)) {
-    throw new InvalidPaneOperationError('target pane is not available after removing the source')
-  }
-  return replacePane(removed.root, targetId, removed.removed)
+  if (zone === 'center') return movePaneToTabs(root, sourceId, targetId, containerId)
+  return movePane(root, sourceId, targetId, zone, containerId)
 }
 
 export function relocatePaneBetweenTrees(
@@ -103,14 +94,14 @@ export function relocatePaneBetweenTrees(
   targetRoot: PaneNode,
   targetId: string,
   zone: WorkspaceDropZone,
-  splitId: string,
+  containerId: string,
 ): RelocatePaneResult {
   const source = findPane(sourceRoot, sourceId)
   if (!source) throw new InvalidPaneOperationError(`source pane "${sourceId}" does not exist`)
   const removed = removePane(sourceRoot, sourceId)
   return {
     sourceRoot: removed.root,
-    targetRoot: dropPaneAt(targetRoot, targetId, removed.removed, zone, splitId),
+    targetRoot: dropPaneAt(targetRoot, targetId, removed.removed, zone, containerId),
   }
 }
 
@@ -120,12 +111,12 @@ export function dockWindowIntoWindow(
   targetInstanceId: string,
   targetPaneId: string,
   zone: WorkspaceDropZone,
-  splitId: string,
+  containerId: string,
 ): WindowState {
   if (sourceInstanceId === targetInstanceId) throw new InvalidPaneOperationError('a window cannot be docked into itself')
   const source = manager.get(sourceInstanceId)
   const target = manager.get(targetInstanceId)
-  const rootPane = dropPaneAt(target.rootPane, targetPaneId, source.rootPane, zone, splitId)
+  const rootPane = dropPaneAt(target.rootPane, targetPaneId, source.rootPane, zone, containerId)
   manager.setRootPane(targetInstanceId, rootPane, 'user')
   manager.close(sourceInstanceId, 'user')
   return manager.get(targetInstanceId)
