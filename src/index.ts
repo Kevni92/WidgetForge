@@ -1,6 +1,4 @@
-/**
- * Public WidgetForge package entry point.
- *
- * Feature exports are added incrementally by the corresponding GitHub issues.
- */
-export {}
+export { default as ThemeProvider } from './vue/ThemeProvider.vue'
+export { createTheme, defaultTheme, themeToCssVariables } from './vue/theme'
+export type { DeepPartial, WidgetForgeTheme, WidgetForgeThemeOverride } from './vue/theme'
+export { useTheme } from './vue/theme-context'
