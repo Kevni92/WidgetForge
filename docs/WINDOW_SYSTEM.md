@@ -4,6 +4,18 @@
 
 Der `WindowManager` besitzt den kanonischen Fensterzustand. Vue-Komponenten stellen diesen Zustand dar und leiten Benutzerinteraktionen an den Manager weiter. DOM-Positionen oder `getBoundingClientRect()` sind nicht die persistente Wahrheit.
 
+## Window Content
+
+Ein Window enthält genau einen kanonischen `rootPane`. Der Root-Pane kann ein Widget-Pane oder ein beliebig verschachtelter Split-Pane sein. Das Window selbst enthält keine parallelen `widgetId`-/`parameters`-Felder mehr.
+
+`WindowManager.open({ widgetId, parameters })` bleibt als Convenience-API erhalten und erzeugt intern einen Widget-Root-Pane. `openPane(...)` öffnet vollständige Pane-Bäume. Layoutänderungen laufen über `setRootPane(...)` und werden vom `PaneHost` gerendert.
+
+Damit gilt die Architekturgrenze:
+
+`Window -> Root Pane -> Widget / Split Panes`
+
+Widgets kennen weder WindowManager noch Pane-Management.
+
 ## Floating-Geometrie
 
 Jede Fensterinstanz besitzt serialisierbar:
@@ -13,8 +25,13 @@ Jede Fensterinstanz besitzt serialisierbar:
 - `constraints.minSize`
 - `constraints.maxSize`
 - Fokus und Z-Reihenfolge
+- den vollständigen Root-Pane-Baum
 
 Koordinaten sind relativ zum Container des `WindowManagerHost`.
+
+## Workspace-Persistenz
+
+Workspace-Format v2 speichert den Root-Pane-Baum, Titel, Geometrie, Constraints, Window-Mode, Fokus und Z-Reihenfolge. Das alte Format v1 wird beim Restore weiterhin gelesen und als einzelner Widget-Root-Pane migriert. Runtime-Lifecycle-Objekte bleiben ausdrücklich außerhalb des serialisierten States.
 
 ## Dragging
 
@@ -31,7 +48,7 @@ Es existieren acht Resize-Richtungen:
 - `top`, `bottom`, `left`, `right`
 - `top-left`, `top-right`, `bottom-left`, `bottom-right`
 
-Widget-Metadaten `window.minSize` und `window.maxSize` werden zentral berücksichtigt. Ohne eigene Angaben verwendet WidgetForge sichere Fallback-Größen.
+Widget-Metadaten `window.minSize` und `window.maxSize` werden bei der Convenience-API zentral berücksichtigt. Pane-basierte Windows können Constraints explizit beim Öffnen setzen.
 
 ## Container-Grenzen
 
@@ -44,32 +61,16 @@ Stattdessen gilt:
 - die obere Fensterkante wird nicht oberhalb des Containers abgelegt,
 - übergroße Fenster bleiben erlaubt,
 - bei einer Container-Verkleinerung werden bestehende Fenster auf diese Erreichbarkeitsregeln zurückgeführt,
-- Min-/Max-Größen eines Widgets werden nicht zugunsten des Containers verletzt.
-
-Die Standardwerte sind über die öffentlichen Core-Konstanten dokumentiert.
+- Min-/Max-Größen werden nicht zugunsten des Containers verletzt.
 
 ## ResizeObserver
 
-Der `WindowManagerHost` beobachtet ausschließlich seine Containergröße. Messungen werden:
-
-- auf ganze Pixel gerundet,
-- bei identischem Ergebnis dedupliziert,
-- bei `0x0`, verstecktem oder bereits entferntem Element ignoriert,
-- beim Unmount vollständig abgemeldet.
-
-Der Observer ersetzt niemals den Window-State.
+Der `WindowManagerHost` beobachtet ausschließlich seine Containergröße. Messungen werden auf ganze Pixel gerundet, bei identischem Ergebnis dedupliziert, bei `0x0`, verstecktem oder entferntem Element ignoriert und beim Unmount vollständig abgemeldet. Der Observer ersetzt niemals den Window-State.
 
 ## Fokus und Z-Reihenfolge
 
 Drag oder Resize fokussieren die betroffene Instanz über den `WindowManager`. Der Manager hält die Z-Reihenfolge deterministisch und normalisiert sie nach Fokus- oder Close-Operationen.
 
-## Bewusst nicht enthalten
+## Folgende Erweiterungen
 
-Mit dem Floating-Window-System werden noch nicht implementiert:
-
-- Docking,
-- Tabs oder Split-Groups,
-- Snapping/Smart Guides,
-- native Browser-Popouts.
-
-Diese Funktionen benötigen bei Bedarf eigene Issues und dürfen das bestehende Window-State-Modell erweitern, aber nicht ersetzen.
+Window-Layer/Presentation, Workspace-Docks, Snapping sowie Window-/Pane-Docking werden in den separaten Issues #63 bis #66 auf diesem State-Modell aufgebaut.

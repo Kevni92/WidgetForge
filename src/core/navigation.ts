@@ -59,7 +59,7 @@ export class WidgetNavigatorService implements WidgetNavigator {
       widgetId: intent.widgetId,
       parameters: intent.parameters ?? {},
     })
-    return { widgetId: window.widgetId, instanceId: window.instanceId }
+    return { widgetId: intent.widgetId, instanceId: window.instanceId }
   }
 }
 

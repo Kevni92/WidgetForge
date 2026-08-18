@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, toRaw } from 'vue'
 import { replacePane, type PaneNode, type SplitPane } from '../core/pane'
 import { resizePaneSplitWeights } from '../core/pane-layout'
+import type { WidgetLifecycleController } from '../core/widget-lifecycle'
 import type { WidgetRegistry } from '../core/widget-registry'
 import WidgetHost from './WidgetHost.vue'
 
@@ -10,6 +11,7 @@ defineOptions({ name: 'PaneHost' })
 interface PaneHostProps {
   pane: PaneNode
   registry: WidgetRegistry
+  lifecycle?: WidgetLifecycleController | undefined
 }
 
 const props = defineProps<PaneHostProps>()
@@ -152,6 +154,7 @@ onBeforeUnmount(finishResize)
       :widget-id="pane.widgetId"
       :instance-id="pane.instanceId"
       :parameters="pane.parameters"
+      :lifecycle="lifecycle"
     />
 
     <template v-else>

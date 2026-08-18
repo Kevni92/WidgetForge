@@ -1,3 +1,4 @@
+import { clonePaneTree, validatePaneTree, type PaneNode, type PaneSettings } from './pane'
 import type { WidgetId } from './widget'
 import {
   DuplicateWindowInstanceError,
@@ -5,19 +6,20 @@ import {
   type WindowMode,
   type WindowState,
 } from './window-manager'
-import type { WindowGeometry } from './window-geometry'
+import type { WindowGeometry, WindowSizeConstraints } from './window-geometry'
 import { UnknownWidgetError, WidgetParameterValidationError } from './widget-registry'
 
-export const WORKSPACE_VERSION = 1 as const
+export const WORKSPACE_VERSION = 2 as const
 
 export type WorkspaceParameterValue = string | number | boolean
 export type WorkspaceParameters = Readonly<Record<string, WorkspaceParameterValue>>
 
 export interface WorkspaceWindowSnapshot {
   readonly instanceId: string
-  readonly widgetId: WidgetId
-  readonly parameters: WorkspaceParameters
+  readonly title: string
+  readonly rootPane: PaneNode
   readonly geometry: WindowGeometry
+  readonly constraints: WindowSizeConstraints
   readonly mode: WindowMode
   readonly focused: boolean
   readonly zIndex: number
@@ -26,6 +28,16 @@ export interface WorkspaceWindowSnapshot {
 export interface WorkspaceSnapshot {
   readonly version: typeof WORKSPACE_VERSION
   readonly windows: readonly WorkspaceWindowSnapshot[]
+}
+
+interface LegacyWorkspaceWindowSnapshot {
+  readonly instanceId: string
+  readonly widgetId: WidgetId
+  readonly parameters: WorkspaceParameters
+  readonly geometry: WindowGeometry
+  readonly mode: WindowMode
+  readonly focused: boolean
+  readonly zIndex: number
 }
 
 export type WorkspaceRestoreIssueCode =
@@ -68,26 +80,17 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-function cloneWorkspaceParameters(parameters: Readonly<Record<string, unknown>>): Record<string, WorkspaceParameterValue> {
-  const cloned: Record<string, WorkspaceParameterValue> = {}
-
-  for (const [key, value] of Object.entries(parameters)) {
-    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
-      throw new WorkspaceSerializationError(`parameter "${key}" is not workspace-serializable`)
-    }
-    if (typeof value === 'number' && !Number.isFinite(value)) {
-      throw new WorkspaceSerializationError(`parameter "${key}" must be a finite number`)
-    }
-    cloned[key] = value
-  }
-
-  return cloned
-}
-
 function cloneGeometry(geometry: WindowGeometry): WindowGeometry {
   return {
     position: { ...geometry.position },
     size: { ...geometry.size },
+  }
+}
+
+function cloneConstraints(constraints: WindowSizeConstraints): WindowSizeConstraints {
+  return {
+    minSize: { ...constraints.minSize },
+    maxSize: constraints.maxSize ? { ...constraints.maxSize } : null,
   }
 }
 
@@ -97,9 +100,10 @@ export function captureWorkspace(manager: WindowManager): WorkspaceSnapshot {
     .sort((left, right) => left.zIndex - right.zIndex)
     .map((window) => ({
       instanceId: window.instanceId,
-      widgetId: window.widgetId,
-      parameters: cloneWorkspaceParameters(window.parameters),
+      title: window.title,
+      rootPane: clonePaneTree(window.rootPane),
       geometry: cloneGeometry(window.geometry),
+      constraints: cloneConstraints(window.constraints),
       mode: window.mode,
       focused: window.focused,
       zIndex: window.zIndex,
@@ -122,7 +126,6 @@ function invalidRoot(code: WorkspaceRestoreIssueCode, message: string): Workspac
 
 function parseInput(input: unknown): unknown {
   if (typeof input !== 'string') return input
-
   try {
     return JSON.parse(input) as unknown
   } catch {
@@ -133,42 +136,150 @@ function parseInput(input: unknown): unknown {
 function readParameters(value: unknown): Record<string, WorkspaceParameterValue> | null {
   if (!isRecord(value)) return null
   const parameters: Record<string, WorkspaceParameterValue> = {}
-
   for (const [key, candidate] of Object.entries(value)) {
     if (typeof candidate !== 'string' && typeof candidate !== 'number' && typeof candidate !== 'boolean') return null
     if (typeof candidate === 'number' && !Number.isFinite(candidate)) return null
     parameters[key] = candidate
   }
-
   return parameters
 }
 
 function readGeometry(value: unknown): WindowGeometry | null {
   if (!isRecord(value) || !isRecord(value.position) || !isRecord(value.size)) return null
-
   const { x, y } = value.position
   const { width, height } = value.size
   if (!isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(width) || !isFiniteNumber(height)) return null
   if (width <= 0 || height <= 0) return null
+  return { position: { x, y }, size: { width, height } }
+}
 
-  return {
-    position: { x, y },
-    size: { width, height },
+function readSize(value: unknown): { width: number; height: number } | null {
+  if (!isRecord(value) || !isFiniteNumber(value.width) || !isFiniteNumber(value.height)) return null
+  if (value.width <= 0 || value.height <= 0) return null
+  return { width: value.width, height: value.height }
+}
+
+function readConstraints(value: unknown): WindowSizeConstraints | null {
+  if (!isRecord(value)) return null
+  const minSize = readSize(value.minSize)
+  const maxSize = value.maxSize === null ? null : readSize(value.maxSize)
+  if (!minSize || (value.maxSize !== null && !maxSize)) return null
+  if (maxSize && (minSize.width > maxSize.width || minSize.height > maxSize.height)) return null
+  return { minSize, maxSize }
+}
+
+function readPaneSettings(value: unknown): PaneSettings | undefined | null {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) return null
+  const settings: {
+    resizable?: boolean
+    minSize?: number
+    maxSize?: number
+    grow?: number
+    background?: 'transparent' | 'canvas' | 'surface' | 'surface-raised'
+    backgroundColor?: string
+    overflow?: 'auto' | 'hidden' | 'visible'
+  } = {}
+  if (value.resizable !== undefined) {
+    if (typeof value.resizable !== 'boolean') return null
+    settings.resizable = value.resizable
+  }
+  for (const key of ['minSize', 'maxSize', 'grow'] as const) {
+    const candidate = value[key]
+    if (candidate === undefined) continue
+    if (!isFiniteNumber(candidate) || candidate < 0) return null
+    settings[key] = candidate
+  }
+  if (settings.minSize !== undefined && settings.maxSize !== undefined && settings.minSize > settings.maxSize) return null
+  if (value.background !== undefined) {
+    if (!['transparent', 'canvas', 'surface', 'surface-raised'].includes(String(value.background))) return null
+    settings.background = value.background as NonNullable<PaneSettings['background']>
+  }
+  if (value.backgroundColor !== undefined) {
+    if (typeof value.backgroundColor !== 'string' || !value.backgroundColor.trim()) return null
+    settings.backgroundColor = value.backgroundColor
+  }
+  if (value.overflow !== undefined) {
+    if (!['auto', 'hidden', 'visible'].includes(String(value.overflow))) return null
+    settings.overflow = value.overflow as NonNullable<PaneSettings['overflow']>
+  }
+  return settings
+}
+
+function readPane(value: unknown): PaneNode | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim()) return null
+  const settings = readPaneSettings(value.settings)
+  if (settings === null) return null
+
+  if (value.kind === 'widget') {
+    if (typeof value.widgetId !== 'string' || !value.widgetId.trim()) return null
+    if (typeof value.instanceId !== 'string' || !value.instanceId.trim()) return null
+    const parameters = readParameters(value.parameters)
+    if (!parameters) return null
+    return {
+      kind: 'widget',
+      id: value.id,
+      widgetId: value.widgetId,
+      instanceId: value.instanceId,
+      parameters,
+      ...(settings ? { settings } : {}),
+    }
+  }
+
+  if (value.kind !== 'split' || (value.axis !== 'horizontal' && value.axis !== 'vertical')) return null
+  if (!Array.isArray(value.children) || !Array.isArray(value.weights)) return null
+  const children = value.children.map(readPane)
+  if (children.some((child) => child === null)) return null
+  if (!value.weights.every((weight) => isFiniteNumber(weight) && weight > 0)) return null
+  const pane: PaneNode = {
+    kind: 'split',
+    id: value.id,
+    axis: value.axis,
+    children: children as PaneNode[],
+    weights: value.weights as number[],
+    ...(settings ? { settings } : {}),
+  }
+  try {
+    validatePaneTree(pane)
+    return pane
+  } catch {
+    return null
   }
 }
 
-function readWindow(value: unknown): WorkspaceWindowSnapshot | null {
+function readWindowV2(value: unknown): WorkspaceWindowSnapshot | null {
+  if (!isRecord(value)) return null
+  if (typeof value.instanceId !== 'string' || !value.instanceId.trim()) return null
+  if (typeof value.title !== 'string' || !value.title.trim()) return null
+  if (value.mode !== 'normal' && value.mode !== 'minimized') return null
+  if (typeof value.focused !== 'boolean') return null
+  if (!Number.isInteger(value.zIndex) || (value.zIndex as number) < 0) return null
+  const rootPane = readPane(value.rootPane)
+  const geometry = readGeometry(value.geometry)
+  const constraints = readConstraints(value.constraints)
+  if (!rootPane || !geometry || !constraints) return null
+  return {
+    instanceId: value.instanceId,
+    title: value.title,
+    rootPane,
+    geometry,
+    constraints,
+    mode: value.mode,
+    focused: value.focused,
+    zIndex: value.zIndex as number,
+  }
+}
+
+function readWindowV1(value: unknown): LegacyWorkspaceWindowSnapshot | null {
   if (!isRecord(value)) return null
   if (typeof value.instanceId !== 'string' || !value.instanceId.trim()) return null
   if (typeof value.widgetId !== 'string' || !value.widgetId.trim()) return null
   if (value.mode !== 'normal' && value.mode !== 'minimized') return null
   if (typeof value.focused !== 'boolean') return null
   if (!Number.isInteger(value.zIndex) || (value.zIndex as number) < 0) return null
-
   const parameters = readParameters(value.parameters)
   const geometry = readGeometry(value.geometry)
   if (!parameters || !geometry) return null
-
   return {
     instanceId: value.instanceId,
     widgetId: value.widgetId,
@@ -180,95 +291,119 @@ function readWindow(value: unknown): WorkspaceWindowSnapshot | null {
   }
 }
 
-function restoreIssue(
-  code: WorkspaceRestoreIssueCode,
-  message: string,
-  entry: WorkspaceWindowSnapshot | null,
-  index: number,
-): WorkspaceRestoreIssue {
+interface RestoreCandidate {
+  readonly index: number
+  readonly instanceId: string
+  readonly focused: boolean
+  readonly mode: WindowMode
+  readonly zIndex: number
+  readonly widgetId?: WidgetId | undefined
+  open(manager: WindowManager): WindowState
+}
+
+function restoreIssue(code: WorkspaceRestoreIssueCode, message: string, candidate: RestoreCandidate | null, index: number): WorkspaceRestoreIssue {
   return {
     code,
     message,
     index,
-    ...(entry ? { instanceId: entry.instanceId, widgetId: entry.widgetId } : {}),
+    ...(candidate ? { instanceId: candidate.instanceId, ...(candidate.widgetId ? { widgetId: candidate.widgetId } : {}) } : {}),
   }
 }
 
 export function restoreWorkspace(manager: WindowManager, input: unknown): WorkspaceRestoreResult {
-  if (manager.list().length > 0) {
-    return invalidRoot('manager-not-empty', 'workspace restore requires an empty WindowManager')
-  }
+  if (manager.list().length > 0) return invalidRoot('manager-not-empty', 'workspace restore requires an empty WindowManager')
 
   const parsed = parseInput(input)
   if (!isRecord(parsed)) return invalidRoot('invalid-workspace', 'workspace must be a valid object or JSON document')
-  if (parsed.version !== WORKSPACE_VERSION) {
+  if (parsed.version !== 1 && parsed.version !== WORKSPACE_VERSION) {
     return invalidRoot('unsupported-version', `unsupported workspace version "${String(parsed.version)}"`)
   }
   if (!Array.isArray(parsed.windows)) return invalidRoot('invalid-workspace', 'workspace windows must be an array')
 
   const issues: WorkspaceRestoreIssue[] = []
-  const candidates: Array<{ entry: WorkspaceWindowSnapshot; index: number }> = []
+  const candidates: RestoreCandidate[] = []
 
   parsed.windows.forEach((value, index) => {
-    const entry = readWindow(value)
+    if (parsed.version === 1) {
+      const legacy = readWindowV1(value)
+      if (!legacy) {
+        issues.push(restoreIssue('invalid-window', 'invalid workspace window entry', null, index))
+        return
+      }
+      candidates.push({
+        index,
+        instanceId: legacy.instanceId,
+        widgetId: legacy.widgetId,
+        focused: legacy.focused,
+        mode: legacy.mode,
+        zIndex: legacy.zIndex,
+        open: (target) => target.open({
+          widgetId: legacy.widgetId,
+          instanceId: legacy.instanceId,
+          parameters: legacy.parameters,
+          position: legacy.geometry.position,
+          size: legacy.geometry.size,
+        }),
+      })
+      return
+    }
+
+    const entry = readWindowV2(value)
     if (!entry) {
       issues.push(restoreIssue('invalid-window', 'invalid workspace window entry', null, index))
       return
     }
-    candidates.push({ entry, index })
+    candidates.push({
+      index,
+      instanceId: entry.instanceId,
+      widgetId: entry.rootPane.kind === 'widget' ? entry.rootPane.widgetId : undefined,
+      focused: entry.focused,
+      mode: entry.mode,
+      zIndex: entry.zIndex,
+      open: (target) => target.openPane({
+        pane: entry.rootPane,
+        instanceId: entry.instanceId,
+        title: entry.title,
+        position: entry.geometry.position,
+        size: entry.geometry.size,
+        minSize: entry.constraints.minSize,
+        ...(entry.constraints.maxSize ? { maxSize: entry.constraints.maxSize } : {}),
+      }),
+    })
   })
 
-  candidates.sort((left, right) => left.entry.zIndex - right.entry.zIndex || left.index - right.index)
-
+  candidates.sort((left, right) => left.zIndex - right.zIndex || left.index - right.index)
   const seenInstanceIds = new Set<string>()
   const openedIds = new Set<string>()
 
-  for (const { entry, index } of candidates) {
-    if (seenInstanceIds.has(entry.instanceId)) {
-      issues.push(restoreIssue('duplicate-instance', 'duplicate workspace instance id', entry, index))
+  for (const candidate of candidates) {
+    if (seenInstanceIds.has(candidate.instanceId)) {
+      issues.push(restoreIssue('duplicate-instance', 'duplicate workspace instance id', candidate, candidate.index))
       continue
     }
-    seenInstanceIds.add(entry.instanceId)
+    seenInstanceIds.add(candidate.instanceId)
 
     try {
-      const opened = manager.open({
-        widgetId: entry.widgetId,
-        instanceId: entry.instanceId,
-        parameters: entry.parameters,
-        position: entry.geometry.position,
-        size: entry.geometry.size,
-      })
-
-      if (opened.instanceId !== entry.instanceId) {
-        issues.push(restoreIssue('singleton-conflict', 'singleton widget was already restored', entry, index))
+      const opened = candidate.open(manager)
+      if (opened.instanceId !== candidate.instanceId) {
+        issues.push(restoreIssue('singleton-conflict', 'singleton widget was already restored', candidate, candidate.index))
         continue
       }
-
-      openedIds.add(entry.instanceId)
+      openedIds.add(candidate.instanceId)
     } catch (error) {
-      if (error instanceof UnknownWidgetError) {
-        issues.push(restoreIssue('unknown-widget', error.message, entry, index))
-      } else if (error instanceof WidgetParameterValidationError) {
-        issues.push(restoreIssue('invalid-parameters', error.message, entry, index))
-      } else if (error instanceof DuplicateWindowInstanceError) {
-        issues.push(restoreIssue('duplicate-instance', error.message, entry, index))
-      } else {
-        issues.push(restoreIssue('open-failed', error instanceof Error ? error.message : 'window restore failed', entry, index))
-      }
+      if (error instanceof UnknownWidgetError) issues.push(restoreIssue('unknown-widget', error.message, candidate, candidate.index))
+      else if (error instanceof WidgetParameterValidationError) issues.push(restoreIssue('invalid-parameters', error.message, candidate, candidate.index))
+      else if (error instanceof DuplicateWindowInstanceError) issues.push(restoreIssue('duplicate-instance', error.message, candidate, candidate.index))
+      else issues.push(restoreIssue('open-failed', error instanceof Error ? error.message : 'window restore failed', candidate, candidate.index))
     }
   }
 
-  for (const { entry } of candidates) {
-    if (!openedIds.has(entry.instanceId) || entry.mode !== 'minimized') continue
-    manager.minimize(entry.instanceId)
+  for (const candidate of candidates) {
+    if (openedIds.has(candidate.instanceId) && candidate.mode === 'minimized') manager.minimize(candidate.instanceId)
   }
 
-  const focused = candidates.find(({ entry }) => openedIds.has(entry.instanceId) && entry.focused && entry.mode === 'normal')
-  if (focused) manager.focus(focused.entry.instanceId)
+  const focused = candidates.find((candidate) => openedIds.has(candidate.instanceId) && candidate.focused && candidate.mode === 'normal')
+  if (focused) manager.focus(focused.instanceId)
 
-  return {
-    valid: true,
-    restored: manager.list(),
-    issues,
-  }
+  return { valid: true, restored: manager.list(), issues }
 }

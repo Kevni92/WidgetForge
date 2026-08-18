@@ -32,7 +32,9 @@ describe('WidgetNavigator', () => {
     const result = navigator.navigate({ widgetId: 'test.detail', parameters: { id: 'A-1' } })
 
     expect(result.widgetId).toBe('test.detail')
-    expect(manager.get(result.instanceId).parameters).toEqual({ id: 'A-1' })
+    const pane = manager.get(result.instanceId).rootPane
+    expect(pane.kind).toBe('widget')
+    if (pane.kind === 'widget') expect(pane.parameters).toEqual({ id: 'A-1' })
   })
 
   it('reuses singleton instances', () => {

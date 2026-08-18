@@ -1,5 +1,6 @@
 import { defineComponent } from 'vue'
 import { describe, expect, it } from 'vitest'
+import { createSplitPane, createWidgetPane } from '../src/core/pane'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
@@ -35,86 +36,103 @@ function createRegistry() {
 }
 
 describe('workspace persistence', () => {
-  it('captures and restores window identity, parameters, geometry, mode and focus order', () => {
+  it('captures and restores pane trees, geometry, constraints, mode and focus order', () => {
     const registry = createRegistry()
     const source = createWindowManager(registry)
-    source.open({
-      widgetId: 'test.alpha',
-      instanceId: 'wf-window-1',
-      parameters: { name: 'ARC', count: 4 },
+    source.openPane({
+      instanceId: 'operations',
+      title: 'Operations',
+      pane: createSplitPane({
+        id: 'operations-root',
+        axis: 'horizontal',
+        weights: [2, 1],
+        children: [
+          createWidgetPane({ id: 'alpha-pane', widgetId: 'test.alpha', instanceId: 'alpha-leaf', parameters: { name: 'ARC', count: 4 } }),
+          createWidgetPane({ id: 'beta-pane', widgetId: 'test.beta', instanceId: 'beta-leaf' }),
+        ],
+      }),
       position: { x: 80, y: 90 },
-      size: { width: 410, height: 260 },
+      size: { width: 510, height: 300 },
+      minSize: { width: 300, height: 180 },
     })
     source.open({ widgetId: 'test.beta', instanceId: 'beta-main' })
-    source.minimize('wf-window-1')
+    source.minimize('operations')
     source.focus('beta-main')
 
     const snapshot = captureWorkspace(source)
-    expect(snapshot.version).toBe(WORKSPACE_VERSION)
-    expect(snapshot.windows.map((window) => window.instanceId)).toEqual(['wf-window-1', 'beta-main'])
+    expect(snapshot.version).toBe(2)
+    expect(snapshot.windows.map((window) => window.instanceId)).toEqual(['operations', 'beta-main'])
+    expect(snapshot.windows[0]?.rootPane).toMatchObject({ kind: 'split', id: 'operations-root', weights: [2, 1] })
 
     const serialized = serializeWorkspace(source)
-    expect(serialized).not.toContain('constraints')
+    expect(serialized).toContain('"constraints"')
+    expect(serialized).toContain('"rootPane"')
     expect(serialized).not.toContain('lifecycle')
-    expect(serialized).not.toContain('"title"')
 
     const target = createWindowManager(registry)
     const result = restoreWorkspace(target, serialized)
 
     expect(result.valid).toBe(true)
     expect(result.issues).toEqual([])
-    expect(target.get('wf-window-1')).toMatchObject({
-      widgetId: 'test.alpha',
-      parameters: { name: 'ARC', count: 4 },
+    expect(target.get('operations')).toMatchObject({
+      title: 'Operations',
       mode: 'minimized',
       focused: false,
       geometry: {
         position: { x: 80, y: 90 },
-        size: { width: 410, height: 260 },
+        size: { width: 510, height: 300 },
       },
+      constraints: { minSize: { width: 300, height: 180 } },
     })
+    expect(target.get('operations').rootPane).toEqual(snapshot.windows[0]?.rootPane)
     expect(target.get('beta-main')).toMatchObject({ mode: 'normal', focused: true })
   })
 
-  it('skips stale or invalid window entries without discarding valid entries', () => {
+  it('migrates legacy workspace v1 widget entries into root panes', () => {
+    const manager = createWindowManager(createRegistry())
+    const result = restoreWorkspace(manager, {
+      version: 1,
+      windows: [{
+        instanceId: 'legacy-alpha',
+        widgetId: 'test.alpha',
+        parameters: { name: 'legacy', count: 2 },
+        geometry: { position: { x: 10, y: 20 }, size: { width: 320, height: 220 } },
+        mode: 'normal',
+        focused: true,
+        zIndex: 0,
+      }],
+    })
+
+    expect(result.valid).toBe(true)
+    expect(result.issues).toEqual([])
+    expect(manager.get('legacy-alpha').rootPane).toMatchObject({
+      kind: 'widget',
+      widgetId: 'test.alpha',
+      instanceId: 'legacy-alpha',
+      parameters: { name: 'legacy', count: 2 },
+    })
+  })
+
+  it('skips stale or invalid v2 entries without discarding valid entries', () => {
+    const source = createWindowManager(createRegistry())
+    source.open({ widgetId: 'test.alpha', instanceId: 'valid-alpha', parameters: { name: 'valid', count: 2 } })
+    const valid = captureWorkspace(source).windows[0]
+    expect(valid).toBeDefined()
+
     const manager = createWindowManager(createRegistry())
     const result = restoreWorkspace(manager, {
       version: WORKSPACE_VERSION,
       windows: [
-        {
-          instanceId: 'valid-alpha',
-          widgetId: 'test.alpha',
-          parameters: { name: 'valid', count: 2 },
-          geometry: { position: { x: 10, y: 20 }, size: { width: 320, height: 220 } },
-          mode: 'normal',
-          focused: true,
-          zIndex: 0,
-        },
-        {
-          instanceId: 'removed-widget',
-          widgetId: 'removed.widget',
-          parameters: {},
-          geometry: { position: { x: 20, y: 30 }, size: { width: 320, height: 220 } },
-          mode: 'normal',
-          focused: false,
-          zIndex: 1,
-        },
-        {
-          instanceId: 'invalid-parameters',
-          widgetId: 'test.alpha',
-          parameters: { count: 2 },
-          geometry: { position: { x: 30, y: 40 }, size: { width: 320, height: 220 } },
-          mode: 'normal',
-          focused: false,
-          zIndex: 2,
-        },
+        valid,
+        valid ? { ...valid, instanceId: 'removed-widget', rootPane: { ...valid.rootPane, widgetId: 'removed.widget' } } : null,
+        valid ? { ...valid, instanceId: 'invalid-parameters', rootPane: { ...valid.rootPane, parameters: { count: 2 } } } : null,
         { broken: true },
       ],
     })
 
     expect(result.valid).toBe(true)
     expect(manager.list()).toHaveLength(1)
-    expect(manager.get('valid-alpha').parameters).toEqual({ name: 'valid', count: 2 })
+    expect(manager.get('valid-alpha').rootPane).toMatchObject({ parameters: { name: 'valid', count: 2 } })
     expect(result.issues.map((issue) => issue.code)).toEqual([
       'invalid-window',
       'unknown-widget',
@@ -124,7 +142,6 @@ describe('workspace persistence', () => {
 
   it('rejects invalid documents without mutating the manager', () => {
     const manager = createWindowManager(createRegistry())
-
     expect(restoreWorkspace(manager, '{broken').valid).toBe(false)
     expect(manager.list()).toEqual([])
     expect(restoreWorkspace(manager, { version: 999, windows: [] }).issues[0]?.code).toBe('unsupported-version')
@@ -139,7 +156,6 @@ describe('workspace persistence', () => {
 
     restoreWorkspace(manager, serializeWorkspace(source))
     const opened = manager.open({ widgetId: 'test.alpha', parameters: { name: 'new' } })
-
     expect(opened.instanceId).toBe('wf-window-2')
   })
 
@@ -148,7 +164,6 @@ describe('workspace persistence', () => {
     manager.open({ widgetId: 'test.alpha', parameters: { name: 'existing' } })
 
     const result = restoreWorkspace(manager, { version: WORKSPACE_VERSION, windows: [] })
-
     expect(result.valid).toBe(false)
     expect(result.issues[0]?.code).toBe('manager-not-empty')
     expect(manager.list()).toHaveLength(1)

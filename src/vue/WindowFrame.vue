@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, toRaw } from 'vue'
+import type { PaneNode } from '../core/pane'
 import type { WidgetLifecycleController } from '../core/widget-lifecycle'
 import type { WidgetRegistry } from '../core/widget-registry'
 import {
@@ -174,6 +175,10 @@ function restoreWindow(): void {
   manager.restore(props.window.instanceId, 'user')
 }
 
+function updateRootPane(pane: PaneNode): void {
+  manager.setRootPane(props.window.instanceId, pane, 'user')
+}
+
 onBeforeUnmount(finishInteraction)
 </script>
 
@@ -193,9 +198,8 @@ onBeforeUnmount(finishInteraction)
   >
     <WindowShell
       :registry="registry"
-      :widget-id="window.widgetId"
+      :pane="window.rootPane"
       :instance-id="window.instanceId"
-      :parameters="window.parameters"
       :title="window.title"
       :focused="window.focused"
       :minimized="window.mode === 'minimized'"
@@ -204,6 +208,7 @@ onBeforeUnmount(finishInteraction)
       @close="closeWindow"
       @minimize="minimizeWindow"
       @restore="restoreWindow"
+      @update:pane="updateRootPane"
     />
 
     <template v-if="window.mode === 'normal'">

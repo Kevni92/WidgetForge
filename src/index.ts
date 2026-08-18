@@ -228,6 +228,7 @@ export {
   WindowManager,
 } from './core/window-manager'
 export type {
+  OpenPaneWindowRequest,
   OpenWindowRequest,
   WindowInstanceId,
   WindowManagerChange,
