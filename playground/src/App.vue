@@ -18,6 +18,7 @@ import {
   serializeWorkspace,
   type WidgetForgeTheme,
 } from 'widgetforge'
+import InteractionShowcase from './InteractionShowcase.vue'
 import NotificationShowcase from './NotificationShowcase.vue'
 import PrimitiveShowcase from './PrimitiveShowcase.vue'
 import { playgroundWidgetRegistry, playgroundWidgets } from './playground-widgets'
@@ -175,6 +176,7 @@ function openMarket(): void {
 
           <PrimitiveShowcase />
           <NotificationShowcase :navigator="commandNavigator" />
+          <InteractionShowcase :navigator="commandNavigator" />
 
           <section class="demo-section command-demo">
             <h2>Commands</h2>
