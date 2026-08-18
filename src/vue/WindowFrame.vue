@@ -49,12 +49,12 @@ function effectiveContainerSize(): WindowSize {
 }
 
 function frameStyle(): Record<string, string> {
-  const { geometry, zIndex } = props.window
+  const { geometry, zIndex, mode } = props.window
   return {
     left: `${geometry.position.x}px`,
     top: `${geometry.position.y}px`,
     width: `${geometry.size.width}px`,
-    height: `${geometry.size.height}px`,
+    height: mode === 'minimized' ? 'var(--wf-size-titlebar-height)' : `${geometry.size.height}px`,
     zIndex: `calc(var(--wf-layer-window) + ${zIndex})`,
   }
 }
@@ -64,6 +64,8 @@ function finishInteraction(): void {
 }
 
 function startInteraction(event: PointerEvent): void {
+  if (props.window.mode === 'minimized') return
+
   const target = event.target
   if (!(target instanceof HTMLElement)) return
   if (target.closest('button, input, select, textarea, a')) return
@@ -160,15 +162,28 @@ function closeWindow(): void {
   manager.close(props.window.instanceId, 'user')
 }
 
+function minimizeWindow(): void {
+  finishInteraction()
+  manager.minimize(props.window.instanceId, 'user')
+}
+
+function restoreWindow(): void {
+  manager.restore(props.window.instanceId, 'user')
+}
+
 onBeforeUnmount(finishInteraction)
 </script>
 
 <template>
   <div
     class="wf-window-frame"
-    :class="{ 'wf-window-frame--interacting': interactionKind }"
+    :class="{
+      'wf-window-frame--interacting': interactionKind,
+      'wf-window-frame--minimized': window.mode === 'minimized',
+    }"
     :data-window-instance-id="window.instanceId"
     :data-window-z-index="window.zIndex"
+    :data-window-mode="window.mode"
     :data-window-interaction="interactionKind ?? 'none'"
     :style="frameStyle()"
     @pointerdown.capture="startInteraction"
@@ -180,18 +195,23 @@ onBeforeUnmount(finishInteraction)
       :parameters="window.parameters"
       :title="window.title"
       :focused="window.focused"
+      :minimized="window.mode === 'minimized'"
       @focus="focusWindow"
       @close="closeWindow"
+      @minimize="minimizeWindow"
+      @restore="restoreWindow"
     />
 
-    <div
-      v-for="handle in resizeHandles"
-      :key="handle"
-      class="wf-window-frame__resize-handle"
-      :class="`wf-window-frame__resize-handle--${handle}`"
-      :data-window-resize-handle="handle"
-      aria-hidden="true"
-    />
+    <template v-if="window.mode === 'normal'">
+      <div
+        v-for="handle in resizeHandles"
+        :key="handle"
+        class="wf-window-frame__resize-handle"
+        :class="`wf-window-frame__resize-handle--${handle}`"
+        :data-window-resize-handle="handle"
+        aria-hidden="true"
+      />
+    </template>
   </div>
 </template>
 
@@ -210,6 +230,10 @@ onBeforeUnmount(finishInteraction)
 
 .wf-window-frame :deep([data-window-drag-handle]) {
   cursor: move;
+}
+
+.wf-window-frame--minimized :deep([data-window-drag-handle]) {
+  cursor: default;
 }
 
 .wf-window-frame__resize-handle {

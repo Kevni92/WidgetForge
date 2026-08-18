@@ -14,7 +14,8 @@ import {
 
 export type WindowInstanceId = string
 export type WindowOperationOrigin = 'api' | 'user'
-export type WindowManagerChangeKind = 'open' | 'focus' | 'close' | 'geometry'
+export type WindowMode = 'normal' | 'minimized'
+export type WindowManagerChangeKind = 'open' | 'focus' | 'close' | 'geometry' | 'minimize' | 'restore'
 
 export interface WindowState {
   readonly instanceId: WindowInstanceId
@@ -23,6 +24,7 @@ export interface WindowState {
   readonly parameters: Readonly<Record<string, unknown>>
   readonly focused: boolean
   readonly zIndex: number
+  readonly mode: WindowMode
   readonly geometry: WindowGeometry
   readonly constraints: WindowSizeConstraints
 }
@@ -78,6 +80,14 @@ function cloneWindow(window: WindowState): WindowState {
   }
 }
 
+function topNormalWindowId(windows: readonly WindowState[]): WindowInstanceId | undefined {
+  for (let index = windows.length - 1; index >= 0; index -= 1) {
+    const candidate = windows[index]
+    if (candidate?.mode === 'normal') return candidate.instanceId
+  }
+  return undefined
+}
+
 export class WindowManager {
   private windows: WindowState[] = []
   private readonly listeners = new Set<WindowManagerListener>()
@@ -97,13 +107,22 @@ export class WindowManager {
 
   open(request: OpenWindowRequest, origin: WindowOperationOrigin = 'api'): WindowState {
     const resolved = this.registry.resolve(request.widgetId, request.parameters ?? {})
-    const instanceId = request.instanceId ?? this.createInstanceId()
+    const manifestWindow = resolved.manifest.window
 
+    if (manifestWindow?.singleton) {
+      const existing = this.windows.find((window) => window.widgetId === request.widgetId)
+      if (existing) {
+        return existing.mode === 'minimized'
+          ? this.restore(existing.instanceId, origin)
+          : this.focus(existing.instanceId, origin)
+      }
+    }
+
+    const instanceId = request.instanceId ?? this.createInstanceId()
     if (this.windows.some((window) => window.instanceId === instanceId)) {
       throw new DuplicateWindowInstanceError(instanceId)
     }
 
-    const manifestWindow = resolved.manifest.window
     const constraints: WindowSizeConstraints = {
       minSize: cloneSize(manifestWindow?.minSize ?? DEFAULT_MIN_WINDOW_SIZE),
       maxSize: manifestWindow?.maxSize ? cloneSize(manifestWindow.maxSize) : null,
@@ -120,6 +139,7 @@ export class WindowManager {
       parameters: { ...resolved.parameters },
       focused: true,
       zIndex: unfocused.length,
+      mode: 'normal',
       geometry: {
         position: {
           x: Number.isFinite(position.x) ? position.x : cascade,
@@ -141,6 +161,7 @@ export class WindowManager {
 
     const focusedWindow = this.windows[index]
     if (!focusedWindow) throw new UnknownWindowInstanceError(instanceId)
+    if (focusedWindow.mode === 'minimized') return this.restore(instanceId, origin)
 
     if (index === this.windows.length - 1 && focusedWindow.focused) {
       return cloneWindow(focusedWindow)
@@ -158,13 +179,56 @@ export class WindowManager {
     return this.get(instanceId)
   }
 
+  minimize(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'api'): WindowState {
+    const index = this.windows.findIndex((window) => window.instanceId === instanceId)
+    if (index < 0) throw new UnknownWindowInstanceError(instanceId)
+
+    const current = this.windows[index]
+    if (!current) throw new UnknownWindowInstanceError(instanceId)
+    if (current.mode === 'minimized') return cloneWindow(current)
+
+    const nextFocusedId = current.focused
+      ? topNormalWindowId(this.windows.filter((window) => window.instanceId !== instanceId))
+      : this.windows.find((window) => window.focused && window.mode === 'normal')?.instanceId
+
+    this.windows = this.windows.map((window) => {
+      if (window.instanceId === instanceId) return { ...window, mode: 'minimized' as const, focused: false }
+      return { ...window, focused: window.instanceId === nextFocusedId }
+    })
+
+    this.emit('minimize', origin, instanceId)
+    return this.get(instanceId)
+  }
+
+  restore(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'api'): WindowState {
+    const index = this.windows.findIndex((window) => window.instanceId === instanceId)
+    if (index < 0) throw new UnknownWindowInstanceError(instanceId)
+
+    const current = this.windows[index]
+    if (!current) throw new UnknownWindowInstanceError(instanceId)
+    if (current.mode === 'normal') return this.focus(instanceId, origin)
+
+    const reordered = this.windows.filter((window) => window.instanceId !== instanceId)
+    reordered.push({ ...current, mode: 'normal' })
+    this.windows = reordered.map((window, zIndex) => ({
+      ...window,
+      focused: window.instanceId === instanceId,
+      zIndex,
+    }))
+
+    this.emit('restore', origin, instanceId)
+    return this.get(instanceId)
+  }
+
   close(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'api'): void {
     const index = this.windows.findIndex((window) => window.instanceId === instanceId)
     if (index < 0) throw new UnknownWindowInstanceError(instanceId)
 
     const wasFocused = this.windows[index]?.focused ?? false
     const remaining = this.windows.filter((window) => window.instanceId !== instanceId)
-    const nextFocusedId = wasFocused ? remaining.at(-1)?.instanceId : remaining.find((window) => window.focused)?.instanceId
+    const nextFocusedId = wasFocused
+      ? topNormalWindowId(remaining)
+      : remaining.find((window) => window.focused && window.mode === 'normal')?.instanceId
 
     this.windows = remaining.map((window, zIndex) => ({
       ...window,

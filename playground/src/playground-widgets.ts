@@ -28,6 +28,7 @@ export const marketTickerWidget = defineWidget({
   window: {
     defaultSize: { width: 520, height: 360 },
     minSize: { width: 340, height: 220 },
+    singleton: true,
   },
 })
 
