@@ -15,7 +15,7 @@ describe('SimpleTable', () => {
       { id: 'name', header: 'Name', field: 'name' },
       { id: 'quantity', header: 'Quantity', field: 'quantity', align: 'end' },
     ]
-    const wrapper = mount(SimpleTable<Row>, {
+    const wrapper = mount(SimpleTable, {
       props: {
         columns,
         rows: [{ name: 'Ore', quantity: 12 }],
