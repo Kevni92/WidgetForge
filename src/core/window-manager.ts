@@ -92,11 +92,13 @@ export class WindowManager {
     const index = this.windows.findIndex((window) => window.instanceId === instanceId)
     if (index < 0) throw new UnknownWindowInstanceError(instanceId)
 
-    if (index === this.windows.length - 1 && this.windows[index]?.focused) {
-      return cloneWindow(this.windows[index])
+    const focusedWindow = this.windows[index]
+    if (!focusedWindow) throw new UnknownWindowInstanceError(instanceId)
+
+    if (index === this.windows.length - 1 && focusedWindow.focused) {
+      return cloneWindow(focusedWindow)
     }
 
-    const focusedWindow = this.windows[index]
     const reordered = this.windows.filter((window) => window.instanceId !== instanceId)
     reordered.push(focusedWindow)
     this.windows = reordered.map((window, zIndex) => ({
