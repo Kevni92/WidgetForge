@@ -30,6 +30,19 @@ Jede neue zugrunde liegende Subscription besitzt eine interne Generation. Versp�
 
 Ein `DataProvider` implementiert ausschließlich `subscribe(key, observer)` und liefert eine Unsubscribe-Funktion zurück. Der Vertrag enthält bewusst noch keine konkrete Transport- oder Connection-Logik.
 
+## MockDataProvider
+
+`MockDataProvider` implementiert denselben `DataProvider`-Vertrag und benötigt keinen Server. Ressourcen werden mit initialem Snapshot registriert und können optional über ein konfiguriertes Intervall fortgeschrieben werden.
+
+Für Tests und Demos stehen kontrollierte Methoden zur Verfügung:
+
+- `set(key, value)` setzt einen neuen Snapshot
+- `advance(key)` führt genau einen definierten Update-Schritt aus
+- `fail(key, error)` simuliert einen Data-Fehler
+- `recover(key)` wechselt über `loading` zurück zum aktuellen Snapshot
+
+Diese Funktionen gehören nur zum Mock Provider. Widgets kennen sie nicht und bleiben vollständig provider-unabhängig.
+
 ## Vue
 
 `DataClientProvider` stellt einen Client im Vue-Tree bereit. Widgets verwenden `useData(key)`. Das Composable ruft beim Vue-Unmount automatisch `release()` auf. Minimieren eines Widgets unmountet den Widget-Inhalt nicht und beendet daher auch keine Data-Subscription; Close/Destroy führt über den normalen Vue-Unmount zum Cleanup.
