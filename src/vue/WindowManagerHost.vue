@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, shallowRef, toRaw } from 'vue'
+import { createWidgetNavigator } from '../core/navigation'
 import type { WidgetRegistry } from '../core/widget-registry'
 import type { WindowSize } from '../core/window-geometry'
 import type { WindowManager, WindowState } from '../core/window-manager'
 import { observeElementSize } from './observe-element-size'
+import { provideWidgetNavigation } from './widget-navigation'
 import WindowFrame from './WindowFrame.vue'
 
 interface WindowManagerHostProps {
@@ -13,6 +15,10 @@ interface WindowManagerHostProps {
 
 const props = defineProps<WindowManagerHostProps>()
 const manager = toRaw(props.manager)
+const registry = toRaw(props.registry)
+const navigator = createWidgetNavigator(registry, manager)
+provideWidgetNavigation(navigator)
+
 const hostElement = ref<HTMLElement | null>(null)
 const containerSize = shallowRef<WindowSize>({ width: 0, height: 0 })
 const windows = shallowRef<readonly WindowState[]>(manager.list())
