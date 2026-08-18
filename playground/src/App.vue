@@ -10,11 +10,15 @@ import {
   defaultTheme,
   forgeDarkTheme,
   forgeLightTheme,
+  restoreWorkspace,
+  serializeWorkspace,
   type WidgetForgeTheme,
 } from 'widgetforge'
 import { playgroundWidgetRegistry, playgroundWidgets } from './playground-widgets'
 
 type ThemeName = 'neutral' | 'forge-dark' | 'forge-light'
+
+const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.workspace.v1'
 
 const themeName = ref<ThemeName>('neutral')
 const themes: Record<ThemeName, WidgetForgeTheme> = {
@@ -45,24 +49,48 @@ const commands = markRaw(createCommandRegistry([
   },
 ]))
 
-windowManager.open({
-  widgetId: 'planet.summary',
-  instanceId: 'planet-alpha',
-  parameters: { planetId: 'ARC-01' },
-  position: { x: 32, y: 32 },
-})
-windowManager.open({
-  widgetId: 'planet.summary',
-  instanceId: 'planet-beta',
-  parameters: { planetId: 'ARC-02', compact: true },
-  position: { x: 190, y: 250 },
-})
-windowManager.open({
-  widgetId: 'market.ticker',
-  instanceId: 'market-metals',
-  parameters: { commodity: 'METALS', rows: 6 },
-  position: { x: 390, y: 70 },
-})
+function readStoredWorkspace(): string | null {
+  try {
+    return window.localStorage.getItem(WORKSPACE_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function persistWorkspace(): void {
+  try {
+    window.localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(windowManager))
+  } catch {
+    // Playground persistence is best-effort and must not break the framework demo.
+  }
+}
+
+function openDefaultWorkspace(): void {
+  windowManager.open({
+    widgetId: 'planet.summary',
+    instanceId: 'planet-alpha',
+    parameters: { planetId: 'ARC-01' },
+    position: { x: 32, y: 32 },
+  })
+  windowManager.open({
+    widgetId: 'planet.summary',
+    instanceId: 'planet-beta',
+    parameters: { planetId: 'ARC-02', compact: true },
+    position: { x: 190, y: 250 },
+  })
+  windowManager.open({
+    widgetId: 'market.ticker',
+    instanceId: 'market-metals',
+    parameters: { commodity: 'METALS', rows: 6 },
+    position: { x: 390, y: 70 },
+  })
+}
+
+const storedWorkspace = readStoredWorkspace()
+const restoredWorkspace = storedWorkspace ? restoreWorkspace(windowManager, storedWorkspace) : null
+if (!restoredWorkspace?.valid) openDefaultWorkspace()
+persistWorkspace()
+windowManager.subscribe(persistWorkspace)
 
 let nextPlanet = 3
 
@@ -95,7 +123,7 @@ function openMarket(): void {
           </label>
         </header>
 
-        <p class="intro">Fenster lassen sich verschieben und skalieren. Widgets können intern navigieren und registrierte Textbefehle öffnen dieselben Widgets über die normale Navigation.</p>
+        <p class="intro">Fenster lassen sich verschieben und skalieren. Widgets können intern navigieren und registrierte Textbefehle öffnen dieselben Widgets über die normale Navigation. Das Workspace-Layout wird lokal im Browser gespeichert.</p>
 
         <section class="demo-section command-demo">
           <h2>Commands</h2>
