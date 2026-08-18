@@ -36,7 +36,15 @@ export interface SplitPane {
   readonly settings?: PaneSettings
 }
 
-export type PaneNode = WidgetPane | SplitPane
+export interface TabPane {
+  readonly kind: 'tabs'
+  readonly id: PaneId
+  readonly children: readonly PaneNode[]
+  readonly activeId: PaneId
+  readonly settings?: PaneSettings
+}
+
+export type PaneNode = WidgetPane | SplitPane | TabPane
 
 export interface CreateWidgetPaneOptions {
   id: PaneId
@@ -51,6 +59,13 @@ export interface CreateSplitPaneOptions {
   axis: PaneAxis
   children: readonly PaneNode[]
   weights?: readonly number[]
+  settings?: PaneSettings
+}
+
+export interface CreateTabPaneOptions {
+  id: PaneId
+  children: readonly PaneNode[]
+  activeId?: PaneId
   settings?: PaneSettings
 }
 
@@ -123,6 +138,13 @@ function validateWeights(children: readonly PaneNode[], weights: readonly number
   }
 }
 
+function validateTabChildren(children: readonly PaneNode[], activeId: PaneId): void {
+  if (children.length < 2) throw new PaneDefinitionError('tab pane requires at least two children')
+  if (!children.some((child) => child.id === activeId)) {
+    throw new PaneDefinitionError(`active tab "${activeId}" must reference a direct tab child`)
+  }
+}
+
 export function createWidgetPane(options: CreateWidgetPaneOptions): WidgetPane {
   validateId(options.id, 'pane id')
   validateId(options.widgetId, 'widget id')
@@ -161,6 +183,25 @@ export function createSplitPane(options: CreateSplitPaneOptions): SplitPane {
   return pane
 }
 
+export function createTabPane(options: CreateTabPaneOptions): TabPane {
+  validateId(options.id, 'pane id')
+  const children = options.children.map(clonePaneTree)
+  const activeId = options.activeId ?? children[0]?.id ?? ''
+  validateId(activeId, 'active tab id')
+  validateTabChildren(children, activeId)
+  validateSettings(options.settings)
+
+  const pane: TabPane = {
+    kind: 'tabs',
+    id: options.id,
+    children,
+    activeId,
+    ...(options.settings ? { settings: cloneSettings(options.settings) } : {}),
+  }
+  validatePaneTree(pane)
+  return pane
+}
+
 export function clonePaneTree<T extends PaneNode>(pane: T): T {
   if (pane.kind === 'widget') {
     return {
@@ -170,10 +211,18 @@ export function clonePaneTree<T extends PaneNode>(pane: T): T {
     } as T
   }
 
+  if (pane.kind === 'split') {
+    return {
+      ...pane,
+      children: pane.children.map(clonePaneTree),
+      weights: [...pane.weights],
+      ...(pane.settings ? { settings: cloneSettings(pane.settings) } : {}),
+    } as T
+  }
+
   return {
     ...pane,
     children: pane.children.map(clonePaneTree),
-    weights: [...pane.weights],
     ...(pane.settings ? { settings: cloneSettings(pane.settings) } : {}),
   } as T
 }
@@ -194,8 +243,12 @@ export function validatePaneTree(root: PaneNode): void {
       return
     }
 
-    if (pane.children.length < 2) throw new PaneDefinitionError('split pane requires at least two children')
-    validateWeights(pane.children, pane.weights)
+    if (pane.kind === 'split') {
+      if (pane.children.length < 2) throw new PaneDefinitionError('split pane requires at least two children')
+      validateWeights(pane.children, pane.weights)
+    } else {
+      validateTabChildren(pane.children, pane.activeId)
+    }
     for (const child of pane.children) visit(child)
   }
 
@@ -222,10 +275,17 @@ export function replacePane(root: PaneNode, paneId: PaneId, replacement: PaneNod
   function replace(current: PaneNode): PaneNode {
     if (current.id === paneId) return clonePaneTree(replacement)
     if (current.kind === 'widget') return clonePaneTree(current)
+    if (current.kind === 'split') {
+      return {
+        ...current,
+        children: current.children.map(replace),
+        weights: [...current.weights],
+        ...(current.settings ? { settings: cloneSettings(current.settings) } : {}),
+      }
+    }
     return {
       ...current,
       children: current.children.map(replace),
-      weights: [...current.weights],
       ...(current.settings ? { settings: cloneSettings(current.settings) } : {}),
     }
   }
@@ -250,20 +310,30 @@ export function removePane(root: PaneNode, paneId: PaneId): RemovePaneResult {
     if (current.kind === 'widget') return clonePaneTree(current)
 
     const kept: PaneNode[] = []
-    const weights: number[] = []
+    const keptIndices: number[] = []
     current.children.forEach((child, index) => {
       const next = remove(child)
       if (!next) return
       kept.push(next)
-      weights.push(current.weights[index] ?? 1)
+      keptIndices.push(index)
     })
 
     if (kept.length === 0) return null
     if (kept.length === 1) return kept[0] ?? null
+
+    if (current.kind === 'split') {
+      return {
+        ...current,
+        children: kept,
+        weights: keptIndices.map((index) => current.weights[index] ?? 1),
+        ...(current.settings ? { settings: cloneSettings(current.settings) } : {}),
+      }
+    }
+
     return {
       ...current,
       children: kept,
-      weights,
+      activeId: kept.some((child) => child.id === current.activeId) ? current.activeId : (kept[0]?.id ?? current.activeId),
       ...(current.settings ? { settings: cloneSettings(current.settings) } : {}),
     }
   }
@@ -297,6 +367,26 @@ export function splitPaneAt(
   return replacePane(root, targetId, split)
 }
 
+export function tabPaneAt(root: PaneNode, targetId: PaneId, incoming: PaneNode, tabId: PaneId): PaneNode {
+  const target = findPane(root, targetId)
+  if (!target) throw new UnknownPaneError(targetId)
+  if (containsPane(incoming, targetId)) {
+    throw new InvalidPaneOperationError('incoming pane must not contain the target pane')
+  }
+
+  if (target.kind === 'tabs') {
+    const next = createTabPane({
+      id: target.id,
+      children: [...target.children, incoming],
+      activeId: incoming.id,
+      ...(target.settings ? { settings: target.settings } : {}),
+    })
+    return replacePane(root, targetId, next)
+  }
+
+  return replacePane(root, targetId, createTabPane({ id: tabId, children: [target, incoming], activeId: incoming.id }))
+}
+
 export function movePane(
   root: PaneNode,
   sourceId: PaneId,
@@ -321,10 +411,53 @@ export function movePane(
   return splitPaneAt(removed.root, targetId, removed.removed, edge, splitId)
 }
 
+export function movePaneToTabs(root: PaneNode, sourceId: PaneId, targetId: PaneId, tabId: PaneId): PaneNode {
+  if (sourceId === targetId) throw new InvalidPaneOperationError('source and target pane must differ')
+  const source = findPane(root, sourceId)
+  const target = findPane(root, targetId)
+  if (!source) throw new UnknownPaneError(sourceId)
+  if (!target) throw new UnknownPaneError(targetId)
+  if (source.id === root.id) throw new InvalidPaneOperationError('the root pane cannot be moved inside itself')
+  if (containsPane(source, targetId)) throw new InvalidPaneOperationError('a pane cannot be moved into one of its descendants')
+
+  const removed = removePane(root, sourceId)
+  if (!removed.root || !containsPane(removed.root, targetId)) {
+    throw new InvalidPaneOperationError('target pane is not available after removing the source')
+  }
+  return tabPaneAt(removed.root, targetId, removed.removed, tabId)
+}
+
 export function setSplitWeights(root: PaneNode, splitId: PaneId, weights: readonly number[]): PaneNode {
   const pane = findPane(root, splitId)
   if (!pane) throw new UnknownPaneError(splitId)
   if (pane.kind !== 'split') throw new InvalidPaneOperationError(`pane "${splitId}" is not a split pane`)
   validateWeights(pane.children, weights)
   return replacePane(root, splitId, { ...pane, weights: [...weights] })
+}
+
+export function setActiveTab(root: PaneNode, tabPaneId: PaneId, activeId: PaneId): PaneNode {
+  const pane = findPane(root, tabPaneId)
+  if (!pane) throw new UnknownPaneError(tabPaneId)
+  if (pane.kind !== 'tabs') throw new InvalidPaneOperationError(`pane "${tabPaneId}" is not a tab pane`)
+  if (!pane.children.some((child) => child.id === activeId)) {
+    throw new InvalidPaneOperationError(`pane "${activeId}" is not a direct tab of "${tabPaneId}"`)
+  }
+  if (pane.activeId === activeId) return clonePaneTree(root)
+  return replacePane(root, tabPaneId, { ...pane, activeId })
+}
+
+export function reorderTab(root: PaneNode, tabPaneId: PaneId, sourceId: PaneId, targetIndex: number): PaneNode {
+  const pane = findPane(root, tabPaneId)
+  if (!pane) throw new UnknownPaneError(tabPaneId)
+  if (pane.kind !== 'tabs') throw new InvalidPaneOperationError(`pane "${tabPaneId}" is not a tab pane`)
+  const sourceIndex = pane.children.findIndex((child) => child.id === sourceId)
+  if (sourceIndex < 0) throw new InvalidPaneOperationError(`pane "${sourceId}" is not a direct tab of "${tabPaneId}"`)
+  if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= pane.children.length) {
+    throw new InvalidPaneOperationError('target tab index is out of range')
+  }
+  const children = [...pane.children]
+  const [moved] = children.splice(sourceIndex, 1)
+  if (!moved) throw new InvalidPaneOperationError('tab reorder source disappeared')
+  children.splice(targetIndex, 0, moved)
+  return replacePane(root, tabPaneId, { ...pane, children })
 }
