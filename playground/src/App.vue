@@ -18,6 +18,7 @@ import {
   serializeWorkspace,
   type WidgetForgeTheme,
 } from 'widgetforge'
+import NotificationShowcase from './NotificationShowcase.vue'
 import PrimitiveShowcase from './PrimitiveShowcase.vue'
 import { playgroundWidgetRegistry, playgroundWidgets } from './playground-widgets'
 
@@ -173,6 +174,7 @@ function openMarket(): void {
           <p class="intro">Fenster lassen sich verschieben und skalieren. Widgets können intern navigieren, Commands öffnen dieselben Widgets und die Live-Metric-Fenster erhalten serverlose Mock-Updates über exakt dieselbe Data API wie ein späterer externer Provider. Das Workspace-Layout wird lokal im Browser gespeichert.</p>
 
           <PrimitiveShowcase />
+          <NotificationShowcase :navigator="commandNavigator" />
 
           <section class="demo-section command-demo">
             <h2>Commands</h2>

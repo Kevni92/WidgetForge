@@ -20,6 +20,8 @@ export {
 } from './vue/data-context'
 export { default as WindowShell } from './vue/WindowShell.vue'
 export { default as WindowManagerHost } from './vue/WindowManagerHost.vue'
+export { default as NotificationToastHost } from './vue/NotificationToastHost.vue'
+export { default as NotificationCenter } from './vue/NotificationCenter.vue'
 export { forgeDarkTheme, forgeLightTheme } from './presets/forge'
 export * from './primitives'
 export {
@@ -105,6 +107,20 @@ export type {
   WidgetNavigationErrorCode,
   WidgetNavigator,
 } from './core/navigation'
+export {
+  createNotificationStore,
+  NotificationDefinitionError,
+  NotificationStore,
+} from './core/notifications'
+export type {
+  NotificationId,
+  NotificationInput,
+  NotificationItem,
+  NotificationSeverity,
+  NotificationStoreListener,
+  NotificationStoreOptions,
+  NotificationStoreUnsubscribe,
+} from './core/notifications'
 export {
   CommandDefinitionError,
   CommandParseError,
