@@ -297,7 +297,7 @@ interface RestoreCandidate {
   readonly focused: boolean
   readonly mode: WindowMode
   readonly zIndex: number
-  readonly widgetId?: WidgetId
+  readonly widgetId?: WidgetId | undefined
   open(manager: WindowManager): WindowState
 }
 
