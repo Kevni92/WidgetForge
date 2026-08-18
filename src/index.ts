@@ -96,6 +96,38 @@ export type {
   WidgetWindowMetadata,
 } from './core/widget'
 export {
+  createWidgetPane,
+  createSplitPane,
+  clonePaneTree,
+  validatePaneTree,
+  findPane,
+  containsPane,
+  replacePane,
+  removePane,
+  splitPaneAt,
+  movePane,
+  setSplitWeights,
+  PaneDefinitionError,
+  UnknownPaneError,
+  InvalidPaneOperationError,
+} from './core/pane'
+export type {
+  PaneId,
+  PaneAxis,
+  PaneOverflow,
+  PaneBackground,
+  PaneParameterValue,
+  PaneParameters,
+  PaneSplitEdge,
+  PaneSettings,
+  WidgetPane,
+  SplitPane,
+  PaneNode,
+  CreateWidgetPaneOptions,
+  CreateSplitPaneOptions,
+  RemovePaneResult,
+} from './core/pane'
+export {
   createWidgetLifecycle,
   InvalidWidgetLifecycleTransitionError,
   WidgetLifecycleController,
