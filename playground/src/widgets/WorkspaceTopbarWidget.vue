@@ -6,6 +6,8 @@ import { useDemoControls, type DemoThemeName } from '../demo-controls'
 const navigation = useWidgetNavigation()
 const controls = useDemoControls()
 const theme = computed(() => controls.theme())
+const canUndo = computed(() => controls.canUndo?.() ?? false)
+const canRedo = computed(() => controls.canRedo?.() ?? false)
 
 function openMarket(): void { navigation.navigate({ widgetId: 'market.ticker', parameters: { commodity: 'METALS', rows: 10 } }) }
 function openColony(): void { navigation.navigate({ widgetId: 'planet.summary', parameters: { planetId: 'ARC-01', compact: false } }) }
@@ -20,33 +22,26 @@ function changeTheme(event: Event): void {
   <nav class="workspace-topbar" aria-label="Simulation navigation">
     <div class="workspace-topbar__brand">
       <span class="workspace-topbar__mark">WF</span>
-      <div>
-        <strong>Orbital Exchange</strong>
-        <span>Sector Helios · Cycle 2841.7</span>
-      </div>
+      <div><strong>Orbital Exchange</strong><span>Sector Helios · Cycle 2841.7</span></div>
     </div>
-
     <div class="workspace-topbar__nav">
       <button type="button" data-demo-nav="market" @click="openMarket">Markets</button>
       <button type="button" data-demo-nav="colony" @click="openColony">Colony</button>
       <button type="button" data-demo-nav="alerts" @click="openAlerts">Alerts</button>
     </div>
-
     <div class="workspace-topbar__tools">
+      <button type="button" data-demo-action="undo" :disabled="!canUndo" title="Undo layout (Ctrl+Z)" @click="controls.undo?.()">Undo</button>
+      <button type="button" data-demo-action="redo" :disabled="!canRedo" title="Redo layout (Ctrl+Y)" @click="controls.redo?.()">Redo</button>
       <span class="workspace-topbar__online"><i /> Network online</span>
-      <select :value="theme" aria-label="Theme" @change="changeTheme">
-        <option value="forge-dark">Dark</option>
-        <option value="forge-light">Light</option>
-      </select>
+      <select :value="theme" aria-label="Theme" @change="changeTheme"><option value="forge-dark">Dark</option><option value="forge-light">Light</option></select>
       <button type="button" data-demo-action="reset" class="workspace-topbar__reset" @click="controls.resetWorkspace">Reset layout</button>
     </div>
   </nav>
 </template>
 
 <style scoped>
-.workspace-topbar{height:100%;display:flex;align-items:center;gap:var(--wf-space-lg);padding:0 var(--wf-space-md);background:var(--wf-color-surface);color:var(--wf-color-text);font-size:var(--wf-font-size-sm);overflow:hidden}
-.workspace-topbar__brand{display:flex;align-items:center;gap:var(--wf-space-sm);min-width:190px}.workspace-topbar__mark{display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--wf-color-accent);border-radius:var(--wf-radius-sm);color:var(--wf-color-accent);font-weight:var(--wf-font-weight-bold);letter-spacing:.06em}.workspace-topbar__brand div{display:grid;line-height:1.15}.workspace-topbar__brand span:last-child{margin-top:2px;color:var(--wf-color-text-muted);font-size:var(--wf-font-size-xs)}
-.workspace-topbar__nav{display:flex;align-items:center;gap:2px;flex:1;height:100%}.workspace-topbar button,.workspace-topbar select{height:30px;border:1px solid transparent;border-radius:var(--wf-radius-sm);background:transparent;color:var(--wf-color-text);font:inherit}.workspace-topbar button{padding:0 var(--wf-space-md);cursor:pointer}.workspace-topbar button:hover{background:var(--wf-color-hover);border-color:var(--wf-color-border)}.workspace-topbar button:focus-visible,.workspace-topbar select:focus-visible{outline:2px solid var(--wf-color-focus);outline-offset:1px}
+.workspace-topbar{height:100%;display:flex;align-items:center;gap:var(--wf-space-lg);padding:0 var(--wf-space-md);background:var(--wf-color-surface);color:var(--wf-color-text);font-size:var(--wf-font-size-sm);overflow:hidden}.workspace-topbar__brand{display:flex;align-items:center;gap:var(--wf-space-sm);min-width:190px}.workspace-topbar__mark{display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--wf-color-accent);border-radius:var(--wf-radius-sm);color:var(--wf-color-accent);font-weight:var(--wf-font-weight-bold);letter-spacing:.06em}.workspace-topbar__brand div{display:grid;line-height:1.15}.workspace-topbar__brand span:last-child{margin-top:2px;color:var(--wf-color-text-muted);font-size:var(--wf-font-size-xs)}
+.workspace-topbar__nav{display:flex;align-items:center;gap:2px;flex:1;height:100%}.workspace-topbar button,.workspace-topbar select{height:30px;border:1px solid transparent;border-radius:var(--wf-radius-sm);background:transparent;color:var(--wf-color-text);font:inherit}.workspace-topbar button{padding:0 var(--wf-space-sm);cursor:pointer}.workspace-topbar button:hover:not(:disabled){background:var(--wf-color-hover);border-color:var(--wf-color-border)}.workspace-topbar button:disabled{opacity:.4;cursor:default}.workspace-topbar button:focus-visible,.workspace-topbar select:focus-visible{outline:2px solid var(--wf-color-focus);outline-offset:1px}
 .workspace-topbar__tools{display:flex;align-items:center;justify-content:flex-end;gap:var(--wf-space-sm);white-space:nowrap}.workspace-topbar__online{display:flex;align-items:center;gap:6px;color:var(--wf-color-text-muted);font-size:var(--wf-font-size-xs)}.workspace-topbar__online i{width:7px;height:7px;border-radius:50%;background:var(--wf-color-success);box-shadow:0 0 8px var(--wf-color-success)}.workspace-topbar select{padding:0 var(--wf-space-sm);border-color:var(--wf-color-border);background:var(--wf-color-surface-raised)}.workspace-topbar__reset{color:var(--wf-color-text-muted)!important}
 @media(max-width:760px){.workspace-topbar__brand span:last-child,.workspace-topbar__online,.workspace-topbar__reset{display:none}.workspace-topbar{gap:var(--wf-space-sm)}.workspace-topbar__brand{min-width:auto}.workspace-topbar__nav button{padding:0 var(--wf-space-sm)}}
 </style>
