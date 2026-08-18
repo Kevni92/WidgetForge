@@ -1,4 +1,5 @@
 import type { WidgetId } from './widget'
+import { createWidgetLifecycle, type WidgetLifecycleController } from './widget-lifecycle'
 import type { WidgetRegistry } from './widget-registry'
 import {
   DEFAULT_MIN_WINDOW_SIZE,
@@ -91,6 +92,7 @@ function topNormalWindowId(windows: readonly WindowState[]): WindowInstanceId | 
 export class WindowManager {
   private windows: WindowState[] = []
   private readonly listeners = new Set<WindowManagerListener>()
+  private readonly lifecycles = new Map<WindowInstanceId, WidgetLifecycleController>()
   private nextInstanceNumber = 0
 
   constructor(private readonly registry: WidgetRegistry) {}
@@ -103,6 +105,12 @@ export class WindowManager {
     const window = this.windows.find((candidate) => candidate.instanceId === instanceId)
     if (!window) throw new UnknownWindowInstanceError(instanceId)
     return cloneWindow(window)
+  }
+
+  getLifecycle(instanceId: WindowInstanceId): WidgetLifecycleController {
+    const lifecycle = this.lifecycles.get(instanceId)
+    if (!lifecycle) throw new UnknownWindowInstanceError(instanceId)
+    return lifecycle
   }
 
   open(request: OpenWindowRequest, origin: WindowOperationOrigin = 'api'): WindowState {
@@ -150,7 +158,9 @@ export class WindowManager {
       constraints,
     }
 
+    this.createLifecycle(instanceId)
     this.windows = [...unfocused, opened]
+    this.setActiveLifecycle(instanceId)
     this.emit('open', origin, instanceId)
     return cloneWindow(opened)
   }
@@ -164,6 +174,7 @@ export class WindowManager {
     if (focusedWindow.mode === 'minimized') return this.restore(instanceId, origin)
 
     if (index === this.windows.length - 1 && focusedWindow.focused) {
+      this.setActiveLifecycle(instanceId)
       return cloneWindow(focusedWindow)
     }
 
@@ -175,6 +186,7 @@ export class WindowManager {
       zIndex,
     }))
 
+    this.setActiveLifecycle(instanceId)
     this.emit('focus', origin, instanceId)
     return this.get(instanceId)
   }
@@ -187,6 +199,9 @@ export class WindowManager {
     if (!current) throw new UnknownWindowInstanceError(instanceId)
     if (current.mode === 'minimized') return cloneWindow(current)
 
+    const lifecycle = this.getLifecycle(instanceId)
+    lifecycle.minimize()
+
     const nextFocusedId = current.focused
       ? topNormalWindowId(this.windows.filter((window) => window.instanceId !== instanceId))
       : this.windows.find((window) => window.focused && window.mode === 'normal')?.instanceId
@@ -196,6 +211,7 @@ export class WindowManager {
       return { ...window, focused: window.instanceId === nextFocusedId }
     })
 
+    this.setActiveLifecycle(nextFocusedId)
     this.emit('minimize', origin, instanceId)
     return this.get(instanceId)
   }
@@ -208,6 +224,8 @@ export class WindowManager {
     if (!current) throw new UnknownWindowInstanceError(instanceId)
     if (current.mode === 'normal') return this.focus(instanceId, origin)
 
+    this.getLifecycle(instanceId).restore()
+
     const reordered = this.windows.filter((window) => window.instanceId !== instanceId)
     reordered.push({ ...current, mode: 'normal' })
     this.windows = reordered.map((window, zIndex) => ({
@@ -216,6 +234,7 @@ export class WindowManager {
       zIndex,
     }))
 
+    this.setActiveLifecycle(instanceId)
     this.emit('restore', origin, instanceId)
     return this.get(instanceId)
   }
@@ -223,6 +242,9 @@ export class WindowManager {
   close(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'api'): void {
     const index = this.windows.findIndex((window) => window.instanceId === instanceId)
     if (index < 0) throw new UnknownWindowInstanceError(instanceId)
+
+    const lifecycle = this.getLifecycle(instanceId)
+    lifecycle.close()
 
     const wasFocused = this.windows[index]?.focused ?? false
     const remaining = this.windows.filter((window) => window.instanceId !== instanceId)
@@ -236,7 +258,10 @@ export class WindowManager {
       zIndex,
     }))
 
+    this.setActiveLifecycle(nextFocusedId)
     this.emit('close', origin, instanceId)
+
+    if (!lifecycle.mounted) lifecycle.destroy()
   }
 
   setGeometry(
@@ -291,6 +316,27 @@ export class WindowManager {
   private createInstanceId(): WindowInstanceId {
     this.nextInstanceNumber += 1
     return `wf-window-${this.nextInstanceNumber}`
+  }
+
+  private createLifecycle(instanceId: WindowInstanceId): WidgetLifecycleController {
+    const lifecycle = createWidgetLifecycle(instanceId)
+    let unsubscribe: () => void = () => {}
+    unsubscribe = lifecycle.subscribe((event) => {
+      if (event.kind !== 'destroy') return
+      this.lifecycles.delete(instanceId)
+      unsubscribe()
+    })
+    this.lifecycles.set(instanceId, lifecycle)
+    return lifecycle
+  }
+
+  private setActiveLifecycle(instanceId?: WindowInstanceId): void {
+    for (const window of this.windows) {
+      const lifecycle = this.lifecycles.get(window.instanceId)
+      if (!lifecycle) continue
+      if (window.instanceId === instanceId && window.mode === 'normal') lifecycle.activate()
+      else lifecycle.deactivate()
+    }
   }
 
   private emit(kind: WindowManagerChangeKind, origin: WindowOperationOrigin, instanceId: WindowInstanceId): void {

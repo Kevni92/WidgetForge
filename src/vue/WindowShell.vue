@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, markRaw, toRaw } from 'vue'
 import type { WidgetId } from '../core/widget'
+import type { WidgetLifecycleController } from '../core/widget-lifecycle'
 import type { WidgetRegistry } from '../core/widget-registry'
 import WidgetHost from './WidgetHost.vue'
 
@@ -18,6 +19,7 @@ interface WindowShellProps {
   closable?: boolean
   minimizable?: boolean
   minimized?: boolean
+  lifecycle?: WidgetLifecycleController | undefined
 }
 
 const props = withDefaults(defineProps<WindowShellProps>(), {
@@ -106,13 +108,14 @@ function toggleMinimized(): void {
       </div>
     </header>
 
-    <div v-if="!minimized" class="wf-window-shell__content">
+    <div v-show="!minimized" class="wf-window-shell__content" :aria-hidden="minimized ? 'true' : undefined">
       <slot>
         <WidgetHost
           :registry="registry"
           :widget-id="widgetId"
           :instance-id="instanceId"
           :parameters="parameters"
+          :lifecycle="lifecycle"
         />
       </slot>
     </div>
