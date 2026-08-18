@@ -32,7 +32,11 @@ function createSetup() {
 }
 
 function dispatchPointer(type: string, clientX: number, clientY: number): void {
-  globalThis.window.dispatchEvent(new MouseEvent(type, { clientX, clientY, bubbles: true }))
+  globalThis.window.dispatchEvent(new MouseEvent(type, { clientX, clientY, bubbles: true, cancelable: true }))
+}
+
+function dispatchPointerOn(element: Element, type: string, clientX: number, clientY: number): void {
+  element.dispatchEvent(new MouseEvent(type, { clientX, clientY, bubbles: true, cancelable: true }))
 }
 
 describe('WindowFrame', () => {
@@ -42,7 +46,8 @@ describe('WindowFrame', () => {
       props: { window, manager, registry, containerSize: { width: 800, height: 600 } },
     })
 
-    await wrapper.get('[data-window-drag-handle]').trigger('pointerdown', { clientX: 100, clientY: 100 })
+    dispatchPointerOn(wrapper.get('[data-window-drag-handle]').element, 'pointerdown', 100, 100)
+    await nextTick()
     expect(wrapper.attributes('data-window-interaction')).toBe('move')
 
     dispatchPointer('pointermove', 150, 130)
@@ -63,7 +68,7 @@ describe('WindowFrame', () => {
       props: { window, manager, registry, containerSize: { width: 800, height: 600 } },
     })
 
-    await wrapper.get('[data-window-resize-handle="bottom-right"]').trigger('pointerdown', { clientX: 0, clientY: 0 })
+    dispatchPointerOn(wrapper.get('[data-window-resize-handle="bottom-right"]').element, 'pointerdown', 0, 0)
     dispatchPointer('pointermove', 400, 400)
     await nextTick()
 
@@ -82,14 +87,14 @@ describe('WindowFrame', () => {
       },
     })
 
-    await frame.get('[data-window-drag-handle]').trigger('pointerdown', { clientX: 100, clientY: 100 })
+    dispatchPointerOn(frame.get('[data-window-drag-handle]').element, 'pointerdown', 100, 100)
     frame.unmount()
     dispatchPointer('pointermove', 300, 300)
     expect(first.manager.get('frame-1').geometry.position).toEqual({ x: 100, y: 100 })
 
     const second = createSetup()
     const host = mount(WindowManagerHost, { props: { registry: second.registry, manager: second.manager } })
-    await host.get('[data-window-drag-handle]').trigger('pointerdown', { clientX: 100, clientY: 100 })
+    dispatchPointerOn(host.get('[data-window-drag-handle]').element, 'pointerdown', 100, 100)
     second.manager.close('frame-1')
     await nextTick()
 
