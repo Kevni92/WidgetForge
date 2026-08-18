@@ -40,6 +40,7 @@ export interface WidgetWindowMetadata {
   defaultSize?: WidgetSize
   minSize?: WidgetSize
   maxSize?: WidgetSize
+  singleton?: boolean
 }
 
 export interface WidgetManifest<TSchema extends WidgetParameterSchema = WidgetParameterSchema> {

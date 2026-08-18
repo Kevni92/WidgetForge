@@ -16,17 +16,23 @@ interface WindowShellProps {
   title?: string
   focused?: boolean
   closable?: boolean
+  minimizable?: boolean
+  minimized?: boolean
 }
 
 const props = withDefaults(defineProps<WindowShellProps>(), {
   parameters: () => ({}),
   focused: false,
   closable: true,
+  minimizable: true,
+  minimized: false,
 })
 
 const emit = defineEmits<{
   focus: [event: WindowShellEvent]
   close: [event: WindowShellEvent]
+  minimize: [event: WindowShellEvent]
+  restore: [event: WindowShellEvent]
 }>()
 
 const resolvedTitle = computed(() => {
@@ -46,16 +52,27 @@ function requestFocus(): void {
 function requestClose(): void {
   emit('close', { instanceId: props.instanceId })
 }
+
+function toggleMinimized(): void {
+  const event = { instanceId: props.instanceId }
+  if (props.minimized) emit('restore', event)
+  else emit('minimize', event)
+}
 </script>
 
 <template>
   <section
     class="wf-window-shell"
-    :class="{ 'wf-window-shell--focused': focused }"
+    :class="{
+      'wf-window-shell--focused': focused,
+      'wf-window-shell--minimized': minimized,
+    }"
     :data-window-instance-id="instanceId"
     :data-focused="focused ? 'true' : 'false'"
+    :data-window-mode="minimized ? 'minimized' : 'normal'"
     role="region"
     :aria-label="resolvedTitle"
+    :aria-expanded="minimized ? 'false' : 'true'"
     @pointerdown="requestFocus"
   >
     <header class="wf-window-shell__titlebar" data-window-drag-handle>
@@ -66,6 +83,16 @@ function requestClose(): void {
       </div>
       <div class="wf-window-shell__actions">
         <slot name="actions" />
+        <button
+          v-if="minimizable"
+          class="wf-window-shell__minimize"
+          type="button"
+          :aria-label="minimized ? 'Restore window' : 'Minimize window'"
+          @pointerdown.stop
+          @click.stop="toggleMinimized"
+        >
+          {{ minimized ? '□' : '−' }}
+        </button>
         <button
           v-if="closable"
           class="wf-window-shell__close"
@@ -79,7 +106,7 @@ function requestClose(): void {
       </div>
     </header>
 
-    <div class="wf-window-shell__content">
+    <div v-if="!minimized" class="wf-window-shell__content">
       <slot>
         <WidgetHost
           :registry="registry"
@@ -123,6 +150,10 @@ function requestClose(): void {
   user-select: none;
 }
 
+.wf-window-shell--minimized .wf-window-shell__titlebar {
+  border-bottom: 0;
+}
+
 .wf-window-shell__title {
   min-width: 0;
   overflow: hidden;
@@ -138,6 +169,7 @@ function requestClose(): void {
   gap: var(--wf-space-xs);
 }
 
+.wf-window-shell__minimize,
 .wf-window-shell__close {
   width: var(--wf-size-control-height);
   height: var(--wf-size-control-height);
@@ -150,11 +182,13 @@ function requestClose(): void {
   cursor: pointer;
 }
 
+.wf-window-shell__minimize:hover,
 .wf-window-shell__close:hover {
   color: var(--wf-color-text);
   background: var(--wf-color-hover);
 }
 
+.wf-window-shell__minimize:focus-visible,
 .wf-window-shell__close:focus-visible {
   outline: 2px solid var(--wf-color-focus);
   outline-offset: -2px;

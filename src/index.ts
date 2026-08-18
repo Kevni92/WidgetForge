@@ -44,6 +44,7 @@ export type {
   WindowManagerChange,
   WindowManagerChangeKind,
   WindowManagerListener,
+  WindowMode,
   WindowOperationOrigin,
   WindowState,
 } from './core/window-manager'
