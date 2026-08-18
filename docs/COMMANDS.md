@@ -20,6 +20,15 @@ Die Eingabe wird in Command-Name und Argumente zerlegt. Leerzeichen trennen Argu
 
 Der Parser liefert ausschließlich einen `NavigationIntent`. Die eigentliche Öffnung erfolgt anschließend über den `WidgetNavigator`, damit Parameterprüfung, Singleton-Verhalten, Lifecycle, Fokus und Z-Reihenfolge weiterhin nur an einer Stelle implementiert bleiben.
 
+## CommandInput
+
+Die Framework-Komponente `CommandInput` verbindet ausschließlich zwei öffentliche Abstraktionen:
+
+1. `CommandRegistry.parse()` erzeugt einen `NavigationIntent`.
+2. `WidgetNavigator.navigate()` führt diesen Intent über die normale Widget-Navigation aus.
+
+Die Komponente kennt weder `WindowManager` noch `WidgetRegistry` und enthält keine fachlichen Commands. Consumer übergeben ihre eigene Command Registry und einen Navigator. Erfolgreiche Ausführung leert die Eingabe und zeigt neutrales Feedback; Parser- und Navigationsfehler werden als zugänglicher Fehlerzustand dargestellt und die Eingabe bleibt zur Korrektur erhalten.
+
 ## Fehler
 
 Parserfehler sind als `CommandParseError` mit strukturiertem Code verfügbar:
@@ -35,4 +44,4 @@ Ungültige oder kollidierende Command-Definitionen werden bereits beim Registrie
 
 ## Architekturgrenze
 
-Konkrete Commands wie `planet`, `market` oder andere Spielbegriffe gehören ausschließlich in die Consumer-Anwendung beziehungsweise in den Playground. WidgetForge stellt nur Registry, Parser und Typkonvertierung bereit.
+Konkrete Commands wie `planet`, `market` oder andere Spielbegriffe gehören ausschließlich in die Consumer-Anwendung beziehungsweise in den Playground. WidgetForge stellt Registry, Parser, die generische Eingabekomponente und die Verbindung zur Navigation bereit.

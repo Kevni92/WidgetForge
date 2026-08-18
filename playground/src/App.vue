@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, markRaw, ref } from 'vue'
 import {
+  CommandInput,
   ThemeProvider,
   WindowManagerHost,
+  createCommandRegistry,
+  createWidgetNavigator,
   createWindowManager,
   defaultTheme,
   forgeDarkTheme,
@@ -22,6 +25,26 @@ const themes: Record<ThemeName, WidgetForgeTheme> = {
 const activeTheme = computed(() => themes[themeName.value])
 
 const windowManager = markRaw(createWindowManager(playgroundWidgetRegistry))
+const commandNavigator = markRaw(createWidgetNavigator(playgroundWidgetRegistry, windowManager))
+const commands = markRaw(createCommandRegistry([
+  {
+    name: 'planet',
+    aliases: ['p'],
+    widgetId: 'planet.summary',
+    arguments: [
+      { name: 'planetId', type: 'string', required: true },
+      { name: 'compact', type: 'boolean', default: false },
+    ],
+  },
+  {
+    name: 'market',
+    aliases: ['mkt'],
+    widgetId: 'market.ticker',
+    parameters: { commodity: 'METALS' },
+    arguments: [{ name: 'rows', type: 'number', default: 5 }],
+  },
+]))
+
 windowManager.open({
   widgetId: 'planet.summary',
   instanceId: 'planet-alpha',
@@ -72,7 +95,13 @@ function openMarket(): void {
           </label>
         </header>
 
-        <p class="intro">Fenster lassen sich an der Titelbar verschieben und an allen Kanten und Ecken skalieren. Fokus, Geometrie und Z-Reihenfolge bleiben im WindowManager-State.</p>
+        <p class="intro">Fenster lassen sich verschieben und skalieren. Widgets können intern navigieren und registrierte Textbefehle öffnen dieselben Widgets über die normale Navigation.</p>
+
+        <section class="demo-section command-demo">
+          <h2>Commands</h2>
+          <CommandInput :commands="commands" :navigator="commandNavigator" placeholder="planet ARC-03" />
+          <p class="manifest-meta">Beispiele: <code>planet ARC-03</code>, <code>p "New Terra" true</code>, <code>market 8</code></p>
+        </section>
 
         <section class="demo-section">
           <h2>Window Manager</h2>

@@ -10,6 +10,7 @@ export {
   useWidgetNavigation,
   WidgetNavigationUnavailableError,
 } from './vue/widget-navigation'
+export { default as CommandInput } from './vue/CommandInput.vue'
 export { default as WindowShell } from './vue/WindowShell.vue'
 export { default as WindowManagerHost } from './vue/WindowManagerHost.vue'
 export { forgeDarkTheme, forgeLightTheme } from './presets/forge'
