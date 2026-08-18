@@ -1,4 +1,4 @@
-import { defineWidget } from 'widgetforge'
+import { createWidgetRegistry, defineWidget } from 'widgetforge'
 import MarketTickerWidget from './widgets/MarketTickerWidget.vue'
 import PlanetSummaryWidget from './widgets/PlanetSummaryWidget.vue'
 
@@ -32,3 +32,4 @@ export const marketTickerWidget = defineWidget({
 })
 
 export const playgroundWidgets = [planetSummaryWidget, marketTickerWidget]
+export const playgroundWidgetRegistry = createWidgetRegistry(playgroundWidgets)
