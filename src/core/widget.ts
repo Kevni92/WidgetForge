@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import { createWindowOptions, type WindowOptionsOverride } from './window-options'
 
 export type WidgetId = string
 
@@ -41,6 +42,7 @@ export interface WidgetWindowMetadata {
   minSize?: WidgetSize
   maxSize?: WidgetSize
   singleton?: boolean
+  options?: WindowOptionsOverride
 }
 
 export interface WidgetManifest<TSchema extends WidgetParameterSchema = WidgetParameterSchema> {
@@ -74,6 +76,13 @@ function validateWindowMetadata(window?: WidgetWindowMetadata): void {
   validateSize('window.defaultSize', window.defaultSize)
   validateSize('window.minSize', window.minSize)
   validateSize('window.maxSize', window.maxSize)
+  if (window.options) {
+    try {
+      createWindowOptions(window.options)
+    } catch (error) {
+      throw new WidgetDefinitionError(error instanceof Error ? error.message : 'invalid window options')
+    }
+  }
 
   const { defaultSize, minSize, maxSize } = window
 
