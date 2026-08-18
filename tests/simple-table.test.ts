@@ -1,27 +1,11 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import SimpleTable from '../src/primitives/SimpleTable.vue'
-import type { SimpleTableColumn } from '../src/primitives/simple-table'
+import SimpleTableBasicFixture from './fixtures/SimpleTableBasicFixture.vue'
 import SimpleTableFixture from './fixtures/SimpleTableFixture.vue'
 
 describe('SimpleTable', () => {
   it('renders declarative typed columns with native table semantics', () => {
-    interface Row {
-      name: string
-      quantity: number
-    }
-
-    const columns: SimpleTableColumn<Row>[] = [
-      { id: 'name', header: 'Name', field: 'name' },
-      { id: 'quantity', header: 'Quantity', field: 'quantity', align: 'end' },
-    ]
-    const wrapper = mount(SimpleTable, {
-      props: {
-        columns,
-        rows: [{ name: 'Ore', quantity: 12 }],
-        caption: 'Inventory',
-      },
-    })
+    const wrapper = mount(SimpleTableBasicFixture)
 
     expect(wrapper.get('table').element.tagName).toBe('TABLE')
     expect(wrapper.get('caption').text()).toBe('Inventory')
