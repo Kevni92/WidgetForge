@@ -21,6 +21,7 @@ export {
 export { default as WindowShell } from './vue/WindowShell.vue'
 export { default as WindowManagerHost } from './vue/WindowManagerHost.vue'
 export { forgeDarkTheme, forgeLightTheme } from './presets/forge'
+export * from './primitives'
 export {
   createDataClient,
   createDataKey,
