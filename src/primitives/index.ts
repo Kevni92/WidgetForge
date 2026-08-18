@@ -1,2 +1,5 @@
 export { default as InfoPopover } from './InfoPopover.vue'
 export type { InfoPopoverPlacement } from './InfoPopover.vue'
+export { default as KeyValueGroup } from './KeyValueGroup.vue'
+export { default as KeyValueRow } from './KeyValueRow.vue'
+export { default as StatValue } from './StatValue.vue'
