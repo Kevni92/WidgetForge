@@ -11,10 +11,10 @@ import WindowManagerHost from './WindowManagerHost.vue'
 interface Props { windows:WindowManager; docks:DockManager; registry:WidgetRegistry }
 const props=defineProps<Props>()
 const windowManager=toRaw(props.windows);const dockManager=toRaw(props.docks);const registry=toRaw(props.registry)
-const root=ref<HTMLElement|null>(null);const size=shallowRef<WindowSize>({width:0,height:0});const docks=shallowRef<readonly DockState[]>(dockManager.list())
+const root=ref<HTMLElement|null>(null);const size=shallowRef<WindowSize>({width:0,height:0});const dockStates=shallowRef<readonly DockState[]>(dockManager.list())
 let disposeSize:(()=>void)|null=null
-const unsubscribe=dockManager.subscribe((change)=>{docks.value=change.docks})
-const layout=computed(()=>calculateWorkspaceDockLayout(size.value,docks.value))
+const unsubscribe=dockManager.subscribe((change)=>{dockStates.value=change.docks})
+const layout=computed(()=>calculateWorkspaceDockLayout(size.value,dockStates.value))
 function rectStyle(rect:{x:number;y:number;width:number;height:number}):Record<string,string>{return{left:`${rect.x}px`,top:`${rect.y}px`,width:`${rect.width}px`,height:`${rect.height}px`}}
 onMounted(()=>{if(root.value)disposeSize=observeElementSize(root.value,(next)=>{size.value=next})})
 onBeforeUnmount(()=>{disposeSize?.();disposeSize=null;unsubscribe()})
@@ -25,7 +25,7 @@ onBeforeUnmount(()=>{disposeSize?.();disposeSize=null;unsubscribe()})
     <div class="wf-workspace-host__floating" :style="rectStyle(layout.floating)" data-workspace-floating>
       <WindowManagerHost :manager="windowManager" :registry="registry" />
     </div>
-    <DockHost v-for="dock in docks" :key="dock.id" :dock="dock" :rect="layout.docks[dock.id] ?? { x:0,y:0,width:0,height:0 }" :manager="dockManager" :registry="registry" />
+    <DockHost v-for="dock in dockStates" :key="dock.id" :dock="dock" :rect="layout.docks[dock.id] ?? { x:0,y:0,width:0,height:0 }" :manager="dockManager" :registry="registry" />
   </div>
 </template>
 
