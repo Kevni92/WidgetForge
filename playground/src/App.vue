@@ -1,266 +1,153 @@
 <script setup lang="ts">
-import { computed, markRaw, ref, shallowRef } from 'vue'
+import { computed, markRaw, nextTick, ref } from 'vue'
 import {
-  CommandInput,
   DataClientProvider,
-  PaneHost,
   ThemeProvider,
-  WindowManagerHost,
-  createCommandRegistry,
+  WorkspaceHost,
   createDataClient,
   createDataKey,
+  createDockManager,
   createMockDataProvider,
   createSplitPane,
   createWidgetNavigator,
   createWidgetPane,
   createWindowManager,
-  defaultTheme,
   forgeDarkTheme,
   forgeLightTheme,
   provideWidgetNavigation,
   restoreWorkspace,
   serializeWorkspace,
-  type PaneNode,
   type WidgetForgeTheme,
 } from 'widgetforge'
-import InteractionShowcase from './InteractionShowcase.vue'
-import NotificationShowcase from './NotificationShowcase.vue'
-import PrimitiveShowcase from './PrimitiveShowcase.vue'
-import { playgroundWidgetRegistry, playgroundWidgets } from './playground-widgets'
+import { provideDemoControls, type DemoThemeName } from './demo-controls'
+import { playgroundWidgetRegistry } from './playground-widgets'
 
-type ThemeName = 'neutral' | 'forge-dark' | 'forge-light'
+interface DemoMetric { label: string; value: number; unit: string }
 
-interface DemoMetric {
-  label: string
-  value: number
-  unit: string
+const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.fullscreen.v2'
+const THEME_STORAGE_KEY = 'widgetforge.playground.theme'
+
+function storedTheme(): DemoThemeName {
+  try { return window.localStorage.getItem(THEME_STORAGE_KEY) === 'forge-light' ? 'forge-light' : 'forge-dark' }
+  catch { return 'forge-dark' }
 }
 
-const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.workspace.v2'
-
-const themeName = ref<ThemeName>('neutral')
-const themes: Record<ThemeName, WidgetForgeTheme> = {
-  neutral: defaultTheme,
-  'forge-dark': forgeDarkTheme,
-  'forge-light': forgeLightTheme,
-}
+const themeName = ref<DemoThemeName>(storedTheme())
+const themes: Record<DemoThemeName, WidgetForgeTheme> = { 'forge-dark': forgeDarkTheme, 'forge-light': forgeLightTheme }
 const activeTheme = computed(() => themes[themeName.value])
 
 const mockProvider = markRaw(createMockDataProvider())
 const gridPowerKey = createDataKey<DemoMetric>('demo.metric', 'grid-power')
 const warehouseKey = createDataKey<DemoMetric>('demo.metric', 'warehouse-stock')
-mockProvider.register({
-  key: gridPowerKey,
-  initial: { label: 'Grid Power', value: 118.0, unit: 'MW' },
-  intervalMs: 1_200,
-  update: (current) => ({ ...current, value: current.value + 0.5 }),
-})
-mockProvider.register({
-  key: warehouseKey,
-  initial: { label: 'Warehouse Stock', value: 640, unit: 't' },
-  intervalMs: 1_800,
-  update: (current, tick) => ({ ...current, value: current.value + (tick % 2 === 0 ? 4 : -2) }),
-})
+mockProvider.register({ key: gridPowerKey, initial: { label: 'Grid Power', value: 118.0, unit: 'MW' }, intervalMs: 1_200, update: (current) => ({ ...current, value: current.value + 0.5 }) })
+mockProvider.register({ key: warehouseKey, initial: { label: 'Warehouse Stock', value: 640, unit: 't' }, intervalMs: 1_800, update: (current, tick) => ({ ...current, value: current.value + (tick % 2 === 0 ? 4 : -2) }) })
 const dataClient = markRaw(createDataClient(mockProvider, { cacheTimeMs: 5_000 }))
 
-const paneDemo = shallowRef<PaneNode>(createSplitPane({
-  id: 'pane-demo-root',
-  axis: 'horizontal',
-  weights: [1.15, 1],
-  children: [
-    createWidgetPane({
-      id: 'pane-demo-planet',
-      widgetId: 'planet.summary',
-      instanceId: 'pane-demo-planet-widget',
-      parameters: { planetId: 'PANE-01', compact: true },
-      settings: { minSize: 220, background: 'surface' },
-    }),
-    createSplitPane({
-      id: 'pane-demo-right',
-      axis: 'vertical',
-      weights: [1, 0.8],
+const windows = markRaw(createWindowManager(playgroundWidgetRegistry))
+const docks = markRaw(createDockManager(playgroundWidgetRegistry))
+const navigator = markRaw(createWidgetNavigator(playgroundWidgetRegistry, windows))
+provideWidgetNavigation(navigator)
+
+function persistWorkspace(): void {
+  try { window.localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(windows, docks)) }
+  catch { /* Demo persistence is best-effort. */ }
+}
+
+function openReferenceLayout(): void {
+  docks.add({
+    id: 'workspace-top',
+    position: 'top',
+    thickness: 58,
+    minThickness: 50,
+    maxThickness: 86,
+    resizable: true,
+    pane: createSplitPane({
+      id: 'workspace-top-root',
+      axis: 'horizontal',
+      weights: [4, 1],
+      settings: { resizable: true, background: 'surface' },
       children: [
-        createWidgetPane({
-          id: 'pane-demo-market',
-          widgetId: 'market.ticker',
-          instanceId: 'pane-demo-market-widget',
-          parameters: { commodity: 'ENERGY', rows: 4 },
-          settings: { minSize: 150, background: 'surface-raised' },
-        }),
-        createWidgetPane({
-          id: 'pane-demo-metric',
-          widgetId: 'demo.live-metric',
-          instanceId: 'pane-demo-metric-widget',
-          parameters: { resourceId: 'grid-power' },
-          settings: { minSize: 120, background: 'canvas' },
+        createWidgetPane({ id: 'workspace-nav-pane', widgetId: 'demo.workspace-topbar', instanceId: 'workspace-nav-widget', settings: { minSize: 520, background: 'surface' } }),
+        createWidgetPane({ id: 'workspace-top-metric-pane', widgetId: 'demo.live-metric', instanceId: 'workspace-top-metric-widget', parameters: { resourceId: 'grid-power' }, settings: { minSize: 180, background: 'surface-raised' } }),
+      ],
+    }),
+  })
+
+  docks.add({
+    id: 'workspace-bottom',
+    position: 'bottom',
+    thickness: 54,
+    minThickness: 48,
+    maxThickness: 88,
+    resizable: true,
+    pane: createWidgetPane({ id: 'workspace-command-pane', widgetId: 'demo.workspace-commandbar', instanceId: 'workspace-command-widget', settings: { background: 'surface' } }),
+  })
+
+  windows.open({ widgetId: 'market.ticker', instanceId: 'market-main', title: 'Helios Commodity Exchange', parameters: { commodity: 'METALS', rows: 14 }, position: { x: 20, y: 20 }, size: { width: 620, height: 430 } })
+  windows.snapWindow('market-main', 'left', { width: 1200, height: 720 })
+
+  windows.open({ widgetId: 'planet.summary', instanceId: 'colony-main', title: 'ARC-01 Colony Administration', parameters: { planetId: 'ARC-01', compact: false }, position: { x: 640, y: 32 }, size: { width: 440, height: 340 } })
+  windows.open({ widgetId: 'demo.alerts', instanceId: 'alerts-main', position: { x: 720, y: 390 }, size: { width: 430, height: 300 } })
+  windows.open({ widgetId: 'demo.live-metric', instanceId: 'telemetry-power', title: 'Grid Telemetry', parameters: { resourceId: 'grid-power' }, position: { x: 890, y: 210 }, size: { width: 250, height: 155 } })
+
+  windows.openPane({
+    instanceId: 'operations-main',
+    title: 'Operations Matrix',
+    position: { x: 470, y: 400 },
+    size: { width: 590, height: 270 },
+    minSize: { width: 420, height: 220 },
+    pane: createSplitPane({
+      id: 'operations-root',
+      axis: 'horizontal',
+      weights: [1.3, 1],
+      children: [
+        createWidgetPane({ id: 'operations-colony', widgetId: 'planet.summary', instanceId: 'operations-colony-widget', parameters: { planetId: 'ARC-02', compact: true }, settings: { minSize: 250, background: 'surface' } }),
+        createSplitPane({
+          id: 'operations-metrics',
+          axis: 'vertical',
+          children: [
+            createWidgetPane({ id: 'operations-power', widgetId: 'demo.live-metric', instanceId: 'operations-power-widget', parameters: { resourceId: 'grid-power' }, settings: { minSize: 90, background: 'surface-raised' } }),
+            createWidgetPane({ id: 'operations-stock', widgetId: 'demo.live-metric', instanceId: 'operations-stock-widget', parameters: { resourceId: 'warehouse-stock' }, settings: { minSize: 90, background: 'canvas' } }),
+          ],
         }),
       ],
     }),
-  ],
-}))
-
-const windowManager = markRaw(createWindowManager(playgroundWidgetRegistry))
-const commandNavigator = markRaw(createWidgetNavigator(playgroundWidgetRegistry, windowManager))
-provideWidgetNavigation(commandNavigator)
-const commands = markRaw(createCommandRegistry([
-  {
-    name: 'planet',
-    aliases: ['p'],
-    widgetId: 'planet.summary',
-    arguments: [
-      { name: 'planetId', type: 'string', required: true },
-      { name: 'compact', type: 'boolean', default: false },
-    ],
-  },
-  {
-    name: 'market',
-    aliases: ['mkt'],
-    widgetId: 'market.ticker',
-    parameters: { commodity: 'METALS' },
-    arguments: [{ name: 'rows', type: 'number', default: 5 }],
-  },
-]))
-
-function readStoredWorkspace(): string | null {
-  try {
-    return window.localStorage.getItem(WORKSPACE_STORAGE_KEY)
-  } catch {
-    return null
-  }
-}
-
-function persistWorkspace(): void {
-  try {
-    window.localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(windowManager))
-  } catch {
-    // Playground persistence is best-effort and must not break the framework demo.
-  }
-}
-
-function openDefaultWorkspace(): void {
-  windowManager.open({
-    widgetId: 'planet.summary',
-    instanceId: 'planet-alpha',
-    parameters: { planetId: 'ARC-01' },
-    position: { x: 32, y: 32 },
-  })
-  windowManager.open({
-    widgetId: 'planet.summary',
-    instanceId: 'planet-beta',
-    parameters: { planetId: 'ARC-02', compact: true },
-    position: { x: 190, y: 250 },
-  })
-  windowManager.open({
-    widgetId: 'market.ticker',
-    instanceId: 'market-metals',
-    parameters: { commodity: 'METALS', rows: 6 },
-    position: { x: 390, y: 70 },
-  })
-  windowManager.open({
-    widgetId: 'demo.live-metric',
-    instanceId: 'metric-power-a',
-    parameters: { resourceId: 'grid-power' },
-    position: { x: 32, y: 420 },
-  })
-  windowManager.open({
-    widgetId: 'demo.live-metric',
-    instanceId: 'metric-power-b',
-    parameters: { resourceId: 'grid-power' },
-    position: { x: 310, y: 420 },
-  })
-  windowManager.open({
-    widgetId: 'demo.live-metric',
-    instanceId: 'metric-warehouse',
-    parameters: { resourceId: 'warehouse-stock' },
-    position: { x: 588, y: 420 },
   })
 }
 
-const storedWorkspace = readStoredWorkspace()
-const restoredWorkspace = storedWorkspace ? restoreWorkspace(windowManager, storedWorkspace) : null
-if (!restoredWorkspace?.valid) openDefaultWorkspace()
+function restoreReferenceLayout(): void {
+  let stored: string | null = null
+  try { stored = window.localStorage.getItem(WORKSPACE_STORAGE_KEY) } catch { /* ignore */ }
+  const restored = stored ? restoreWorkspace(windows, stored, docks) : null
+  if (!restored?.valid || restored.restoredDocks.length === 0) openReferenceLayout()
+}
+
+async function resetWorkspace(): Promise<void> {
+  for (const window of [...windows.list()]) windows.close(window.instanceId, 'user')
+  for (const dock of [...docks.list()]) docks.remove(dock.id)
+  try { window.localStorage.removeItem(WORKSPACE_STORAGE_KEY) } catch { /* ignore */ }
+  await nextTick()
+  openReferenceLayout()
+  persistWorkspace()
+}
+
+function setTheme(theme: DemoThemeName): void {
+  themeName.value = theme
+  try { window.localStorage.setItem(THEME_STORAGE_KEY, theme) } catch { /* ignore */ }
+}
+
+provideDemoControls({ theme: () => themeName.value, setTheme, resetWorkspace })
+restoreReferenceLayout()
 persistWorkspace()
-windowManager.subscribe(persistWorkspace)
-
-let nextPlanet = 3
-
-function openPlanet(): void {
-  windowManager.open({ widgetId: 'planet.summary', parameters: { planetId: `ARC-0${nextPlanet}` } })
-  nextPlanet += 1
-}
-
-function openMarket(): void {
-  windowManager.open({ widgetId: 'market.ticker', parameters: { commodity: 'FOOD', rows: 5 } })
-}
+windows.subscribe(persistWorkspace)
+docks.subscribe(persistWorkspace)
 </script>
 
 <template>
   <ThemeProvider :theme="activeTheme">
     <DataClientProvider :client="dataClient">
-      <main class="playground-shell">
-        <section class="playground-card">
-          <header class="playground-header">
-            <div>
-              <p class="eyebrow">WidgetForge</p>
-              <h1>Floating Window Playground</h1>
-            </div>
-            <label class="theme-picker">
-              Theme
-              <select v-model="themeName">
-                <option value="neutral">Neutral</option>
-                <option value="forge-dark">Forge Dark</option>
-                <option value="forge-light">Forge Light</option>
-              </select>
-            </label>
-          </header>
-
-          <p class="intro">Fenster lassen sich verschieben und skalieren. Widgets können intern navigieren, Commands öffnen dieselben Widgets und die Live-Metric-Fenster erhalten serverlose Mock-Updates über exakt dieselbe Data API wie ein späterer externer Provider. Das Workspace-Layout wird lokal im Browser gespeichert.</p>
-
-          <PrimitiveShowcase />
-          <NotificationShowcase :navigator="commandNavigator" />
-          <InteractionShowcase :navigator="commandNavigator" />
-
-          <section class="demo-section command-demo">
-            <h2>Commands</h2>
-            <CommandInput :commands="commands" :navigator="commandNavigator" placeholder="planet ARC-03" />
-            <p class="manifest-meta">Beispiele: <code>planet ARC-03</code>, <code>p "New Terra" true</code>, <code>market 8</code></p>
-          </section>
-
-          <section class="demo-section">
-            <h2>Pane Layout</h2>
-            <p class="manifest-meta">Ein rekursiver Pane-Baum enthält drei normale Widgets. Die Divider verändern ausschließlich die Split-Gewichte.</p>
-            <div class="pane-playground-area">
-              <PaneHost v-model:pane="paneDemo" :registry="playgroundWidgetRegistry" />
-            </div>
-          </section>
-
-          <section class="demo-section">
-            <h2>Window Manager</h2>
-            <div class="playground-actions">
-              <button type="button" data-action="open-planet" @click="openPlanet">Open Planet</button>
-              <button type="button" data-action="open-market" @click="openMarket">Open Market</button>
-            </div>
-            <div class="window-playground-area">
-              <WindowManagerHost :manager="windowManager" :registry="playgroundWidgetRegistry" />
-            </div>
-          </section>
-
-          <section class="demo-section">
-            <h2>Widget Manifests</h2>
-            <div class="manifest-grid">
-              <article v-for="widget in playgroundWidgets" :key="widget.id" class="manifest-card">
-                <strong>{{ widget.title }}</strong>
-                <code>{{ widget.id }}</code>
-                <span class="manifest-meta">
-                  Parameter: {{ Object.keys(widget.parameters ?? {}).join(', ') || 'keine' }}
-                </span>
-                <span v-if="widget.window?.defaultSize" class="manifest-meta">
-                  Default: {{ widget.window.defaultSize.width }} × {{ widget.window.defaultSize.height }}
-                </span>
-              </article>
-            </div>
-          </section>
-        </section>
+      <main class="simulation-demo" data-fullscreen-workspace-demo>
+        <WorkspaceHost :windows="windows" :docks="docks" :registry="playgroundWidgetRegistry" />
       </main>
     </DataClientProvider>
   </ThemeProvider>
