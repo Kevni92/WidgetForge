@@ -11,7 +11,7 @@ import {
 interface TransportSubscription {
   readonly key: DataKey<unknown>
   readonly observer: RealtimeResourceObserver<unknown>
-  readonly unsubscribe: ReturnType<typeof vi.fn>
+  readonly unsubscribe: () => void
   active: boolean
 }
 
