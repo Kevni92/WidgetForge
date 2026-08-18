@@ -17,6 +17,7 @@ import {
   defaultTheme,
   forgeDarkTheme,
   forgeLightTheme,
+  provideWidgetNavigation,
   restoreWorkspace,
   serializeWorkspace,
   type PaneNode,
@@ -100,6 +101,7 @@ const paneDemo = shallowRef<PaneNode>(createSplitPane({
 
 const windowManager = markRaw(createWindowManager(playgroundWidgetRegistry))
 const commandNavigator = markRaw(createWidgetNavigator(playgroundWidgetRegistry, windowManager))
+provideWidgetNavigation(commandNavigator)
 const commands = markRaw(createCommandRegistry([
   {
     name: 'planet',
