@@ -29,7 +29,7 @@ describe('ContextMenuHost', () => {
     await nextTick()
     await nextTick()
 
-    const enabled = wrapper.findAll('[role="menuitem"]').filter((item) => !item.attributes('disabled'))
+    const enabled = wrapper.findAll('[role="menuitem"]').filter((item) => item.attributes('disabled') === undefined)
     expect(document.activeElement).toBe(enabled[0]?.element)
 
     await wrapper.get('[role="menu"]').trigger('keydown', { key: 'ArrowDown' })
