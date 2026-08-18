@@ -10,6 +10,13 @@ interface CommandInputProps {
   submitLabel?: string
 }
 
+let nextCommandInputId = 0
+
+function createFeedbackId(): string {
+  nextCommandInputId += 1
+  return `wf-command-input-feedback-${nextCommandInputId}`
+}
+
 const props = withDefaults(defineProps<CommandInputProps>(), {
   placeholder: 'Enter command',
   submitLabel: 'Run',
@@ -20,6 +27,7 @@ const emit = defineEmits<{
   error: [error: Error]
 }>()
 
+const feedbackId = createFeedbackId()
 const input = ref('')
 const status = ref<'idle' | 'success' | 'error'>('idle')
 const feedback = ref('')
@@ -54,13 +62,13 @@ function submit(): void {
         :placeholder="placeholder"
         autocomplete="off"
         spellcheck="false"
-        aria-describedby="wf-command-input-feedback"
+        :aria-describedby="status === 'idle' ? undefined : feedbackId"
       />
     </label>
     <button class="wf-command-input__submit" type="submit">{{ submitLabel }}</button>
     <p
       v-if="status !== 'idle'"
-      id="wf-command-input-feedback"
+      :id="feedbackId"
       class="wf-command-input__feedback"
       :class="`wf-command-input__feedback--${status}`"
       :role="status === 'error' ? 'alert' : 'status'"
