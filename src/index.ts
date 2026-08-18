@@ -5,6 +5,11 @@ export { useTheme } from './vue/theme-context'
 export { default as WidgetHost } from './vue/WidgetHost.vue'
 export { useWidgetContext } from './vue/widget-context'
 export type { WidgetContext } from './vue/widget-context'
+export {
+  provideWidgetNavigation,
+  useWidgetNavigation,
+  WidgetNavigationUnavailableError,
+} from './vue/widget-navigation'
 export { default as WindowShell } from './vue/WindowShell.vue'
 export { default as WindowManagerHost } from './vue/WindowManagerHost.vue'
 export { forgeDarkTheme, forgeLightTheme } from './presets/forge'
@@ -44,6 +49,17 @@ export type {
   WidgetParameterIssueCode,
   WidgetParameterValidationResult,
 } from './core/widget-registry'
+export {
+  createWidgetNavigator,
+  WidgetNavigationError,
+  WidgetNavigatorService,
+} from './core/navigation'
+export type {
+  NavigationIntent,
+  NavigationResult,
+  WidgetNavigationErrorCode,
+  WidgetNavigator,
+} from './core/navigation'
 export {
   createWindowManager,
   DuplicateWindowInstanceError,
