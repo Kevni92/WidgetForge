@@ -35,8 +35,10 @@ describe('Vue widget navigation', () => {
     const wrapper = mount(WindowManagerHost, { props: { manager, registry } })
     await wrapper.get('.navigate').trigger('click')
 
-    const target = manager.list().find((window) => window.widgetId === 'test.target')
-    expect(target?.parameters).toEqual({ id: 'B-2' })
+    const target = manager.list().find((window) =>
+      window.rootPane.kind === 'widget' && window.rootPane.widgetId === 'test.target')
+    expect(target?.rootPane.kind).toBe('widget')
+    if (target?.rootPane.kind === 'widget') expect(target.rootPane.parameters).toEqual({ id: 'B-2' })
     expect(wrapper.find('.target').exists()).toBe(true)
     wrapper.unmount()
   })
