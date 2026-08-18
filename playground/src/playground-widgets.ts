@@ -44,6 +44,11 @@ export const liveMetricWidget = defineWidget({
     defaultSize: { width: 260, height: 170 },
     minSize: { width: 220, height: 140 },
     maxSize: { width: 460, height: 320 },
+    options: {
+      layer: 'always-on-top',
+      opacity: 0.94,
+      header: 'focused',
+    },
   },
 })
 
