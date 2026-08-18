@@ -22,7 +22,7 @@ describe('InfoPopover', () => {
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
 
     await trigger.trigger('focus')
-    expect(wrapper.get('[role="dialog"]').exists()).toBe(true)
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
   })
 
   it('keeps parent popovers stable while nested levels open and escape closes only the inner level', async () => {
