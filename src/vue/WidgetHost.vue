@@ -10,7 +10,7 @@ interface WidgetHostProps {
   widgetId: WidgetId
   parameters?: Readonly<Record<string, unknown>>
   instanceId?: string
-  lifecycle?: WidgetLifecycleController
+  lifecycle?: WidgetLifecycleController | undefined
 }
 
 let nextGeneratedInstanceId = 0
