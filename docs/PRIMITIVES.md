@@ -24,3 +24,16 @@ Because the content may itself be interactive, the panel uses dialog semantics r
 `StatValue` renders a number or string with an optional unit and semantic tone (`neutral`, `success`, `warning`, `danger`, `info`). It uses tabular numbers and accepts an accessible label for abbreviated values.
 
 The row markup uses `dt`/`dd` and is intended to be composed inside `KeyValueGroup`'s `dl` element.
+
+## SimpleTable
+
+`SimpleTable` is the lightweight table for small and medium, already-prepared data sets.
+
+- columns are typed against the row type
+- a column can point directly at a row `field` or calculate a value with `value(row)`
+- optional `format(value, row)` covers simple textual formatting
+- `cell-<columnId>` scoped slots allow arbitrary consumer content such as navigation controls or `InfoPopover`
+- native `table`, `th scope="col"`, `tbody` and optional `caption` semantics are retained
+- the compact variant only changes density
+
+Sorting, filtering, row selection and other data-grid behavior intentionally do not belong to `SimpleTable`; those capabilities are provided by the separate `DataTable` primitive.
