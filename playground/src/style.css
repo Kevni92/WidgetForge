@@ -40,6 +40,10 @@ p { line-height: 1.6; }
 .state.info { color: var(--wf-color-info); }
 .state.danger { color: var(--wf-color-danger); }
 .dummy-widget { display: grid; gap: var(--wf-space-xs); }
+.playground-actions { display: flex; flex-wrap: wrap; gap: var(--wf-space-sm); margin-bottom: var(--wf-space-lg); }
+.playground-actions button { min-height: var(--wf-size-control-height); padding: 0 var(--wf-space-md); color: var(--wf-color-accent-contrast); background: var(--wf-color-accent); border: 1px solid var(--wf-color-accent); border-radius: var(--wf-radius-sm); cursor: pointer; }
+.playground-actions button:hover { filter: brightness(1.06); }
+.playground-actions button:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
 
 @media (max-width: 640px) {
   .playground-header { align-items: stretch; flex-direction: column; }

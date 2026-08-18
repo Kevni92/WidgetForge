@@ -3,21 +3,24 @@ import { describe, expect, it } from 'vitest'
 import App from '../src/App.vue'
 
 describe('Playground App', () => {
-  it('renders multiple WindowShells and keeps theme switching public', async () => {
+  it('demonstrates open, focus and close through the public WindowManager flow', async () => {
     const wrapper = mount(App)
     const select = wrapper.get('select')
 
-    expect(wrapper.text()).toContain('Planet Summary')
-    expect(wrapper.text()).toContain('Market Ticker')
-    expect(wrapper.text()).toContain('ARC-01')
-    expect(wrapper.text()).toContain('ARC-02')
     expect(wrapper.findAll('.wf-window-shell')).toHaveLength(3)
-    expect(wrapper.findAll('.wf-window-shell--focused')).toHaveLength(1)
+    expect(wrapper.get('[data-window-instance-id="market-metals"] .wf-window-shell').attributes('data-focused')).toBe('true')
+
+    await wrapper.get('[data-window-instance-id="planet-alpha"] .wf-window-shell').trigger('pointerdown')
+    expect(wrapper.get('[data-window-instance-id="planet-alpha"] .wf-window-shell').attributes('data-focused')).toBe('true')
+
+    await wrapper.get('[data-window-instance-id="planet-beta"] .wf-window-shell__close').trigger('click')
+    expect(wrapper.find('[data-window-instance-id="planet-beta"]').exists()).toBe(false)
+
+    await wrapper.get('[data-action="open-planet"]').trigger('click')
+    expect(wrapper.findAll('.wf-window-shell')).toHaveLength(3)
+    expect(wrapper.text()).toContain('ARC-03')
 
     await select.setValue('forge-dark')
     expect(wrapper.get('.wf-theme').attributes('style')).toContain('--wf-color-canvas: #070b12')
-
-    await select.setValue('forge-light')
-    expect(wrapper.get('.wf-theme').attributes('style')).toContain('--wf-color-canvas: #e9eef3')
   })
 })
