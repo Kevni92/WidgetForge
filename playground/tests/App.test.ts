@@ -5,18 +5,11 @@ import App from '../src/App.vue'
 const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.fullscreen.v2'
 
 describe('Fullscreen Playground App', () => {
-  beforeEach(() => {
-    window.localStorage.clear()
-    vi.useFakeTimers()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+  beforeEach(() => { window.localStorage.clear(); vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
 
   it('renders a cohesive fullscreen simulation workspace with docks, panes and window states', async () => {
     const wrapper = mount(App)
-
     expect(wrapper.get('[data-fullscreen-workspace-demo]').element).toBeTruthy()
     expect(wrapper.findAll('.wf-dock-host')).toHaveLength(2)
     expect(wrapper.get('[data-dock-id="workspace-top"]').attributes('data-dock-position')).toBe('top')
@@ -28,13 +21,11 @@ describe('Fullscreen Playground App', () => {
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
     expect(wrapper.get('[data-window-instance-id="telemetry-power"]').attributes('data-window-layer')).toBe('always-on-top')
     expect(wrapper.get('[data-window-instance-id="operations-main"] [data-pane-id="operations-root"]').attributes('data-pane-kind')).toBe('split')
-    expect(wrapper.get('[data-pane-id="operations-metrics"]').attributes('data-pane-kind')).toBe('split')
+    expect(wrapper.get('[data-pane-id="operations-metrics"]').attributes('data-pane-kind')).toBe('tabs')
+    expect(wrapper.findAll('[data-pane-id="operations-metrics"] [role="tab"]')).toHaveLength(2)
     expect(wrapper.findAll('[data-window-instance-id="market-main"] .wf-data-table__row')).toHaveLength(14)
 
-    const snapshot = JSON.parse(window.localStorage.getItem(WORKSPACE_STORAGE_KEY) ?? '{}') as {
-      windows?: Array<{ instanceId: string; snap?: { zone?: string } | null }>
-      docks?: unknown[]
-    }
+    const snapshot = JSON.parse(window.localStorage.getItem(WORKSPACE_STORAGE_KEY) ?? '{}') as { windows?: Array<{ instanceId: string; snap?: { zone?: string } | null }>; docks?: unknown[] }
     expect(snapshot.docks).toHaveLength(2)
     expect(snapshot.windows?.find((window) => window.instanceId === 'market-main')?.snap?.zone).toBe('left')
 
@@ -55,7 +46,6 @@ describe('Fullscreen Playground App', () => {
     await first.get('[data-window-instance-id="alerts-main"] .wf-window-shell__close').trigger('click')
     await first.get('[data-window-instance-id="colony-main"] .wf-window-shell__minimize').trigger('click')
     first.unmount()
-
     const second = mount(App)
     expect(second.findAll('.wf-dock-host')).toHaveLength(2)
     expect(second.find('[data-window-instance-id="alerts-main"]').exists()).toBe(false)
@@ -68,11 +58,8 @@ describe('Fullscreen Playground App', () => {
     const wrapper = mount(App)
     await wrapper.get('[data-window-instance-id="alerts-main"] .wf-window-shell__close').trigger('click')
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(4)
-
     await wrapper.get('[data-demo-action="reset"]').trigger('click')
-    await wrapper.vm.$nextTick()
-    await wrapper.vm.$nextTick()
-
+    await wrapper.vm.$nextTick(); await wrapper.vm.$nextTick()
     expect(wrapper.findAll('.wf-dock-host')).toHaveLength(2)
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
     expect(wrapper.get('[data-window-instance-id="alerts-main"]').element).toBeTruthy()
