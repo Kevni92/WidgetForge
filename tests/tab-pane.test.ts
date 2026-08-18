@@ -40,11 +40,14 @@ describe('TabPane core', () => {
     expect(edge).toMatchObject({ kind: 'split', id: 'split-container', axis: 'horizontal' })
   })
 
-  it('moves a tab child into another target without changing its identity', () => {
-    const root = createTabPane({ id: 'tabs', children: [first, second, third], activeId: 'first' })
-    const next = movePaneToTarget(root, 'third', 'first', 'center', 'nested-tabs')
+  it('moves a tab child through its normalized TabPane target without changing identity', () => {
+    const nested = createTabPane({ id: 'nested-tabs', children: [first, second], activeId: 'first' })
+    const root = createTabPane({ id: 'tabs', children: [nested, third], activeId: 'nested-tabs' })
+    const next = movePaneToTarget(root, 'third', 'nested-tabs', 'center', 'unused')
     expect(findPane(next, 'third')).toMatchObject({ instanceId: 'third-instance' })
     expect(findPane(next, 'nested-tabs')).toMatchObject({ kind: 'tabs', activeId: 'third' })
+    const target = findPane(next, 'nested-tabs')
+    expect(target?.kind === 'tabs' ? target.children.map((child) => child.id) : []).toEqual(['first', 'second', 'third'])
   })
 })
 
