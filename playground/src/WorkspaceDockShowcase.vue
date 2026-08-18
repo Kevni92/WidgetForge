@@ -6,8 +6,13 @@ import {
   createSplitPane,
   createWidgetPane,
   createWindowManager,
+  provideWidgetNavigation,
+  type WidgetNavigator,
 } from 'widgetforge'
 import { playgroundWidgetRegistry } from './playground-widgets'
+
+const props = defineProps<{ navigator: WidgetNavigator }>()
+provideWidgetNavigation(props.navigator)
 
 const docks = markRaw(createDockManager(playgroundWidgetRegistry))
 const windows = markRaw(createWindowManager(playgroundWidgetRegistry))
