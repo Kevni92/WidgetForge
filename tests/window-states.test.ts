@@ -62,7 +62,7 @@ describe('window states and instance rules', () => {
     expect(manager.get(singletonA.instanceId).focused).toBe(true)
   })
 
-  it('renders minimized shells without destroying the shell instance and emits restore', async () => {
+  it('renders minimized shells without destroying widget content and emits restore', async () => {
     const registry = createRegistry()
     const wrapper = mount(WindowShell, {
       props: {
@@ -76,7 +76,8 @@ describe('window states and instance rules', () => {
     expect(wrapper.find('.content').exists()).toBe(true)
     await wrapper.setProps({ minimized: true })
     expect(wrapper.attributes('data-window-mode')).toBe('minimized')
-    expect(wrapper.find('.content').exists()).toBe(false)
+    expect(wrapper.find('.content').exists()).toBe(true)
+    expect(wrapper.find('.content').isVisible()).toBe(false)
 
     await wrapper.get('.wf-window-shell__minimize').trigger('click')
     expect(wrapper.emitted('restore')?.[0]?.[0]).toEqual({ instanceId: 'window-1' })
