@@ -22,6 +22,8 @@ export { default as WindowShell } from './vue/WindowShell.vue'
 export { default as WindowManagerHost } from './vue/WindowManagerHost.vue'
 export { default as NotificationToastHost } from './vue/NotificationToastHost.vue'
 export { default as NotificationCenter } from './vue/NotificationCenter.vue'
+export { default as ContextMenuHost } from './vue/ContextMenuHost.vue'
+export { default as ConfirmationDialog } from './vue/ConfirmationDialog.vue'
 export { forgeDarkTheme, forgeLightTheme } from './presets/forge'
 export * from './primitives'
 export {
@@ -121,6 +123,19 @@ export type {
   NotificationStoreOptions,
   NotificationStoreUnsubscribe,
 } from './core/notifications'
+export {
+  ContextMenuController,
+  ContextMenuDefinitionError,
+  createContextMenuController,
+} from './core/context-menu'
+export type {
+  ContextMenuItem,
+  ContextMenuItemTone,
+  ContextMenuListener,
+  ContextMenuRequest,
+  ContextMenuState,
+  ContextMenuUnsubscribe,
+} from './core/context-menu'
 export {
   CommandDefinitionError,
   CommandParseError,
