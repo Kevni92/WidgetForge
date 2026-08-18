@@ -53,6 +53,7 @@ const context: WidgetContext = {
   instanceId,
   widgetId,
   parameters: contextParameters,
+  lifecycle,
 }
 
 provide(widgetContextKey, context)
