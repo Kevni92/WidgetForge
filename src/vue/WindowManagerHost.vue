@@ -5,9 +5,15 @@ import type { WidgetRegistry } from '../core/widget-registry'
 import type { WindowGeometry, WindowPosition, WindowSize } from '../core/window-geometry'
 import type { WindowManager, WindowState } from '../core/window-manager'
 import { detectWindowSnapZone, snapWindowGeometry, type WindowSnapZone } from '../core/window-snap'
+import {
+  detectWorkspaceDropZone,
+  dockWindowIntoWindow,
+  workspaceDropPreviewRect,
+  type WorkspaceDropRect,
+} from '../core/workspace-docking'
 import { observeElementSize } from './observe-element-size'
 import { provideWidgetNavigation } from './widget-navigation'
-import WindowFrame from './WindowFrame.vue'
+import WindowFrame, { type WindowDropTarget } from './WindowFrame.vue'
 
 interface WindowManagerHostProps {
   manager: WindowManager
@@ -20,6 +26,12 @@ interface SnapPreviewState {
   readonly geometry: WindowGeometry
 }
 
+interface WindowDockPreviewState {
+  readonly sourceInstanceId: string
+  readonly target: WindowDropTarget
+  readonly rect: WorkspaceDropRect
+}
+
 const props = defineProps<WindowManagerHostProps>()
 const manager = toRaw(props.manager)
 const registry = toRaw(props.registry)
@@ -30,11 +42,18 @@ const hostElement = ref<HTMLElement | null>(null)
 const containerSize = shallowRef<WindowSize>({ width: 0, height: 0 })
 const windows = shallowRef<readonly WindowState[]>(manager.list())
 const snapPreview = shallowRef<SnapPreviewState | null>(null)
+const windowDockPreview = shallowRef<WindowDockPreviewState | null>(null)
 let disposeSizeObserver: (() => void) | null = null
+let windowDockSequence = 0
 
 const unsubscribe = manager.subscribe((change) => {
   windows.value = change.windows
-  if (change.kind === 'close' && snapPreview.value?.instanceId === change.instanceId) snapPreview.value = null
+  if (change.kind === 'close') {
+    if (snapPreview.value?.instanceId === change.instanceId) snapPreview.value = null
+    if (windowDockPreview.value?.sourceInstanceId === change.instanceId || windowDockPreview.value?.target.targetInstanceId === change.instanceId) {
+      windowDockPreview.value = null
+    }
+  }
   if (change.kind === 'open' && containerSize.value.width > 0 && containerSize.value.height > 0) {
     manager.constrainToContainer(change.instanceId, containerSize.value)
   }
@@ -72,32 +91,91 @@ function unsnapForPointer(instanceId: string, clientX: number, clientY: number):
     : manager.unsnapWindow(instanceId, undefined, undefined, 'user')
 }
 
-function previewStyle(geometry: WindowGeometry): Record<string, string> {
-  return {
-    left: `${geometry.position.x}px`,
-    top: `${geometry.position.y}px`,
-    width: `${geometry.size.width}px`,
-    height: `${geometry.size.height}px`,
+function containsClientPoint(rect: DOMRect, clientX: number, clientY: number): boolean {
+  return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom && rect.width > 0 && rect.height > 0
+}
+
+function targetWindowElement(sourceInstanceId: string, clientX: number, clientY: number): HTMLElement | null {
+  const host = hostElement.value
+  if (!host) return null
+  const candidates = [...host.querySelectorAll<HTMLElement>('.wf-window-frame[data-window-instance-id]')]
+    .filter((element) => element.dataset.windowInstanceId !== sourceInstanceId && element.dataset.windowMode === 'normal')
+    .filter((element) => containsClientPoint(element.getBoundingClientRect(), clientX, clientY))
+    .sort((left, right) => Number(right.dataset.windowZIndex ?? 0) - Number(left.dataset.windowZIndex ?? 0))
+  return candidates[0] ?? null
+}
+
+function targetPaneElement(windowElement: HTMLElement, clientX: number, clientY: number): HTMLElement | null {
+  const candidates = [...windowElement.querySelectorAll<HTMLElement>('.wf-pane-host[data-pane-id]')]
+    .filter((element) => containsClientPoint(element.getBoundingClientRect(), clientX, clientY))
+    .sort((left, right) => {
+      const leftRect = left.getBoundingClientRect()
+      const rightRect = right.getBoundingClientRect()
+      return leftRect.width * leftRect.height - rightRect.width * rightRect.height
+    })
+  return candidates[0] ?? null
+}
+
+function resolveWindowDrop(sourceInstanceId: string, clientX: number, clientY: number): WindowDropTarget | null {
+  const windowElement = targetWindowElement(sourceInstanceId, clientX, clientY)
+  if (!windowElement) return null
+  const paneElement = targetPaneElement(windowElement, clientX, clientY)
+  const targetInstanceId = windowElement.dataset.windowInstanceId
+  const targetPaneId = paneElement?.dataset.paneId
+  if (!paneElement || !targetInstanceId || !targetPaneId) return null
+
+  const rect = paneElement.getBoundingClientRect()
+  const zone = detectWorkspaceDropZone({ x: clientX, y: clientY }, { x: rect.left, y: rect.top, width: rect.width, height: rect.height })
+  if (!zone || (zone === 'center' && paneElement.dataset.paneKind === 'split')) return null
+  return { targetInstanceId, targetPaneId, zone }
+}
+
+function previewWindowDrop(sourceInstanceId: string, target: WindowDropTarget | null): void {
+  if (!target) {
+    if (windowDockPreview.value?.sourceInstanceId === sourceInstanceId) windowDockPreview.value = null
+    return
   }
+  const host = hostElement.value
+  if (!host) return
+  const targetWindow = host.querySelector<HTMLElement>(`.wf-window-frame[data-window-instance-id="${CSS.escape(target.targetInstanceId)}"]`)
+  const paneElement = targetWindow?.querySelector<HTMLElement>(`.wf-pane-host[data-pane-id="${CSS.escape(target.targetPaneId)}"]`)
+  if (!paneElement) return
+  const hostRect = host.getBoundingClientRect()
+  const paneRect = paneElement.getBoundingClientRect()
+  const preview = workspaceDropPreviewRect(target.zone, { x: paneRect.left, y: paneRect.top, width: paneRect.width, height: paneRect.height })
+  windowDockPreview.value = {
+    sourceInstanceId,
+    target,
+    rect: { x: preview.x - hostRect.left, y: preview.y - hostRect.top, width: preview.width, height: preview.height },
+  }
+}
+
+function commitWindowDrop(sourceInstanceId: string, target: WindowDropTarget): void {
+  windowDockPreview.value = null
+  windowDockSequence += 1
+  dockWindowIntoWindow(manager, sourceInstanceId, target.targetInstanceId, target.targetPaneId, target.zone, `window-dock-${windowDockSequence}`)
+}
+
+function geometryStyle(geometry: WindowGeometry): Record<string, string> {
+  return { left: `${geometry.position.x}px`, top: `${geometry.position.y}px`, width: `${geometry.size.width}px`, height: `${geometry.size.height}px` }
+}
+
+function rectStyle(rect: WorkspaceDropRect): Record<string, string> {
+  return { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` }
 }
 
 onMounted(() => {
   if (!hostElement.value) return
-
   disposeSizeObserver = observeElementSize(hostElement.value, (size) => {
     containerSize.value = size
-    if (snapPreview.value) {
-      snapPreview.value = {
-        ...snapPreview.value,
-        geometry: snapWindowGeometry(snapPreview.value.zone, size),
-      }
-    }
+    if (snapPreview.value) snapPreview.value = { ...snapPreview.value, geometry: snapWindowGeometry(snapPreview.value.zone, size) }
     for (const window of manager.list()) manager.constrainToContainer(window.instanceId, size)
   })
 })
 
 onBeforeUnmount(() => {
   snapPreview.value = null
+  windowDockPreview.value = null
   disposeSizeObserver?.()
   disposeSizeObserver = null
   unsubscribe()
@@ -106,14 +184,8 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="hostElement" class="wf-window-manager-host">
-    <div
-      v-if="snapPreview"
-      class="wf-window-snap-preview"
-      :data-window-snap-preview="snapPreview.instanceId"
-      :data-window-snap-zone="snapPreview.zone"
-      :style="previewStyle(snapPreview.geometry)"
-      aria-hidden="true"
-    />
+    <div v-if="snapPreview" class="wf-window-snap-preview" :data-window-snap-preview="snapPreview.instanceId" :data-window-snap-zone="snapPreview.zone" :style="geometryStyle(snapPreview.geometry)" aria-hidden="true" />
+    <div v-if="windowDockPreview" class="wf-window-dock-preview" :data-window-dock-preview="windowDockPreview.sourceInstanceId" :data-window-dock-target="windowDockPreview.target.targetInstanceId" :data-window-dock-zone="windowDockPreview.target.zone" :style="rectStyle(windowDockPreview.rect)" aria-hidden="true" />
     <WindowFrame
       v-for="window in windows"
       :key="window.instanceId"
@@ -126,27 +198,15 @@ onBeforeUnmount(() => {
       :preview-snap="previewSnap"
       :commit-snap="commitSnap"
       :unsnap-for-pointer="unsnapForPointer"
+      :resolve-window-drop="resolveWindowDrop"
+      :preview-window-drop="previewWindowDrop"
+      :commit-window-drop="commitWindowDrop"
     />
   </div>
 </template>
 
 <style scoped>
-.wf-window-manager-host {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.wf-window-snap-preview {
-  position: absolute;
-  z-index: var(--wf-layer-overlay);
-  pointer-events: none;
-  border: 1px solid var(--wf-color-focus);
-  border-radius: var(--wf-radius-sm);
-  background: var(--wf-color-selected);
-  box-shadow: inset 0 0 0 1px var(--wf-color-border);
-}
+.wf-window-manager-host{position:relative;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden}
+.wf-window-snap-preview,.wf-window-dock-preview{position:absolute;z-index:var(--wf-layer-overlay);pointer-events:none;border:1px solid var(--wf-color-focus);border-radius:var(--wf-radius-sm);background:var(--wf-color-selected);box-shadow:inset 0 0 0 1px var(--wf-color-border)}
+.wf-window-dock-preview{outline:1px dashed var(--wf-color-accent);outline-offset:-3px}
 </style>
