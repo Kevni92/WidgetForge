@@ -51,7 +51,7 @@ mockProvider.register({
 })
 mockProvider.register({
   key: warehouseKey,
-  initial: { label: warehouseKey.id, value: 640, unit: 't' },
+  initial: { label: 'Warehouse Stock', value: 640, unit: 't' },
   intervalMs: 1_800,
   update: (current, tick) => ({ ...current, value: current.value + (tick % 2 === 0 ? 4 : -2) }),
 })
