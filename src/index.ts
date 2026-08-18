@@ -25,7 +25,30 @@ export { default as NotificationCenter } from './vue/NotificationCenter.vue'
 export { default as ContextMenuHost } from './vue/ContextMenuHost.vue'
 export { default as ConfirmationDialog } from './vue/ConfirmationDialog.vue'
 export { forgeDarkTheme, forgeLightTheme } from './presets/forge'
-export * from './primitives'
+export { default as InfoPopover } from './primitives/InfoPopover.vue'
+export type { InfoPopoverPlacement } from './primitives/InfoPopover.vue'
+export { default as KeyValueGroup } from './primitives/KeyValueGroup.vue'
+export { default as KeyValueRow } from './primitives/KeyValueRow.vue'
+export { default as StatValue } from './primitives/StatValue.vue'
+export { default as SimpleTable } from './primitives/SimpleTable.vue'
+export type { SimpleTableAlign, SimpleTableColumn } from './primitives/simple-table'
+export { default as DataTable } from './primitives/DataTable.vue'
+export {
+  filterDataTableRows,
+  nextDataTableSort,
+  processDataTableRows,
+  sortDataTableRows,
+  visibleDataTableColumns,
+} from './primitives/data-table'
+export type {
+  DataTableColumn,
+  DataTableRowId,
+  DataTableSort,
+  DataTableSortDirection,
+} from './primitives/data-table'
+export { default as LoadingState } from './primitives/LoadingState.vue'
+export { default as EmptyState } from './primitives/EmptyState.vue'
+export { default as ErrorState } from './primitives/ErrorState.vue'
 export {
   createDataClient,
   createDataKey,
