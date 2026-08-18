@@ -11,9 +11,32 @@ export {
   WidgetNavigationUnavailableError,
 } from './vue/widget-navigation'
 export { default as CommandInput } from './vue/CommandInput.vue'
+export { default as DataClientProvider } from './vue/DataClientProvider.vue'
+export {
+  DataClientUnavailableError,
+  provideDataClient,
+  useData,
+  useDataClient,
+} from './vue/data-context'
 export { default as WindowShell } from './vue/WindowShell.vue'
 export { default as WindowManagerHost } from './vue/WindowManagerHost.vue'
 export { forgeDarkTheme, forgeLightTheme } from './presets/forge'
+export {
+  createDataClient,
+  createDataKey,
+  dataKeyId,
+  DataClient,
+  InvalidDataKeyError,
+} from './data/data-client'
+export type {
+  DataHandle,
+  DataKey,
+  DataObserver,
+  DataProvider,
+  DataState,
+  DataStateRef,
+  DataUnsubscribe,
+} from './data/data-client'
 export { defineWidget, WidgetDefinitionError } from './core/widget'
 export type {
   InferWidgetParameters,
