@@ -6,7 +6,14 @@ import type { WidgetRegistry } from '../core/widget-registry'
 import { moveWindow, resizeWindow, type ResizeHandle, type WindowGeometry, type WindowSize } from '../core/window-geometry'
 import type { WindowManager, WindowState } from '../core/window-manager'
 import type { WindowSnapZone } from '../core/window-snap'
+import type { WorkspaceDropZone } from '../core/workspace-docking'
 import WindowShell from './WindowShell.vue'
+
+export interface WindowDropTarget {
+  readonly targetInstanceId: string
+  readonly targetPaneId: string
+  readonly zone: WorkspaceDropZone
+}
 
 interface WindowFrameProps {
   window: WindowState
@@ -18,6 +25,9 @@ interface WindowFrameProps {
   previewSnap?: (instanceId: string, zone: WindowSnapZone | null) => void
   commitSnap?: (instanceId: string, zone: WindowSnapZone) => void
   unsnapForPointer?: (instanceId: string, clientX: number, clientY: number) => WindowState
+  resolveWindowDrop?: (sourceInstanceId: string, clientX: number, clientY: number) => WindowDropTarget | null
+  previewWindowDrop?: (sourceInstanceId: string, target: WindowDropTarget | null) => void
+  commitWindowDrop?: (sourceInstanceId: string, target: WindowDropTarget) => void
 }
 
 interface InteractionSession {
@@ -29,6 +39,7 @@ interface InteractionSession {
   handle: ResizeHandle | null
   unsnapPending: boolean
   snapZone: WindowSnapZone | null
+  windowDrop: WindowDropTarget | null
 }
 
 const props = defineProps<WindowFrameProps>()
@@ -76,6 +87,7 @@ function startInteraction(event: PointerEvent): void {
     handle: handle ?? null,
     unsnapPending: !handle && props.window.snap !== null,
     snapZone: null,
+    windowDrop: null,
   }
   interactionKind.value = session.handle ? 'resize' : 'move'
   if (session.pointerId !== undefined && typeof session.captureTarget.setPointerCapture === 'function') {
@@ -83,8 +95,15 @@ function startInteraction(event: PointerEvent): void {
   }
 
   const pointerMatches = (pointerEvent: PointerEvent): boolean => session.pointerId === undefined || typeof pointerEvent.pointerId !== 'number' || pointerEvent.pointerId === session.pointerId
-  const updateSnapPreview = (pointerEvent: PointerEvent): void => {
+  const updatePreviews = (pointerEvent: PointerEvent): void => {
     if (session.handle) return
+    session.windowDrop = props.resolveWindowDrop?.(props.window.instanceId, pointerEvent.clientX, pointerEvent.clientY) ?? null
+    props.previewWindowDrop?.(props.window.instanceId, session.windowDrop)
+    if (session.windowDrop) {
+      session.snapZone = null
+      props.previewSnap?.(props.window.instanceId, null)
+      return
+    }
     session.snapZone = props.resolveSnapZone?.(pointerEvent.clientX, pointerEvent.clientY) ?? null
     props.previewSnap?.(props.window.instanceId, session.snapZone)
   }
@@ -94,10 +113,7 @@ function startInteraction(event: PointerEvent): void {
     if (!session.handle && session.unsnapPending) {
       const unsnapped = props.unsnapForPointer?.(props.window.instanceId, pointerEvent.clientX, pointerEvent.clientY)
       if (unsnapped) {
-        session.startGeometry = {
-          position: { ...unsnapped.geometry.position },
-          size: { ...unsnapped.geometry.size },
-        }
+        session.startGeometry = { position: { ...unsnapped.geometry.position }, size: { ...unsnapped.geometry.size } }
         session.startX = pointerEvent.clientX
         session.startY = pointerEvent.clientY
       }
@@ -109,13 +125,16 @@ function startInteraction(event: PointerEvent): void {
       ? resizeWindow(session.startGeometry, session.handle, delta, props.window.constraints, effectiveContainerSize())
       : moveWindow(session.startGeometry, delta, effectiveContainerSize())
     manager.setGeometry(props.window.instanceId, geometry, 'user')
-    updateSnapPreview(pointerEvent)
+    updatePreviews(pointerEvent)
   }
   const cleanup = (): void => {
     globalThis.window.removeEventListener('pointermove', onPointerMove)
     globalThis.window.removeEventListener('pointerup', onPointerEnd)
     globalThis.window.removeEventListener('pointercancel', onPointerEnd)
-    if (!session.handle) props.previewSnap?.(props.window.instanceId, null)
+    if (!session.handle) {
+      props.previewSnap?.(props.window.instanceId, null)
+      props.previewWindowDrop?.(props.window.instanceId, null)
+    }
     if (session.pointerId !== undefined && typeof session.captureTarget.releasePointerCapture === 'function') {
       try { session.captureTarget.releasePointerCapture(session.pointerId) } catch { /* Browser may already have released capture. */ }
     }
@@ -124,8 +143,9 @@ function startInteraction(event: PointerEvent): void {
   }
   const onPointerEnd = (pointerEvent: PointerEvent): void => {
     if (!pointerMatches(pointerEvent)) return
-    if (pointerEvent.type === 'pointerup' && !session.handle && session.snapZone) {
-      props.commitSnap?.(props.window.instanceId, session.snapZone)
+    if (pointerEvent.type === 'pointerup' && !session.handle) {
+      if (session.windowDrop) props.commitWindowDrop?.(props.window.instanceId, session.windowDrop)
+      else if (session.snapZone) props.commitSnap?.(props.window.instanceId, session.snapZone)
     }
     cleanup()
   }
