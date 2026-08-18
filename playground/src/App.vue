@@ -2,12 +2,13 @@
 import { computed, ref } from 'vue'
 import {
   ThemeProvider,
+  WidgetHost,
   defaultTheme,
   forgeDarkTheme,
   forgeLightTheme,
   type WidgetForgeTheme,
 } from 'widgetforge'
-import { playgroundWidgets } from './playground-widgets'
+import { playgroundWidgetRegistry, playgroundWidgets } from './playground-widgets'
 
 type ThemeName = 'neutral' | 'forge-dark' | 'forge-light'
 
@@ -28,7 +29,7 @@ const activeTheme = computed(() => themes[themeName.value])
         <header class="playground-header">
           <div>
             <p class="eyebrow">WidgetForge</p>
-            <h1>Widget Contract Playground</h1>
+            <h1>Widget Host Playground</h1>
           </div>
           <label class="theme-picker">
             Theme
@@ -40,10 +41,40 @@ const activeTheme = computed(() => themes[themeName.value])
           </label>
         </header>
 
-        <p class="intro">Widgets werden deklarativ über ein kleines, domänenfreies Manifest beschrieben.</p>
+        <p class="intro">Registrierte Widgets werden über die öffentliche WidgetHost-API als isolierte Instanzen gerendert.</p>
 
         <section class="demo-section">
-          <h2>Dummy Widgets</h2>
+          <h2>Live Widget Hosts</h2>
+          <div class="manifest-grid">
+            <article class="manifest-card">
+              <WidgetHost
+                :registry="playgroundWidgetRegistry"
+                widget-id="planet.summary"
+                instance-id="planet-alpha"
+                :parameters="{ planetId: 'ARC-01' }"
+              />
+            </article>
+            <article class="manifest-card">
+              <WidgetHost
+                :registry="playgroundWidgetRegistry"
+                widget-id="planet.summary"
+                instance-id="planet-beta"
+                :parameters="{ planetId: 'ARC-02', compact: true }"
+              />
+            </article>
+            <article class="manifest-card">
+              <WidgetHost
+                :registry="playgroundWidgetRegistry"
+                widget-id="market.ticker"
+                instance-id="market-metals"
+                :parameters="{ commodity: 'METALS', rows: 6 }"
+              />
+            </article>
+          </div>
+        </section>
+
+        <section class="demo-section">
+          <h2>Widget Manifests</h2>
           <div class="manifest-grid">
             <article v-for="widget in playgroundWidgets" :key="widget.id" class="manifest-card">
               <strong>{{ widget.title }}</strong>
