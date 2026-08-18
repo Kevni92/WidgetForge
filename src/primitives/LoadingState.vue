@@ -51,7 +51,7 @@ const props = withDefaults(defineProps<{
   flex: 0 0 auto;
   border: 2px solid var(--wf-color-border);
   border-top-color: var(--wf-color-info);
-  border-radius: var(--wf-radius-full);
+  border-radius: var(--wf-radius-lg);
   animation: wf-loading-state-spin 0.8s linear infinite;
 }
 
