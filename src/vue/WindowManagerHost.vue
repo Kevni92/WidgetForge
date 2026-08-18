@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { onBeforeUnmount, shallowRef, toRaw } from 'vue'
+import { onBeforeUnmount, onMounted, ref, shallowRef, toRaw } from 'vue'
 import type { WidgetRegistry } from '../core/widget-registry'
+import type { WindowSize } from '../core/window-geometry'
 import type { WindowManager, WindowState } from '../core/window-manager'
-import WindowShell from './WindowShell.vue'
+import { observeElementSize } from './observe-element-size'
+import WindowFrame from './WindowFrame.vue'
 
 interface WindowManagerHostProps {
   manager: WindowManager
@@ -11,63 +13,56 @@ interface WindowManagerHostProps {
 
 const props = defineProps<WindowManagerHostProps>()
 const manager = toRaw(props.manager)
+const hostElement = ref<HTMLElement | null>(null)
+const containerSize = shallowRef<WindowSize>({ width: 0, height: 0 })
 const windows = shallowRef<readonly WindowState[]>(manager.list())
+let disposeSizeObserver: (() => void) | null = null
 
 const unsubscribe = manager.subscribe((change) => {
   windows.value = change.windows
+  if (change.kind === 'open' && containerSize.value.width > 0 && containerSize.value.height > 0) {
+    manager.constrainToContainer(change.instanceId, containerSize.value)
+  }
 })
 
-onBeforeUnmount(unsubscribe)
+onMounted(() => {
+  if (!hostElement.value) return
 
-function focusWindow(instanceId: string): void {
-  manager.focus(instanceId, 'user')
-}
+  disposeSizeObserver = observeElementSize(hostElement.value, (size) => {
+    containerSize.value = size
+    for (const window of manager.list()) {
+      manager.constrainToContainer(window.instanceId, size)
+    }
+  })
+})
 
-function closeWindow(instanceId: string): void {
-  manager.close(instanceId, 'user')
-}
-
-function windowStyle(window: WindowState): Record<string, string> {
-  return {
-    zIndex: `calc(var(--wf-layer-window) + ${window.zIndex})`,
-  }
-}
+onBeforeUnmount(() => {
+  disposeSizeObserver?.()
+  disposeSizeObserver = null
+  unsubscribe()
+})
 </script>
 
 <template>
-  <div class="wf-window-manager-host">
-    <div
+  <div ref="hostElement" class="wf-window-manager-host">
+    <WindowFrame
       v-for="window in windows"
       :key="window.instanceId"
-      class="wf-window-manager-host__item"
-      :data-window-instance-id="window.instanceId"
-      :data-window-z-index="window.zIndex"
-      :style="windowStyle(window)"
-    >
-      <WindowShell
-        :registry="registry"
-        :widget-id="window.widgetId"
-        :instance-id="window.instanceId"
-        :parameters="window.parameters"
-        :title="window.title"
-        :focused="window.focused"
-        @focus="focusWindow($event.instanceId)"
-        @close="closeWindow($event.instanceId)"
-      />
-    </div>
+      :window="window"
+      :manager="manager"
+      :registry="registry"
+      :container-size="containerSize"
+    />
   </div>
 </template>
 
 <style scoped>
 .wf-window-manager-host {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: var(--wf-space-lg);
   position: relative;
-}
-
-.wf-window-manager-host__item {
+  width: 100%;
+  height: 100%;
   min-width: 0;
-  position: relative;
+  min-height: 0;
+  overflow: hidden;
 }
 </style>
