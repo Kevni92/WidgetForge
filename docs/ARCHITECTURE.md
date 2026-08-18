@@ -1,0 +1,130 @@
+# Architektur
+
+## Grundsatz
+
+WidgetForge ist Infrastruktur. Das Framework kennt Widgets, Fenster, Navigation, Commands, Design Tokens und Datenquellen, aber keine konkrete Spieldomäne.
+
+## Schichten
+
+### 1. Core
+
+Framework-unabhängige bzw. möglichst UI-arme Logik:
+
+- Widget-Typen und Manifest-Verträge
+- Widget Registry
+- Instanz-IDs und Parameter-Validierung
+- Workspace-State
+- Command-Auflösung
+- interne Navigation
+
+### 2. Vue Integration
+
+Vue-spezifische Adapter und Komponenten:
+
+- Window Shell
+- Window Host/Manager
+- Composables für Widget-Kontext und Navigation
+- Theme-/Token-Integration
+- Data-Composables
+
+### 3. Data Layer
+
+Transportunabhängige reaktive Datenversorgung:
+
+- Data API
+- Cache/Store
+- Subscription-Verwaltung
+- Provider-/Transport-Schnittstelle
+- Mock Provider für Playground/Tests
+- später optionaler WebSocket-Adapter
+
+### 4. UI Primitives
+
+Kleine, wiederverwendbare Bausteine für simulationslastige Oberflächen. Diese dürfen weder Spielobjekte noch konkrete Produktoptik voraussetzen.
+
+### 5. Playground
+
+Eine eigenständige Demo-Anwendung, die ausschließlich die öffentliche WidgetForge-API nutzt. Sie dient als Referenz, visueller Test und GitHub-Pages-Ausgabe.
+
+## Abhängigkeitsregeln
+
+- Spiel-Widgets dürfen WidgetForge importieren.
+- WidgetForge darf niemals Spiel-Widgets importieren.
+- Generische Komponenten dürfen keine konkrete Spieldomäne kennen.
+- Widgets sprechen nicht direkt miteinander.
+- Widgets öffnen andere Inhalte über Navigation/Framework-Services.
+- Widgets verwalten keine WebSocket-Verbindungen selbst.
+- Fensterzustand und Spieldaten bleiben getrennt.
+- Visuelle Komponenten verwenden Design Tokens statt Produkt-Hardcodes.
+
+## Komponentenregeln
+
+Eine Komponente soll genau eine klar erkennbare UI-Verantwortung besitzen. Aufteilung erfolgt nach Verhalten und Verantwortlichkeit, nicht nach einer willkürlichen Zeilenanzahl.
+
+Warnsignale für eine zu große Komponente:
+
+- mehrere voneinander unabhängige Verhaltensbereiche,
+- eigene Datenbeschaffung plus Window-Management plus Darstellung,
+- schwer isoliert testbare Logik,
+- viele Props, die unterschiedliche Teilfunktionen konfigurieren,
+- Änderungen an einer Funktion brechen regelmäßig andere Bereiche.
+
+Große Komponenten werden in kleinere Komponenten oder Composables zerlegt, wenn dadurch Verantwortlichkeiten klarer werden.
+
+## Widget Contract
+
+Die konkrete TypeScript-API wird in einem eigenen Issue festgelegt. Konzeptionell benötigt eine Widget-Definition:
+
+- `id`
+- `component`
+- Parameter-Schema/Typ
+- Metadaten für Titel/Fenster
+- Capability-Metadaten, falls benötigt
+
+Die Definition soll deklarativ bleiben. Verhalten, das alle Widgets betrifft, gehört in Framework-Services und nicht in jedes Manifest.
+
+## Window Management
+
+Der Window Manager verwaltet ausschließlich UI-Zustand und Lifecycle. Fachliche Widget-Inhalte bleiben davon unabhängig.
+
+Ein Fenster besitzt eine eigene Instanz-ID. Widget-Typ und Widget-Parameter sind davon getrennt. Dadurch sind mehrere Instanzen desselben Widgets möglich.
+
+## Navigation
+
+Navigation wird als Intent formuliert und zentral aufgelöst. Fachliche Widgets sollen nicht wissen müssen, wie Fenster erzeugt oder fokussiert werden.
+
+## Datenmodell
+
+Das Framework trennt mindestens:
+
+- Widget-/Workspace-State
+- User-/Theme-Preferences
+- externe fachliche Daten
+- Connection-/Transport-State
+
+Diese Zustände dürfen nicht in einem unstrukturierten globalen Store vermischt werden.
+
+## Realtime-Prinzip
+
+Der Data Layer stellt reaktive Daten bereit. Provider liefern Snapshots und Änderungen. Mehrere Konsumenten derselben Ressource sollen sich einen Cache bzw. eine Subscription teilen können.
+
+Der WebSocket-Adapter ist austauschbar. Die Library darf nicht davon ausgehen, dass jedes Produkt dasselbe Nachrichtenprotokoll verwendet.
+
+## Testing
+
+Tests sind Bestandteil jedes Issues.
+
+Mindestens erforderlich:
+
+- Unit-Tests für Core-Logik und Parser,
+- Component-Tests für Vue-Komponenten,
+- Lifecycle- und Interaktionstests für Window-Verhalten,
+- Tests für Fehler- und Randfälle,
+- Integrationstests für zentrale Flows wie `Registry -> Widget öffnen -> Fenster verwalten`,
+- Mock-Provider-Tests für Data-Layer-Verhalten.
+
+Ein Feature gilt nicht als fertig, wenn die dazugehörigen Tests fehlen.
+
+## Playground als Architekturtest
+
+Der Playground darf keine internen APIs oder Sonderwege verwenden. Alles, was dort demonstriert wird, muss genau so aus einem externen Projekt mit dem npm-Package nutzbar sein.
