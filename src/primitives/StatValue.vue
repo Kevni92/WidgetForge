@@ -7,7 +7,6 @@ const props = withDefaults(defineProps<{
 }>(), {
   unit: '',
   tone: 'neutral',
-  label: undefined,
 })
 </script>
 
