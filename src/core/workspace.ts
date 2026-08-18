@@ -46,7 +46,7 @@ function readSize(value:unknown):{width:number;height:number}|null{if(!isRecord(
 function readConstraints(value:unknown):WindowSizeConstraints|null{if(!isRecord(value))return null;const minSize=readSize(value.minSize);const maxSize=value.maxSize===null?null:readSize(value.maxSize);if(!minSize||(value.maxSize!==null&&!maxSize)||(maxSize&&(minSize.width>maxSize.width||minSize.height>maxSize.height)))return null;return{minSize,maxSize}}
 function readWindowOptions(value:unknown):WindowOptions|null{if(value===undefined)return createWindowOptions();if(!isRecord(value))return null;try{return createWindowOptions(value)}catch{return null}}
 function readWindowSnap(value:unknown):WindowSnapState|null|undefined{
-  if(value===undefined||value===null)return value===undefined?null:null
+  if(value===undefined||value===null)return null
   if(!isRecord(value)||!['left','right','top'].includes(String(value.zone)))return undefined
   const floatingGeometry=readGeometry(value.floatingGeometry);if(!floatingGeometry)return undefined
   return{zone:value.zone as WindowSnapZone,floatingGeometry}
@@ -63,11 +63,26 @@ function readPaneSettings(value:unknown):PaneSettings|undefined|null{
   return settings
 }
 function readPane(value:unknown):PaneNode|null{
-  if(!isRecord(value)||typeof value.id!=='string'||!value.id.trim())return null;const settings=readPaneSettings(value.settings);if(settings===null)return null
-  if(value.kind==='widget'){if(typeof value.widgetId!=='string'||!value.widgetId.trim()||typeof value.instanceId!=='string'||!value.instanceId.trim())return null;const parameters=readParameters(value.parameters);if(!parameters)return null;return{kind:'widget',id:value.id,widgetId:value.widgetId,instanceId:value.instanceId,parameters,...(settings?{settings}:{})}}
-  if(value.kind!=='split'||(value.axis!=='horizontal'&&value.axis!=='vertical')||!Array.isArray(value.children)||!Array.isArray(value.weights))return null
-  const children=value.children.map(readPane);if(children.some((child)=>child===null)||!value.weights.every((weight)=>isFiniteNumber(weight)&&weight>0))return null
-  const pane:PaneNode={kind:'split',id:value.id,axis:value.axis,children:children as PaneNode[],weights:value.weights as number[],...(settings?{settings}:{})};try{validatePaneTree(pane);return pane}catch{return null}
+  if(!isRecord(value)||typeof value.id!=='string'||!value.id.trim())return null
+  const settings=readPaneSettings(value.settings);if(settings===null)return null
+  if(value.kind==='widget'){
+    if(typeof value.widgetId!=='string'||!value.widgetId.trim()||typeof value.instanceId!=='string'||!value.instanceId.trim())return null
+    const parameters=readParameters(value.parameters);if(!parameters)return null
+    return{kind:'widget',id:value.id,widgetId:value.widgetId,instanceId:value.instanceId,parameters,...(settings?{settings}:{})}
+  }
+  if(value.kind==='split'){
+    if((value.axis!=='horizontal'&&value.axis!=='vertical')||!Array.isArray(value.children)||!Array.isArray(value.weights))return null
+    const children=value.children.map(readPane);if(children.some((child)=>child===null)||!value.weights.every((weight)=>isFiniteNumber(weight)&&weight>0))return null
+    const pane:PaneNode={kind:'split',id:value.id,axis:value.axis,children:children as PaneNode[],weights:value.weights as number[],...(settings?{settings}:{})}
+    try{validatePaneTree(pane);return pane}catch{return null}
+  }
+  if(value.kind==='tabs'){
+    if(!Array.isArray(value.children)||typeof value.activeId!=='string'||!value.activeId.trim())return null
+    const children=value.children.map(readPane);if(children.some((child)=>child===null))return null
+    const pane:PaneNode={kind:'tabs',id:value.id,children:children as PaneNode[],activeId:value.activeId,...(settings?{settings}:{})}
+    try{validatePaneTree(pane);return pane}catch{return null}
+  }
+  return null
 }
 function readWindowV2(value:unknown):WorkspaceWindowSnapshot|null{
   if(!isRecord(value)||typeof value.instanceId!=='string'||!value.instanceId.trim()||typeof value.title!=='string'||!value.title.trim())return null
