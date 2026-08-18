@@ -75,8 +75,8 @@ export class InvalidPaneOperationError extends Error {
   }
 }
 
-function cloneSettings(settings?: PaneSettings): PaneSettings | undefined {
-  return settings ? { ...settings } : undefined
+function cloneSettings(settings: PaneSettings): PaneSettings {
+  return { ...settings }
 }
 
 function validateId(id: string, label: string): void {
