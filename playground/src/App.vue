@@ -1,27 +1,20 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ThemeProvider, type WidgetForgeThemeOverride } from 'widgetforge'
+import {
+  ThemeProvider,
+  defaultTheme,
+  forgeDarkTheme,
+  forgeLightTheme,
+  type WidgetForgeTheme,
+} from 'widgetforge'
 
-const themeName = ref<'midnight' | 'paper'>('midnight')
+type ThemeName = 'neutral' | 'forge-dark' | 'forge-light'
 
-const themes: Record<'midnight' | 'paper', WidgetForgeThemeOverride> = {
-  midnight: {},
-  paper: {
-    color: {
-      canvas: '#efe9dc',
-      surface: '#fffaf0',
-      surfaceRaised: '#ffffff',
-      text: '#282319',
-      textMuted: '#6c6253',
-      border: '#cfc5b4',
-      accent: '#9a3d24',
-      accentContrast: '#ffffff',
-      danger: '#a12727',
-    },
-    font: { family: 'Georgia, serif' },
-    radius: { sm: '0px', md: '2px', lg: '4px' },
-    shadow: { sm: '0 1px 2px rgb(60 45 20 / 0.12)', md: '0 6px 16px rgb(60 45 20 / 0.16)' },
-  },
+const themeName = ref<ThemeName>('neutral')
+const themes: Record<ThemeName, WidgetForgeTheme> = {
+  neutral: defaultTheme,
+  'forge-dark': forgeDarkTheme,
+  'forge-light': forgeLightTheme,
 }
 
 const activeTheme = computed(() => themes[themeName.value])
@@ -34,23 +27,43 @@ const activeTheme = computed(() => themes[themeName.value])
         <header class="playground-header">
           <div>
             <p class="eyebrow">WidgetForge</p>
-            <h1>Playground</h1>
+            <h1>Theme Playground</h1>
           </div>
           <label class="theme-picker">
             Theme
             <select v-model="themeName">
-              <option value="midnight">Midnight</option>
-              <option value="paper">Paper</option>
+              <option value="neutral">Neutral</option>
+              <option value="forge-dark">Forge Dark</option>
+              <option value="forge-light">Forge Light</option>
             </select>
           </label>
         </header>
 
-        <p>Die Design-Token-Grundlage ist aktiv.</p>
+        <p class="intro">Forge ist ein offizielles Preset auf derselben generischen Theme-API wie das neutrale Standard-Theme.</p>
+
         <div class="token-demo">
           <div class="demo-surface">Surface</div>
           <div class="demo-surface raised">Raised surface</div>
-          <p class="muted">Farben, Typografie, Spacing, Radien und Schatten kommen aus semantischen Tokens.</p>
         </div>
+
+        <section class="demo-section">
+          <h2>Semantische Zustände</h2>
+          <div class="state-grid">
+            <span class="state success">Success</span>
+            <span class="state warning">Warning</span>
+            <span class="state info">Info</span>
+            <span class="state danger">Danger</span>
+          </div>
+        </section>
+
+        <section class="demo-section">
+          <h2>Interaktion</h2>
+          <div class="interaction-grid">
+            <button class="interaction hover">Hover</button>
+            <button class="interaction selected">Selected</button>
+            <button class="interaction focus">Focus</button>
+          </div>
+        </section>
       </section>
     </main>
   </ThemeProvider>
