@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, markRaw, ref } from 'vue'
 import {
   ThemeProvider,
-  WindowShell,
+  WindowManagerHost,
+  createWindowManager,
   defaultTheme,
   forgeDarkTheme,
   forgeLightTheme,
@@ -18,8 +19,23 @@ const themes: Record<ThemeName, WidgetForgeTheme> = {
   'forge-dark': forgeDarkTheme,
   'forge-light': forgeLightTheme,
 }
-
 const activeTheme = computed(() => themes[themeName.value])
+
+const windowManager = markRaw(createWindowManager(playgroundWidgetRegistry))
+windowManager.open({ widgetId: 'planet.summary', instanceId: 'planet-alpha', parameters: { planetId: 'ARC-01' } })
+windowManager.open({ widgetId: 'planet.summary', instanceId: 'planet-beta', parameters: { planetId: 'ARC-02', compact: true } })
+windowManager.open({ widgetId: 'market.ticker', instanceId: 'market-metals', parameters: { commodity: 'METALS', rows: 6 } })
+
+let nextPlanet = 3
+
+function openPlanet(): void {
+  windowManager.open({ widgetId: 'planet.summary', parameters: { planetId: `ARC-0${nextPlanet}` } })
+  nextPlanet += 1
+}
+
+function openMarket(): void {
+  windowManager.open({ widgetId: 'market.ticker', parameters: { commodity: 'FOOD', rows: 5 } })
+}
 </script>
 
 <template>
@@ -29,7 +45,7 @@ const activeTheme = computed(() => themes[themeName.value])
         <header class="playground-header">
           <div>
             <p class="eyebrow">WidgetForge</p>
-            <h1>Window Shell Playground</h1>
+            <h1>Window Manager Playground</h1>
           </div>
           <label class="theme-picker">
             Theme
@@ -41,31 +57,15 @@ const activeTheme = computed(() => themes[themeName.value])
           </label>
         </header>
 
-        <p class="intro">WindowShell stellt generisches Fenster-Chrome bereit und hält den Widget-Inhalt davon getrennt.</p>
+        <p class="intro">Fenster werden ausschließlich über die öffentliche WindowManager-API geöffnet, fokussiert und geschlossen.</p>
 
         <section class="demo-section">
-          <h2>Window Shells</h2>
-          <div class="manifest-grid">
-            <WindowShell
-              :registry="playgroundWidgetRegistry"
-              widget-id="planet.summary"
-              instance-id="planet-alpha"
-              :parameters="{ planetId: 'ARC-01' }"
-              focused
-            />
-            <WindowShell
-              :registry="playgroundWidgetRegistry"
-              widget-id="planet.summary"
-              instance-id="planet-beta"
-              :parameters="{ planetId: 'ARC-02', compact: true }"
-            />
-            <WindowShell
-              :registry="playgroundWidgetRegistry"
-              widget-id="market.ticker"
-              instance-id="market-metals"
-              :parameters="{ commodity: 'METALS', rows: 6 }"
-            />
+          <h2>Window Manager</h2>
+          <div class="playground-actions">
+            <button type="button" data-action="open-planet" @click="openPlanet">Open Planet</button>
+            <button type="button" data-action="open-market" @click="openMarket">Open Market</button>
           </div>
+          <WindowManagerHost :manager="windowManager" :registry="playgroundWidgetRegistry" />
         </section>
 
         <section class="demo-section">
@@ -81,24 +81,6 @@ const activeTheme = computed(() => themes[themeName.value])
                 Default: {{ widget.window.defaultSize.width }} × {{ widget.window.defaultSize.height }}
               </span>
             </article>
-          </div>
-        </section>
-
-        <section class="demo-section">
-          <h2>Theme Tokens</h2>
-          <div class="token-demo">
-            <div class="demo-surface">Surface</div>
-            <div class="demo-surface raised">Raised surface</div>
-          </div>
-        </section>
-
-        <section class="demo-section">
-          <h2>Semantische Zustände</h2>
-          <div class="state-grid">
-            <span class="state success">Success</span>
-            <span class="state warning">Warning</span>
-            <span class="state info">Info</span>
-            <span class="state danger">Danger</span>
           </div>
         </section>
       </section>
