@@ -38,7 +38,7 @@ describe('DockHost',()=>{
     const {registry,docks}=setup();docks.add({id:'left',position:'left',pane:pane('left-pane'),thickness:120,minThickness:80,maxThickness:220})
     const wrapper=mount(DockHost,{props:{dock:docks.get('left'),rect:{x:0,y:0,width:120,height:500},manager:docks,registry}})
     const handle=wrapper.get('[data-dock-resize="left"]')
-    await handle.trigger('pointerdown',{button:0,clientX:120,pointerId:1})
+    handle.element.dispatchEvent(new MouseEvent('pointerdown',{button:0,clientX:120,bubbles:true,cancelable:true}))
     globalThis.window.dispatchEvent(new MouseEvent('pointermove',{clientX:180,bubbles:true}))
     await nextTick()
     expect(docks.get('left').thickness).toBe(180)
