@@ -1,0 +1,36 @@
+{
+  "name": "widgetforge",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reusable Vue 3 UI framework for window-based widget interfaces in browser and simulation games.",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && vue-tsc -p tsconfig.build.json --declaration --emitDeclarationOnly --outDir dist",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.8",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.0",
+    "vue": "^3.5.40",
+    "vue-tsc": "^3.3.9"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}
