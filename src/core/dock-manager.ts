@@ -1,0 +1,95 @@
+import { clonePaneTree, validatePaneTree, type PaneNode, type PaneParameters } from './pane'
+import type { WidgetRegistry } from './widget-registry'
+import type { WindowSize } from './window-geometry'
+
+export type DockId = string
+export type DockPosition = 'top' | 'bottom' | 'left' | 'right'
+export type DockChangeKind = 'add' | 'remove' | 'pane' | 'thickness'
+
+export interface DockState {
+  readonly id: DockId
+  readonly position: DockPosition
+  readonly rootPane: PaneNode
+  readonly thickness: number
+  readonly minThickness: number
+  readonly maxThickness: number | null
+  readonly resizable: boolean
+}
+
+export interface AddDockRequest {
+  id: DockId
+  position: DockPosition
+  pane: PaneNode
+  thickness: number
+  minThickness?: number
+  maxThickness?: number
+  resizable?: boolean
+}
+
+export interface DockChange {
+  readonly kind: DockChangeKind
+  readonly dockId: DockId
+  readonly docks: readonly DockState[]
+}
+
+export interface DockRect { readonly x:number; readonly y:number; readonly width:number; readonly height:number }
+export interface WorkspaceDockLayout { readonly floating:DockRect; readonly docks:Readonly<Record<DockId,DockRect>> }
+export type DockListener = (change:DockChange)=>void
+
+export class DuplicateDockError extends Error { constructor(public readonly dockId:DockId){super(`dock "${dockId}" already exists`);this.name='DuplicateDockError'} }
+export class UnknownDockError extends Error { constructor(public readonly dockId:DockId){super(`unknown dock "${dockId}"`);this.name='UnknownDockError'} }
+export class DockDefinitionError extends Error { constructor(message:string){super(message);this.name='DockDefinitionError'} }
+
+function paneParameters(parameters:Readonly<Record<string,unknown>>):PaneParameters{
+  const result:Record<string,string|number|boolean>={}
+  for(const[key,value]of Object.entries(parameters))if(typeof value==='string'||typeof value==='boolean'||(typeof value==='number'&&Number.isFinite(value)))result[key]=value
+  return result
+}
+function normalizePane(registry:WidgetRegistry,pane:PaneNode):PaneNode{
+  validatePaneTree(pane)
+  if(pane.kind==='widget'){
+    const resolved=registry.resolve(pane.widgetId,pane.parameters)
+    return{...clonePaneTree(pane),parameters:paneParameters(resolved.parameters)}
+  }
+  return{...clonePaneTree(pane),children:pane.children.map((child)=>normalizePane(registry,child))}
+}
+function normalizeThickness(value:number,min:number,max:number|null):number{
+  if(!Number.isFinite(value)||value<0)throw new DockDefinitionError('dock thickness must be a finite non-negative number')
+  return Math.max(min,max===null?value:Math.min(max,value))
+}
+function cloneDock(dock:DockState):DockState{return{...dock,rootPane:clonePaneTree(dock.rootPane)}}
+
+export class DockManager{
+  private docks:DockState[]=[]
+  private readonly listeners=new Set<DockListener>()
+  constructor(private readonly registry:WidgetRegistry){}
+  list():readonly DockState[]{return this.docks.map(cloneDock)}
+  get(id:DockId):DockState{const dock=this.docks.find((item)=>item.id===id);if(!dock)throw new UnknownDockError(id);return cloneDock(dock)}
+  add(request:AddDockRequest):DockState{
+    if(!request.id.trim())throw new DockDefinitionError('dock id must not be empty')
+    if(this.docks.some((dock)=>dock.id===request.id))throw new DuplicateDockError(request.id)
+    const min=request.minThickness??0;const max=request.maxThickness??null
+    if(!Number.isFinite(min)||min<0||max!==null&&(!Number.isFinite(max)||max<min))throw new DockDefinitionError('invalid dock thickness constraints')
+    const dock:DockState={id:request.id,position:request.position,rootPane:normalizePane(this.registry,request.pane),thickness:normalizeThickness(request.thickness,min,max),minThickness:min,maxThickness:max,resizable:request.resizable??true}
+    this.docks=[...this.docks,dock];this.emit('add',dock.id);return cloneDock(dock)
+  }
+  remove(id:DockId):void{if(!this.docks.some((dock)=>dock.id===id))throw new UnknownDockError(id);this.docks=this.docks.filter((dock)=>dock.id!==id);this.emit('remove',id)}
+  setRootPane(id:DockId,pane:PaneNode):DockState{const current=this.get(id);const updated:{readonly [K in keyof DockState]:DockState[K]}={...current,rootPane:normalizePane(this.registry,pane)};this.docks=this.docks.map((dock)=>dock.id===id?updated:dock);this.emit('pane',id);return cloneDock(updated)}
+  setThickness(id:DockId,thickness:number):DockState{const current=this.get(id);const next=normalizeThickness(thickness,current.minThickness,current.maxThickness);if(next===current.thickness)return current;const updated={...current,thickness:next};this.docks=this.docks.map((dock)=>dock.id===id?updated:dock);this.emit('thickness',id);return cloneDock(updated)}
+  subscribe(listener:DockListener):()=>void{this.listeners.add(listener);return()=>this.listeners.delete(listener)}
+  private emit(kind:DockChangeKind,dockId:DockId):void{const change={kind,dockId,docks:this.list()};for(const listener of [...this.listeners])listener(change)}
+}
+
+export function createDockManager(registry:WidgetRegistry):DockManager{return new DockManager(registry)}
+
+export function calculateWorkspaceDockLayout(container:WindowSize,docks:readonly DockState[]):WorkspaceDockLayout{
+  let left=0;let top=0;let right=Math.max(0,container.width);let bottom=Math.max(0,container.height)
+  const rects:Record<string,DockRect>={}
+  for(const dock of docks){
+    if(dock.position==='top'){const height=Math.min(dock.thickness,Math.max(0,bottom-top));rects[dock.id]={x:left,y:top,width:Math.max(0,right-left),height};top+=height}
+    else if(dock.position==='bottom'){const height=Math.min(dock.thickness,Math.max(0,bottom-top));bottom-=height;rects[dock.id]={x:left,y:bottom,width:Math.max(0,right-left),height}}
+    else if(dock.position==='left'){const width=Math.min(dock.thickness,Math.max(0,right-left));rects[dock.id]={x:left,y:top,width,height:Math.max(0,bottom-top)};left+=width}
+    else{const width=Math.min(dock.thickness,Math.max(0,right-left));right-=width;rects[dock.id]={x:right,y:top,width,height:Math.max(0,bottom-top)}}
+  }
+  return{floating:{x:left,y:top,width:Math.max(0,right-left),height:Math.max(0,bottom-top)},docks:rects}
+}
