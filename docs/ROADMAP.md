@@ -69,6 +69,40 @@ Der Playground bleibt dabei serverlos. Ein konkretes Serverprotokoll ist nicht T
 
 `Pane` ist dabei die allgemeine Content-/Layout-Einheit. Windows und Docks hosten Pane-Bäume; Widgets selbst kennen weder Window-, Dock- noch Pane-Management.
 
+## Phase 10 – Advanced Workspace UX
+
+77. #77 TabPane und Tab-Docking implementieren
+78. #78 Visuelles Docking-Overlay mit eindeutigen Drop-Zielen implementieren
+79. #79 Workspace Undo/Redo für Layout-Operationen implementieren
+80. #80 Vollständigen Workspace Edit-Mode und Layout-Lock implementieren
+81. #81 Erweiterte Snap-Layouts und echten Maximized-State implementieren
+82. #82 Window-Gruppen für gemeinsame Aktionen implementieren
+83. #83 Window-Rollen für modal, utility und overlay implementieren
+84. #84 Window-Chrome und Header-Actions stärker konfigurierbar machen
+85. #85 Pane-Typen und Layout-Constraints um StackPane, fixed und content-sized erweitern
+86. #86 Pane Context API für Widgets bereitstellen
+
+## Phase 11 – Workspace-Persistenz und Produktivität
+
+87. #87 Benannte Workspace-Layouts und Layout-Presets implementieren
+88. #88 Mehrere Workspaces als virtuelle Desktops implementieren
+89. #89 Workspace Migration Registry für versionierte Persistenz implementieren
+
+## Phase 12 – Widget Runtime und Simulationskontext
+
+90. #90 Widget Action Contract und generische Toolbar-Integration implementieren
+91. #91 Widget View State getrennt vom Workspace-State persistieren
+92. #92 Widget Capabilities im Manifest deklarierbar machen
+93. #93 Global Selection Context und verknüpfte Widgets implementieren
+94. #94 Globale Command Palette für Widgets, Workspaces und Actions implementieren
+
+## Phase 13 – Developer Experience und Reference App
+
+95. #95 WidgetForge DevTools und Debug-Overlay implementieren
+96. #96 Playground zu einer kleinen zusammenhängenden Wirtschaftssimulation ausbauen
+
+Die Phasen 10–13 bauen den vorhandenen Pane-/Window-/Workspace-Kern aus, ohne die zentrale Architekturregel aufzuweichen: Layout, Widget-Lifecycle, Domain-Daten und Widget-View-State bleiben getrennte Verantwortlichkeiten. Neue Desktop-Funktionen werden zentral im Workspace modelliert; Widgets erhalten nur kleine öffentliche Context-/Action-/Selection-Schnittstellen.
+
 ## Arbeitsregel
 
 Grundsätzlich wird ein Issue abgeschlossen, getestet und – sofern visuell relevant – im GitHub-Pages-Playground demonstriert, bevor der nächste darauf aufbauende Schritt begonnen wird. Die verbindlichen Qualitäts- und Architekturregeln stehen in `AGENTS.md` und `docs/DEVELOPMENT_WORKFLOW.md`.
