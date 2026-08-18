@@ -9,6 +9,12 @@ export interface WidgetForgeTheme {
     accent: string
     accentContrast: string
     danger: string
+    success: string
+    warning: string
+    info: string
+    focus: string
+    hover: string
+    selected: string
   }
   font: {
     family: string
@@ -65,6 +71,12 @@ export const defaultTheme: WidgetForgeTheme = {
     accent: '#62a8ff',
     accentContrast: '#07111d',
     danger: '#ff6b6b',
+    success: '#53c58c',
+    warning: '#e6a44e',
+    info: '#62a8ff',
+    focus: '#8bc1ff',
+    hover: 'rgb(255 255 255 / 0.06)',
+    selected: 'rgb(98 168 255 / 0.16)',
   },
   font: {
     family: 'Inter, ui-sans-serif, system-ui, sans-serif',
