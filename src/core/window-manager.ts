@@ -2,6 +2,7 @@ import { clonePaneTree, createWidgetPane, validatePaneTree, type PaneNode, type 
 import type { WidgetId } from './widget'
 import { createWidgetLifecycle, type WidgetLifecycleController } from './widget-lifecycle'
 import type { WidgetRegistry } from './widget-registry'
+import { createWindowOptions, type WindowOptions, type WindowOptionsOverride } from './window-options'
 import {
   DEFAULT_MIN_WINDOW_SIZE,
   DEFAULT_WINDOW_SIZE,
@@ -17,12 +18,13 @@ import {
 export type WindowInstanceId = string
 export type WindowOperationOrigin = 'api' | 'user'
 export type WindowMode = 'normal' | 'minimized'
-export type WindowManagerChangeKind = 'open' | 'focus' | 'close' | 'geometry' | 'pane' | 'minimize' | 'restore'
+export type WindowManagerChangeKind = 'open' | 'focus' | 'close' | 'geometry' | 'pane' | 'options' | 'minimize' | 'restore'
 
 export interface WindowState {
   readonly instanceId: WindowInstanceId
   readonly title: string
   readonly rootPane: PaneNode
+  readonly options: WindowOptions
   readonly focused: boolean
   readonly zIndex: number
   readonly mode: WindowMode
@@ -37,6 +39,7 @@ export interface OpenWindowRequest {
   title?: string
   position?: WindowPosition
   size?: WindowSize
+  options?: WindowOptionsOverride
 }
 
 export interface OpenPaneWindowRequest {
@@ -47,6 +50,7 @@ export interface OpenPaneWindowRequest {
   size?: WindowSize
   minSize?: WindowSize
   maxSize?: WindowSize
+  options?: WindowOptionsOverride
 }
 
 export interface WindowManagerChange {
@@ -80,6 +84,7 @@ function cloneWindow(window: WindowState): WindowState {
   return {
     ...window,
     rootPane: clonePaneTree(window.rootPane),
+    options: { ...window.options },
     geometry: {
       position: { ...window.geometry.position },
       size: cloneSize(window.geometry.size),
@@ -91,7 +96,27 @@ function cloneWindow(window: WindowState): WindowState {
   }
 }
 
-function topNormalWindowId(windows: readonly WindowState[]): WindowInstanceId | undefined {
+function stackWindows(windows: readonly WindowState[], focusedId?: WindowInstanceId): WindowState[] {
+  const normal = windows.filter((window) => window.options.layer === 'normal')
+  const alwaysOnTop = windows.filter((window) => window.options.layer === 'always-on-top')
+  return [...normal, ...alwaysOnTop].map((window, zIndex) => ({
+    ...window,
+    focused: focusedId === undefined ? window.focused : window.instanceId === focusedId,
+    zIndex,
+  }))
+}
+
+function focusWithinLayer(windows: readonly WindowState[], target: WindowState): WindowState[] {
+  const remaining = windows.filter((window) => window.instanceId !== target.instanceId)
+  if (target.options.layer === 'normal') {
+    const normal = remaining.filter((window) => window.options.layer === 'normal')
+    const alwaysOnTop = remaining.filter((window) => window.options.layer === 'always-on-top')
+    return stackWindows([...normal, target, ...alwaysOnTop], target.instanceId)
+  }
+  return stackWindows([...remaining, target], target.instanceId)
+}
+
+function topVisibleWindowId(windows: readonly WindowState[]): WindowInstanceId | undefined {
   for (let index = windows.length - 1; index >= 0; index -= 1) {
     const candidate = windows[index]
     if (candidate?.mode === 'normal') return candidate.instanceId
@@ -113,16 +138,9 @@ function normalizePane(registry: WidgetRegistry, pane: PaneNode): PaneNode {
   validatePaneTree(pane)
   if (pane.kind === 'widget') {
     const resolved = registry.resolve(pane.widgetId, pane.parameters)
-    return {
-      ...clonePaneTree(pane),
-      parameters: paneParameters(resolved.parameters),
-    }
+    return { ...clonePaneTree(pane), parameters: paneParameters(resolved.parameters) }
   }
-
-  return {
-    ...clonePaneTree(pane),
-    children: pane.children.map((child) => normalizePane(registry, child)),
-  }
+  return { ...clonePaneTree(pane), children: pane.children.map((child) => normalizePane(registry, child)) }
 }
 
 function defaultPaneTitle(registry: WidgetRegistry, pane: PaneNode): string {
@@ -164,11 +182,7 @@ export class WindowManager {
 
     if (manifestWindow?.singleton) {
       const existing = this.windows.find((window) => rootWidgetId(window) === request.widgetId)
-      if (existing) {
-        return existing.mode === 'minimized'
-          ? this.restore(existing.instanceId, origin)
-          : this.focus(existing.instanceId, origin)
-      }
+      if (existing) return existing.mode === 'minimized' ? this.restore(existing.instanceId, origin) : this.focus(existing.instanceId, origin)
     }
 
     const instanceId = request.instanceId ?? this.createInstanceId()
@@ -188,6 +202,7 @@ export class WindowManager {
       minSize: manifestWindow?.minSize,
       maxSize: manifestWindow?.maxSize,
       defaultSize: manifestWindow?.defaultSize,
+      options: createWindowOptions({ ...(manifestWindow?.options ?? {}), ...(request.options ?? {}) }),
     }, origin)
   }
 
@@ -202,30 +217,22 @@ export class WindowManager {
       size: request.size,
       minSize: request.minSize,
       maxSize: request.maxSize,
+      options: createWindowOptions(request.options),
     }, origin)
   }
 
   focus(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'api'): WindowState {
-    const index = this.windows.findIndex((window) => window.instanceId === instanceId)
-    if (index < 0) throw new UnknownWindowInstanceError(instanceId)
+    const current = this.windows.find((window) => window.instanceId === instanceId)
+    if (!current) throw new UnknownWindowInstanceError(instanceId)
+    if (current.mode === 'minimized') return this.restore(instanceId, origin)
 
-    const focusedWindow = this.windows[index]
-    if (!focusedWindow) throw new UnknownWindowInstanceError(instanceId)
-    if (focusedWindow.mode === 'minimized') return this.restore(instanceId, origin)
-
-    if (index === this.windows.length - 1 && focusedWindow.focused) {
+    const sameLayer = this.windows.filter((window) => window.options.layer === current.options.layer)
+    if (sameLayer.at(-1)?.instanceId === instanceId && current.focused) {
       this.setActiveLifecycle(instanceId)
-      return cloneWindow(focusedWindow)
+      return cloneWindow(current)
     }
 
-    const reordered = this.windows.filter((window) => window.instanceId !== instanceId)
-    reordered.push(focusedWindow)
-    this.windows = reordered.map((window, zIndex) => ({
-      ...window,
-      focused: window.instanceId === instanceId,
-      zIndex,
-    }))
-
+    this.windows = focusWithinLayer(this.windows, current)
     this.setActiveLifecycle(instanceId)
     this.emit('focus', origin, instanceId)
     return this.get(instanceId)
@@ -234,46 +241,31 @@ export class WindowManager {
   minimize(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'api'): WindowState {
     const index = this.windows.findIndex((window) => window.instanceId === instanceId)
     if (index < 0) throw new UnknownWindowInstanceError(instanceId)
-
     const current = this.windows[index]
     if (!current) throw new UnknownWindowInstanceError(instanceId)
     if (current.mode === 'minimized') return cloneWindow(current)
 
-    const lifecycle = this.getLifecycle(instanceId)
-    lifecycle.minimize()
-
+    this.getLifecycle(instanceId).minimize()
+    const remaining = this.windows.filter((window) => window.instanceId !== instanceId)
     const nextFocusedId = current.focused
-      ? topNormalWindowId(this.windows.filter((window) => window.instanceId !== instanceId))
+      ? topVisibleWindowId(remaining)
       : this.windows.find((window) => window.focused && window.mode === 'normal')?.instanceId
 
-    this.windows = this.windows.map((window) => {
-      if (window.instanceId === instanceId) return { ...window, mode: 'minimized' as const, focused: false }
-      return { ...window, focused: window.instanceId === nextFocusedId }
-    })
-
+    this.windows = stackWindows(this.windows.map((window) =>
+      window.instanceId === instanceId ? { ...window, mode: 'minimized' as const, focused: false } : window), nextFocusedId)
     this.setActiveLifecycle(nextFocusedId)
     this.emit('minimize', origin, instanceId)
     return this.get(instanceId)
   }
 
   restore(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'api'): WindowState {
-    const index = this.windows.findIndex((window) => window.instanceId === instanceId)
-    if (index < 0) throw new UnknownWindowInstanceError(instanceId)
-
-    const current = this.windows[index]
+    const current = this.windows.find((window) => window.instanceId === instanceId)
     if (!current) throw new UnknownWindowInstanceError(instanceId)
     if (current.mode === 'normal') return this.focus(instanceId, origin)
 
     this.getLifecycle(instanceId).restore()
-
-    const reordered = this.windows.filter((window) => window.instanceId !== instanceId)
-    reordered.push({ ...current, mode: 'normal' })
-    this.windows = reordered.map((window, zIndex) => ({
-      ...window,
-      focused: window.instanceId === instanceId,
-      zIndex,
-    }))
-
+    const restored = { ...current, mode: 'normal' as const }
+    this.windows = focusWithinLayer(this.windows, restored)
     this.setActiveLifecycle(instanceId)
     this.emit('restore', origin, instanceId)
     return this.get(instanceId)
@@ -282,52 +274,43 @@ export class WindowManager {
   close(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'api'): void {
     const index = this.windows.findIndex((window) => window.instanceId === instanceId)
     if (index < 0) throw new UnknownWindowInstanceError(instanceId)
-
     const lifecycle = this.getLifecycle(instanceId)
     lifecycle.close()
 
-    const wasFocused = this.windows[index]?.focused ?? false
+    const current = this.windows[index]
     const remaining = this.windows.filter((window) => window.instanceId !== instanceId)
-    const nextFocusedId = wasFocused
-      ? topNormalWindowId(remaining)
+    const nextFocusedId = current?.focused
+      ? topVisibleWindowId(remaining)
       : remaining.find((window) => window.focused && window.mode === 'normal')?.instanceId
-
-    this.windows = remaining.map((window, zIndex) => ({
-      ...window,
-      focused: window.instanceId === nextFocusedId,
-      zIndex,
-    }))
+    this.windows = stackWindows(remaining, nextFocusedId)
 
     this.setActiveLifecycle(nextFocusedId)
     this.emit('close', origin, instanceId)
-
     if (!lifecycle.mounted) lifecycle.destroy()
   }
 
   setRootPane(instanceId: WindowInstanceId, pane: PaneNode, origin: WindowOperationOrigin = 'api'): WindowState {
-    const index = this.windows.findIndex((window) => window.instanceId === instanceId)
-    if (index < 0) throw new UnknownWindowInstanceError(instanceId)
-    const current = this.windows[index]
+    const current = this.windows.find((window) => window.instanceId === instanceId)
     if (!current) throw new UnknownWindowInstanceError(instanceId)
-
-    const normalized = normalizePane(this.registry, pane)
-    const updated: WindowState = { ...current, rootPane: normalized }
+    const updated: WindowState = { ...current, rootPane: normalizePane(this.registry, pane) }
     this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window)
     this.emit('pane', origin, instanceId)
     return cloneWindow(updated)
   }
 
-  setGeometry(
-    instanceId: WindowInstanceId,
-    geometry: WindowGeometry,
-    origin: WindowOperationOrigin = 'api',
-  ): WindowState {
-    const index = this.windows.findIndex((window) => window.instanceId === instanceId)
-    if (index < 0) throw new UnknownWindowInstanceError(instanceId)
-
-    const current = this.windows[index]
+  setOptions(instanceId: WindowInstanceId, override: WindowOptionsOverride, origin: WindowOperationOrigin = 'api'): WindowState {
+    const current = this.windows.find((window) => window.instanceId === instanceId)
     if (!current) throw new UnknownWindowInstanceError(instanceId)
+    const updated: WindowState = { ...current, options: createWindowOptions({ ...current.options, ...override }) }
+    const replaced = this.windows.map((window) => window.instanceId === instanceId ? updated : window)
+    this.windows = updated.focused ? focusWithinLayer(replaced, updated) : stackWindows(replaced)
+    this.emit('options', origin, instanceId)
+    return this.get(instanceId)
+  }
 
+  setGeometry(instanceId: WindowInstanceId, geometry: WindowGeometry, origin: WindowOperationOrigin = 'api'): WindowState {
+    const current = this.windows.find((window) => window.instanceId === instanceId)
+    if (!current) throw new UnknownWindowInstanceError(instanceId)
     const normalized: WindowGeometry = {
       position: {
         x: Number.isFinite(geometry.position.x) ? geometry.position.x : current.geometry.position.x,
@@ -335,26 +318,16 @@ export class WindowManager {
       },
       size: constrainSize(geometry.size, current.constraints),
     }
-
     if (sameGeometry(current.geometry, normalized)) return cloneWindow(current)
-
     const updated: WindowState = { ...current, geometry: normalized }
     this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window)
     this.emit('geometry', origin, instanceId)
     return cloneWindow(updated)
   }
 
-  constrainToContainer(
-    instanceId: WindowInstanceId,
-    container: WindowSize,
-    origin: WindowOperationOrigin = 'api',
-  ): WindowState {
+  constrainToContainer(instanceId: WindowInstanceId, container: WindowSize, origin: WindowOperationOrigin = 'api'): WindowState {
     const current = this.get(instanceId)
-    return this.setGeometry(
-      instanceId,
-      constrainGeometry(current.geometry, current.constraints, container),
-      origin,
-    )
+    return this.setGeometry(instanceId, constrainGeometry(current.geometry, current.constraints, container), origin)
   }
 
   subscribe(listener: WindowManagerListener): () => void {
@@ -371,6 +344,7 @@ export class WindowManager {
       pane: PaneNode
       instanceId: WindowInstanceId
       title: string
+      options: WindowOptions
       position?: WindowPosition | undefined
       size?: WindowSize | undefined
       minSize?: WindowSize | undefined
@@ -379,9 +353,7 @@ export class WindowManager {
     },
     origin: WindowOperationOrigin,
   ): WindowState {
-    if (this.windows.some((window) => window.instanceId === request.instanceId)) {
-      throw new DuplicateWindowInstanceError(request.instanceId)
-    }
+    if (this.windows.some((window) => window.instanceId === request.instanceId)) throw new DuplicateWindowInstanceError(request.instanceId)
 
     const constraints: WindowSizeConstraints = {
       minSize: cloneSize(request.minSize ?? DEFAULT_MIN_WINDOW_SIZE),
@@ -390,13 +362,13 @@ export class WindowManager {
     const size = constrainSize(request.size ?? request.defaultSize ?? DEFAULT_WINDOW_SIZE, constraints)
     const cascade = 24 + this.windows.length * 24
     const position = request.position ?? { x: cascade, y: cascade }
-    const unfocused = this.windows.map((window) => ({ ...window, focused: false }))
     const opened: WindowState = {
       instanceId: request.instanceId,
       title: request.title,
       rootPane: clonePaneTree(request.pane),
+      options: { ...request.options },
       focused: true,
-      zIndex: unfocused.length,
+      zIndex: 0,
       mode: 'normal',
       geometry: {
         position: {
@@ -409,10 +381,10 @@ export class WindowManager {
     }
 
     this.createLifecycle(request.instanceId)
-    this.windows = [...unfocused, opened]
+    this.windows = focusWithinLayer([...this.windows.map((window) => ({ ...window, focused: false })), opened], opened)
     this.setActiveLifecycle(request.instanceId)
     this.emit('open', origin, request.instanceId)
-    return cloneWindow(opened)
+    return this.get(request.instanceId)
   }
 
   private createInstanceId(): WindowInstanceId {
@@ -446,12 +418,7 @@ export class WindowManager {
   }
 
   private emit(kind: WindowManagerChangeKind, origin: WindowOperationOrigin, instanceId: WindowInstanceId): void {
-    const change: WindowManagerChange = {
-      kind,
-      origin,
-      instanceId,
-      windows: this.list(),
-    }
+    const change: WindowManagerChange = { kind, origin, instanceId, windows: this.list() }
     for (const listener of [...this.listeners]) listener(change)
   }
 }
