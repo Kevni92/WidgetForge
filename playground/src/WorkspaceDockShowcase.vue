@@ -55,14 +55,6 @@ docks.add({
     settings: { background: 'canvas' },
   }),
 })
-
-windows.open({
-  widgetId: 'planet.summary',
-  instanceId: 'dock-demo-floating',
-  parameters: { planetId: 'FLOAT-01', compact: true },
-  position: { x: 48, y: 36 },
-  size: { width: 360, height: 230 },
-})
 </script>
 
 <template>
