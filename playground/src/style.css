@@ -44,10 +44,12 @@ p { line-height: 1.6; }
 .playground-actions button { min-height: var(--wf-size-control-height); padding: 0 var(--wf-space-md); color: var(--wf-color-accent-contrast); background: var(--wf-color-accent); border: 1px solid var(--wf-color-accent); border-radius: var(--wf-radius-sm); cursor: pointer; }
 .playground-actions button:hover { filter: brightness(1.06); }
 .playground-actions button:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
+.pane-playground-area { height: 380px; overflow: hidden; border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-md); background: var(--wf-color-canvas); box-shadow: inset var(--wf-shadow-sm); }
 .window-playground-area { height: 620px; overflow: hidden; border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-md); background: var(--wf-color-canvas); box-shadow: inset var(--wf-shadow-sm); }
 
 @media (max-width: 640px) {
   .playground-header { align-items: stretch; flex-direction: column; }
   .manifest-grid, .token-demo { grid-template-columns: 1fr; }
+  .pane-playground-area { height: 520px; }
   .window-playground-area { height: 720px; }
 }
