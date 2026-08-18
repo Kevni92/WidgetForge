@@ -13,3 +13,17 @@ export type {
   WidgetSize,
   WidgetWindowMetadata,
 } from './core/widget'
+export {
+  createWidgetRegistry,
+  DuplicateWidgetIdError,
+  UnknownWidgetError,
+  validateWidgetParameters,
+  WidgetParameterValidationError,
+  WidgetRegistry,
+} from './core/widget-registry'
+export type {
+  ResolvedWidget,
+  WidgetParameterIssue,
+  WidgetParameterIssueCode,
+  WidgetParameterValidationResult,
+} from './core/widget-registry'
