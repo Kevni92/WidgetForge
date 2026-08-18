@@ -6,6 +6,7 @@ import {
   createContextMenuController,
   type WidgetNavigator,
 } from 'widgetforge'
+import WorkspaceDockShowcase from './WorkspaceDockShowcase.vue'
 
 const props = defineProps<{ navigator: WidgetNavigator }>()
 const contextMenu = markRaw(createContextMenuController())
@@ -77,6 +78,14 @@ function showKeyboardMenu(): void {
       @cancel="lastDecision = 'cancelled'"
     />
   </section>
+
+  <section class="demo-section interaction-showcase">
+    <h2>Workspace Docks</h2>
+    <p class="interaction-showcase__description">
+      Top- und Bottom-Dock verwenden dieselben verschachtelbaren Panes wie Windows. Die Dock-Größe reduziert die verbleibende Floating-Fläche.
+    </p>
+    <WorkspaceDockShowcase :navigator="props.navigator" />
+  </section>
 </template>
 
 <style scoped>
@@ -99,8 +108,13 @@ function showKeyboardMenu(): void {
   margin-top: var(--wf-space-md);
 }
 
-.interaction-showcase__actions span {
+.interaction-showcase__actions span,
+.interaction-showcase__description {
   color: var(--wf-color-text-muted);
   font-size: var(--wf-font-size-xs);
+}
+
+.interaction-showcase__description {
+  margin: 0 0 var(--wf-space-md);
 }
 </style>
