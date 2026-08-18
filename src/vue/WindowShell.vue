@@ -54,7 +54,9 @@ function requestClose(): void {
 }
 
 function toggleMinimized(): void {
-  emit(props.minimized ? 'restore' : 'minimize', { instanceId: props.instanceId })
+  const event = { instanceId: props.instanceId }
+  if (props.minimized) emit('restore', event)
+  else emit('minimize', event)
 }
 </script>
 
