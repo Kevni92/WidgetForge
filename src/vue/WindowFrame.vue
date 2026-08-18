@@ -5,10 +5,31 @@ import type { WidgetLifecycleController } from '../core/widget-lifecycle'
 import type { WidgetRegistry } from '../core/widget-registry'
 import { moveWindow, resizeWindow, type ResizeHandle, type WindowGeometry, type WindowSize } from '../core/window-geometry'
 import type { WindowManager, WindowState } from '../core/window-manager'
+import type { WindowSnapZone } from '../core/window-snap'
 import WindowShell from './WindowShell.vue'
 
-interface WindowFrameProps { window: WindowState; manager: WindowManager; registry: WidgetRegistry; containerSize: WindowSize; lifecycle?: WidgetLifecycleController }
-interface InteractionSession { pointerId: number | undefined; captureTarget: HTMLElement; startX: number; startY: number; startGeometry: WindowGeometry; handle: ResizeHandle | null }
+interface WindowFrameProps {
+  window: WindowState
+  manager: WindowManager
+  registry: WidgetRegistry
+  containerSize: WindowSize
+  lifecycle?: WidgetLifecycleController
+  resolveSnapZone?: (clientX: number, clientY: number) => WindowSnapZone | null
+  previewSnap?: (instanceId: string, zone: WindowSnapZone | null) => void
+  commitSnap?: (instanceId: string, zone: WindowSnapZone) => void
+  unsnapForPointer?: (instanceId: string, clientX: number, clientY: number) => WindowState
+}
+
+interface InteractionSession {
+  pointerId: number | undefined
+  captureTarget: HTMLElement
+  startX: number
+  startY: number
+  startGeometry: WindowGeometry
+  handle: ResizeHandle | null
+  unsnapPending: boolean
+  snapZone: WindowSnapZone | null
+}
 
 const props = defineProps<WindowFrameProps>()
 const manager = toRaw(props.manager)
@@ -47,35 +68,72 @@ function startInteraction(event: PointerEvent): void {
 
   event.preventDefault(); finishInteraction(); manager.focus(props.window.instanceId, 'user')
   const session: InteractionSession = {
-    pointerId: typeof event.pointerId === 'number' ? event.pointerId : undefined, captureTarget: target,
-    startX: event.clientX, startY: event.clientY,
+    pointerId: typeof event.pointerId === 'number' ? event.pointerId : undefined,
+    captureTarget: target,
+    startX: event.clientX,
+    startY: event.clientY,
     startGeometry: { position: { ...props.window.geometry.position }, size: { ...props.window.geometry.size } },
     handle: handle ?? null,
+    unsnapPending: !handle && props.window.snap !== null,
+    snapZone: null,
   }
   interactionKind.value = session.handle ? 'resize' : 'move'
   if (session.pointerId !== undefined && typeof session.captureTarget.setPointerCapture === 'function') {
     try { session.captureTarget.setPointerCapture(session.pointerId) } catch { /* Pointer capture is optional. */ }
   }
+
   const pointerMatches = (pointerEvent: PointerEvent): boolean => session.pointerId === undefined || typeof pointerEvent.pointerId !== 'number' || pointerEvent.pointerId === session.pointerId
+  const updateSnapPreview = (pointerEvent: PointerEvent): void => {
+    if (session.handle) return
+    session.snapZone = props.resolveSnapZone?.(pointerEvent.clientX, pointerEvent.clientY) ?? null
+    props.previewSnap?.(props.window.instanceId, session.snapZone)
+  }
   const onPointerMove = (pointerEvent: PointerEvent): void => {
     if (!pointerMatches(pointerEvent)) return
+
+    if (!session.handle && session.unsnapPending) {
+      const unsnapped = props.unsnapForPointer?.(props.window.instanceId, pointerEvent.clientX, pointerEvent.clientY)
+      if (unsnapped) {
+        session.startGeometry = {
+          position: { ...unsnapped.geometry.position },
+          size: { ...unsnapped.geometry.size },
+        }
+        session.startX = pointerEvent.clientX
+        session.startY = pointerEvent.clientY
+      }
+      session.unsnapPending = false
+    }
+
     const delta = { x: pointerEvent.clientX - session.startX, y: pointerEvent.clientY - session.startY }
     const geometry = session.handle
       ? resizeWindow(session.startGeometry, session.handle, delta, props.window.constraints, effectiveContainerSize())
       : moveWindow(session.startGeometry, delta, effectiveContainerSize())
     manager.setGeometry(props.window.instanceId, geometry, 'user')
+    updateSnapPreview(pointerEvent)
   }
   const cleanup = (): void => {
-    globalThis.window.removeEventListener('pointermove', onPointerMove); globalThis.window.removeEventListener('pointerup', onPointerEnd); globalThis.window.removeEventListener('pointercancel', onPointerEnd)
+    globalThis.window.removeEventListener('pointermove', onPointerMove)
+    globalThis.window.removeEventListener('pointerup', onPointerEnd)
+    globalThis.window.removeEventListener('pointercancel', onPointerEnd)
+    if (!session.handle) props.previewSnap?.(props.window.instanceId, null)
     if (session.pointerId !== undefined && typeof session.captureTarget.releasePointerCapture === 'function') {
       try { session.captureTarget.releasePointerCapture(session.pointerId) } catch { /* Browser may already have released capture. */ }
     }
     if (disposeInteraction === cleanup) disposeInteraction = null
     interactionKind.value = null
   }
-  const onPointerEnd = (pointerEvent: PointerEvent): void => { if (pointerMatches(pointerEvent)) cleanup() }
+  const onPointerEnd = (pointerEvent: PointerEvent): void => {
+    if (!pointerMatches(pointerEvent)) return
+    if (pointerEvent.type === 'pointerup' && !session.handle && session.snapZone) {
+      props.commitSnap?.(props.window.instanceId, session.snapZone)
+    }
+    cleanup()
+  }
+
   disposeInteraction = cleanup
-  globalThis.window.addEventListener('pointermove', onPointerMove); globalThis.window.addEventListener('pointerup', onPointerEnd); globalThis.window.addEventListener('pointercancel', onPointerEnd)
+  globalThis.window.addEventListener('pointermove', onPointerMove)
+  globalThis.window.addEventListener('pointerup', onPointerEnd)
+  globalThis.window.addEventListener('pointercancel', onPointerEnd)
 }
 
 function focusWindow(): void { manager.focus(props.window.instanceId, 'user') }

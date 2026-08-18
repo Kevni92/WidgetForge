@@ -4,6 +4,12 @@ import { createWidgetLifecycle, type WidgetLifecycleController } from './widget-
 import type { WidgetRegistry } from './widget-registry'
 import { createWindowOptions, type WindowOptions, type WindowOptionsOverride } from './window-options'
 import {
+  restoreFloatingWindowGeometry,
+  snapWindowGeometry,
+  type WindowSnapState,
+  type WindowSnapZone,
+} from './window-snap'
+import {
   DEFAULT_MIN_WINDOW_SIZE,
   DEFAULT_WINDOW_SIZE,
   constrainGeometry,
@@ -18,13 +24,14 @@ import {
 export type WindowInstanceId = string
 export type WindowOperationOrigin = 'api' | 'user'
 export type WindowMode = 'normal' | 'minimized'
-export type WindowManagerChangeKind = 'open' | 'focus' | 'close' | 'geometry' | 'pane' | 'options' | 'minimize' | 'restore'
+export type WindowManagerChangeKind = 'open' | 'focus' | 'close' | 'geometry' | 'pane' | 'options' | 'snap' | 'minimize' | 'restore'
 
 export interface WindowState {
   readonly instanceId: WindowInstanceId
   readonly title: string
   readonly rootPane: PaneNode
   readonly options: WindowOptions
+  readonly snap: WindowSnapState | null
   readonly focused: boolean
   readonly zIndex: number
   readonly mode: WindowMode
@@ -51,6 +58,7 @@ export interface OpenPaneWindowRequest {
   minSize?: WindowSize
   maxSize?: WindowSize
   options?: WindowOptionsOverride
+  snap?: WindowSnapState | null
 }
 
 export interface WindowManagerChange {
@@ -80,15 +88,17 @@ function cloneSize(size: WindowSize): WindowSize {
   return { ...size }
 }
 
+function cloneGeometry(geometry: WindowGeometry): WindowGeometry {
+  return { position: { ...geometry.position }, size: cloneSize(geometry.size) }
+}
+
 function cloneWindow(window: WindowState): WindowState {
   return {
     ...window,
     rootPane: clonePaneTree(window.rootPane),
     options: { ...window.options },
-    geometry: {
-      position: { ...window.geometry.position },
-      size: cloneSize(window.geometry.size),
-    },
+    snap: window.snap ? { zone: window.snap.zone, floatingGeometry: cloneGeometry(window.snap.floatingGeometry) } : null,
+    geometry: cloneGeometry(window.geometry),
     constraints: {
       minSize: cloneSize(window.constraints.minSize),
       maxSize: window.constraints.maxSize ? cloneSize(window.constraints.maxSize) : null,
@@ -203,6 +213,7 @@ export class WindowManager {
       maxSize: manifestWindow?.maxSize,
       defaultSize: manifestWindow?.defaultSize,
       options: createWindowOptions({ ...(manifestWindow?.options ?? {}), ...(request.options ?? {}) }),
+      snap: null,
     }, origin)
   }
 
@@ -218,6 +229,7 @@ export class WindowManager {
       minSize: request.minSize,
       maxSize: request.maxSize,
       options: createWindowOptions(request.options),
+      snap: request.snap ?? null,
     }, origin)
   }
 
@@ -308,6 +320,43 @@ export class WindowManager {
     return this.get(instanceId)
   }
 
+  snapWindow(
+    instanceId: WindowInstanceId,
+    zone: WindowSnapZone,
+    container: WindowSize,
+    origin: WindowOperationOrigin = 'user',
+  ): WindowState {
+    const current = this.windows.find((window) => window.instanceId === instanceId)
+    if (!current) throw new UnknownWindowInstanceError(instanceId)
+    const floatingGeometry = current.snap?.floatingGeometry ?? current.geometry
+    const updated: WindowState = {
+      ...current,
+      geometry: snapWindowGeometry(zone, container),
+      snap: { zone, floatingGeometry: cloneGeometry(floatingGeometry) },
+    }
+    this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window)
+    this.emit('snap', origin, instanceId)
+    return cloneWindow(updated)
+  }
+
+  unsnapWindow(
+    instanceId: WindowInstanceId,
+    pointer?: WindowPosition,
+    container?: WindowSize,
+    origin: WindowOperationOrigin = 'user',
+  ): WindowState {
+    const current = this.windows.find((window) => window.instanceId === instanceId)
+    if (!current) throw new UnknownWindowInstanceError(instanceId)
+    if (!current.snap) return cloneWindow(current)
+    const geometry = pointer && container
+      ? restoreFloatingWindowGeometry(current.snap.floatingGeometry, pointer, container)
+      : cloneGeometry(current.snap.floatingGeometry)
+    const updated: WindowState = { ...current, geometry, snap: null }
+    this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window)
+    this.emit('snap', origin, instanceId)
+    return cloneWindow(updated)
+  }
+
   setGeometry(instanceId: WindowInstanceId, geometry: WindowGeometry, origin: WindowOperationOrigin = 'api'): WindowState {
     const current = this.windows.find((window) => window.instanceId === instanceId)
     if (!current) throw new UnknownWindowInstanceError(instanceId)
@@ -327,6 +376,14 @@ export class WindowManager {
 
   constrainToContainer(instanceId: WindowInstanceId, container: WindowSize, origin: WindowOperationOrigin = 'api'): WindowState {
     const current = this.get(instanceId)
+    if (current.snap) {
+      const geometry = snapWindowGeometry(current.snap.zone, container)
+      if (sameGeometry(current.geometry, geometry)) return current
+      const updated: WindowState = { ...current, geometry }
+      this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window)
+      this.emit('geometry', origin, instanceId)
+      return cloneWindow(updated)
+    }
     return this.setGeometry(instanceId, constrainGeometry(current.geometry, current.constraints, container), origin)
   }
 
@@ -345,6 +402,7 @@ export class WindowManager {
       instanceId: WindowInstanceId
       title: string
       options: WindowOptions
+      snap: WindowSnapState | null
       position?: WindowPosition | undefined
       size?: WindowSize | undefined
       minSize?: WindowSize | undefined
@@ -367,6 +425,7 @@ export class WindowManager {
       title: request.title,
       rootPane: clonePaneTree(request.pane),
       options: { ...request.options },
+      snap: request.snap ? { zone: request.snap.zone, floatingGeometry: cloneGeometry(request.snap.floatingGeometry) } : null,
       focused: true,
       zIndex: 0,
       mode: 'normal',

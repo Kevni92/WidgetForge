@@ -4,6 +4,7 @@ import type { WidgetId } from './widget'
 import { DuplicateWindowInstanceError, type WindowManager, type WindowMode, type WindowState } from './window-manager'
 import type { WindowGeometry, WindowSizeConstraints } from './window-geometry'
 import { createWindowOptions, type WindowOptions } from './window-options'
+import type { WindowSnapState, WindowSnapZone } from './window-snap'
 import { UnknownWidgetError, WidgetParameterValidationError } from './widget-registry'
 
 export const WORKSPACE_VERSION = 2 as const
@@ -11,7 +12,7 @@ export type WorkspaceParameterValue = string | number | boolean
 export type WorkspaceParameters = Readonly<Record<string, WorkspaceParameterValue>>
 
 export interface WorkspaceWindowSnapshot {
-  readonly instanceId:string; readonly title:string; readonly rootPane:PaneNode; readonly geometry:WindowGeometry; readonly constraints:WindowSizeConstraints; readonly options:WindowOptions; readonly mode:WindowMode; readonly focused:boolean; readonly zIndex:number
+  readonly instanceId:string; readonly title:string; readonly rootPane:PaneNode; readonly geometry:WindowGeometry; readonly constraints:WindowSizeConstraints; readonly options:WindowOptions; readonly snap:WindowSnapState|null; readonly mode:WindowMode; readonly focused:boolean; readonly zIndex:number
 }
 export interface WorkspaceDockSnapshot {
   readonly id:string; readonly position:DockPosition; readonly rootPane:PaneNode; readonly thickness:number; readonly minThickness:number; readonly maxThickness:number|null; readonly resizable:boolean
@@ -28,9 +29,10 @@ function isRecord(value:unknown):value is Record<string,unknown>{return typeof v
 function isFiniteNumber(value:unknown):value is number{return typeof value==='number'&&Number.isFinite(value)}
 function cloneGeometry(geometry:WindowGeometry):WindowGeometry{return{position:{...geometry.position},size:{...geometry.size}}}
 function cloneConstraints(constraints:WindowSizeConstraints):WindowSizeConstraints{return{minSize:{...constraints.minSize},maxSize:constraints.maxSize?{...constraints.maxSize}:null}}
+function cloneSnap(snap:WindowSnapState|null):WindowSnapState|null{return snap?{zone:snap.zone,floatingGeometry:cloneGeometry(snap.floatingGeometry)}:null}
 
 export function captureWorkspace(manager:WindowManager,dockManager?:DockManager):WorkspaceSnapshot{
-  const windows=manager.list().slice().sort((a,b)=>a.zIndex-b.zIndex).map((window)=>({instanceId:window.instanceId,title:window.title,rootPane:clonePaneTree(window.rootPane),geometry:cloneGeometry(window.geometry),constraints:cloneConstraints(window.constraints),options:{...window.options},mode:window.mode,focused:window.focused,zIndex:window.zIndex}))
+  const windows=manager.list().slice().sort((a,b)=>a.zIndex-b.zIndex).map((window)=>({instanceId:window.instanceId,title:window.title,rootPane:clonePaneTree(window.rootPane),geometry:cloneGeometry(window.geometry),constraints:cloneConstraints(window.constraints),options:{...window.options},snap:cloneSnap(window.snap),mode:window.mode,focused:window.focused,zIndex:window.zIndex}))
   const docks=(dockManager?.list()??[]).map((dock)=>({...dock,rootPane:clonePaneTree(dock.rootPane)}))
   return{version:WORKSPACE_VERSION,windows,docks}
 }
@@ -43,6 +45,12 @@ function readGeometry(value:unknown):WindowGeometry|null{if(!isRecord(value)||!i
 function readSize(value:unknown):{width:number;height:number}|null{if(!isRecord(value)||!isFiniteNumber(value.width)||!isFiniteNumber(value.height)||value.width<=0||value.height<=0)return null;return{width:value.width,height:value.height}}
 function readConstraints(value:unknown):WindowSizeConstraints|null{if(!isRecord(value))return null;const minSize=readSize(value.minSize);const maxSize=value.maxSize===null?null:readSize(value.maxSize);if(!minSize||(value.maxSize!==null&&!maxSize)||(maxSize&&(minSize.width>maxSize.width||minSize.height>maxSize.height)))return null;return{minSize,maxSize}}
 function readWindowOptions(value:unknown):WindowOptions|null{if(value===undefined)return createWindowOptions();if(!isRecord(value))return null;try{return createWindowOptions(value)}catch{return null}}
+function readWindowSnap(value:unknown):WindowSnapState|null|undefined{
+  if(value===undefined||value===null)return value===undefined?null:null
+  if(!isRecord(value)||!['left','right','top'].includes(String(value.zone)))return undefined
+  const floatingGeometry=readGeometry(value.floatingGeometry);if(!floatingGeometry)return undefined
+  return{zone:value.zone as WindowSnapZone,floatingGeometry}
+}
 function readPaneSettings(value:unknown):PaneSettings|undefined|null{
   if(value===undefined)return undefined;if(!isRecord(value))return null
   const settings:{resizable?:boolean;minSize?:number;maxSize?:number;grow?:number;background?:'transparent'|'canvas'|'surface'|'surface-raised';backgroundColor?:string;overflow?:'auto'|'hidden'|'visible'}={}
@@ -64,8 +72,8 @@ function readPane(value:unknown):PaneNode|null{
 function readWindowV2(value:unknown):WorkspaceWindowSnapshot|null{
   if(!isRecord(value)||typeof value.instanceId!=='string'||!value.instanceId.trim()||typeof value.title!=='string'||!value.title.trim())return null
   if(value.mode!=='normal'&&value.mode!=='minimized'||typeof value.focused!=='boolean'||!Number.isInteger(value.zIndex)||(value.zIndex as number)<0)return null
-  const rootPane=readPane(value.rootPane);const geometry=readGeometry(value.geometry);const constraints=readConstraints(value.constraints);const options=readWindowOptions(value.options);if(!rootPane||!geometry||!constraints||!options)return null
-  return{instanceId:value.instanceId,title:value.title,rootPane,geometry,constraints,options,mode:value.mode,focused:value.focused,zIndex:value.zIndex as number}
+  const rootPane=readPane(value.rootPane);const geometry=readGeometry(value.geometry);const constraints=readConstraints(value.constraints);const options=readWindowOptions(value.options);const snap=readWindowSnap(value.snap);if(!rootPane||!geometry||!constraints||!options||snap===undefined)return null
+  return{instanceId:value.instanceId,title:value.title,rootPane,geometry,constraints,options,snap,mode:value.mode,focused:value.focused,zIndex:value.zIndex as number}
 }
 function readWindowV1(value:unknown):LegacyWorkspaceWindowSnapshot|null{
   if(!isRecord(value)||typeof value.instanceId!=='string'||!value.instanceId.trim()||typeof value.widgetId!=='string'||!value.widgetId.trim())return null
@@ -98,7 +106,7 @@ export function restoreWorkspace(manager:WindowManager,input:unknown,dockManager
   parsed.windows.forEach((value,index)=>{
     if(parsed.version===1){const legacy=readWindowV1(value);if(!legacy){issues.push(restoreIssue('invalid-window','invalid workspace window entry',null,index));return};candidates.push({index,instanceId:legacy.instanceId,widgetId:legacy.widgetId,focused:legacy.focused,mode:legacy.mode,zIndex:legacy.zIndex,open:(target)=>target.open({widgetId:legacy.widgetId,instanceId:legacy.instanceId,parameters:legacy.parameters,position:legacy.geometry.position,size:legacy.geometry.size})});return}
     const entry=readWindowV2(value);if(!entry){issues.push(restoreIssue('invalid-window','invalid workspace window entry',null,index));return}
-    candidates.push({index,instanceId:entry.instanceId,widgetId:entry.rootPane.kind==='widget'?entry.rootPane.widgetId:undefined,focused:entry.focused,mode:entry.mode,zIndex:entry.zIndex,open:(target)=>target.openPane({pane:entry.rootPane,instanceId:entry.instanceId,title:entry.title,position:entry.geometry.position,size:entry.geometry.size,minSize:entry.constraints.minSize,...(entry.constraints.maxSize?{maxSize:entry.constraints.maxSize}:{}),options:entry.options})})
+    candidates.push({index,instanceId:entry.instanceId,widgetId:entry.rootPane.kind==='widget'?entry.rootPane.widgetId:undefined,focused:entry.focused,mode:entry.mode,zIndex:entry.zIndex,open:(target)=>target.openPane({pane:entry.rootPane,instanceId:entry.instanceId,title:entry.title,position:entry.geometry.position,size:entry.geometry.size,minSize:entry.constraints.minSize,...(entry.constraints.maxSize?{maxSize:entry.constraints.maxSize}:{}),options:entry.options,snap:entry.snap})})
   })
   candidates.sort((a,b)=>a.zIndex-b.zIndex||a.index-b.index);const seen=new Set<string>();const openedIds=new Set<string>()
   for(const candidate of candidates){if(seen.has(candidate.instanceId)){issues.push(restoreIssue('duplicate-instance','duplicate workspace instance id',candidate,candidate.index));continue}seen.add(candidate.instanceId);try{const opened=candidate.open(manager);if(opened.instanceId!==candidate.instanceId){issues.push(restoreIssue('singleton-conflict','singleton widget was already restored',candidate,candidate.index));continue}openedIds.add(candidate.instanceId)}catch(error){if(error instanceof UnknownWidgetError)issues.push(restoreIssue('unknown-widget',error.message,candidate,candidate.index));else if(error instanceof WidgetParameterValidationError)issues.push(restoreIssue('invalid-parameters',error.message,candidate,candidate.index));else if(error instanceof DuplicateWindowInstanceError)issues.push(restoreIssue('duplicate-instance',error.message,candidate,candidate.index));else issues.push(restoreIssue('open-failed',error instanceof Error?error.message:'window restore failed',candidate,candidate.index))}}
