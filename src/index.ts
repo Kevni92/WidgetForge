@@ -5,6 +5,7 @@ export { useTheme } from './vue/theme-context'
 export { default as WidgetHost } from './vue/WidgetHost.vue'
 export { useWidgetContext } from './vue/widget-context'
 export type { WidgetContext } from './vue/widget-context'
+export { default as WindowShell } from './vue/WindowShell.vue'
 export { forgeDarkTheme, forgeLightTheme } from './presets/forge'
 export { defineWidget, WidgetDefinitionError } from './core/widget'
 export type {
