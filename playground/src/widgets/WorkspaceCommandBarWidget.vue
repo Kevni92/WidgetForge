@@ -1,34 +1,15 @@
 <script setup lang="ts">
-import { markRaw } from 'vue'
-import { CommandInput, createCommandRegistry, useWidgetNavigation } from 'widgetforge'
+import { CommandInput, useWidgetNavigation } from 'widgetforge'
+import { playgroundCommands } from '../playground-commands'
 
 const navigator = useWidgetNavigation()
-const commands = markRaw(createCommandRegistry([
-  {
-    name: 'planet',
-    aliases: ['p'],
-    widgetId: 'planet.summary',
-    arguments: [
-      { name: 'planetId', type: 'string', required: true },
-      { name: 'compact', type: 'boolean', default: false },
-    ],
-  },
-  {
-    name: 'market',
-    aliases: ['mkt'],
-    widgetId: 'market.ticker',
-    parameters: { commodity: 'METALS' },
-    arguments: [{ name: 'rows', type: 'number', default: 8 }],
-  },
-  { name: 'alerts', widgetId: 'demo.alerts' },
-]))
 </script>
 
 <template>
   <div class="workspace-commandbar">
     <span class="workspace-commandbar__prompt">APEX://</span>
-    <CommandInput :commands="commands" :navigator="navigator" placeholder="planet ARC-03" />
-    <span class="workspace-commandbar__hint">Drag window → dock · Edge → snap · Ctrl+drag pane → edit layout</span>
+    <CommandInput :commands="playgroundCommands" :navigator="navigator" placeholder="planet ARC-03" />
+    <span class="workspace-commandbar__hint">Ctrl+K palette · Drag window → dock · Edge → snap · Ctrl+drag pane → edit layout</span>
   </div>
 </template>
 
