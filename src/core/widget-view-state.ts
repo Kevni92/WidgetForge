@@ -67,7 +67,7 @@ function clone<T extends WidgetViewStateValue>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
-function validateDefinition(definition: WidgetViewStateDefinition): void {
+export function validateWidgetViewStateDefinition(definition: WidgetViewStateDefinition): void {
   if (!Number.isInteger(definition.version) || definition.version < 1) throw new WidgetViewStateError('widget view state version must be a positive integer')
   clone(definition.defaultState)
   if (definition.validate && !definition.validate(clone(definition.defaultState))) throw new WidgetViewStateError('widget view state defaultState does not satisfy its validator')
@@ -97,7 +97,7 @@ export class WidgetViewStateStore {
   bind<TState extends WidgetViewStateValue>(scopeId: string, instanceId: string, widgetId: WidgetId, definition: WidgetViewStateDefinition<TState>): WidgetViewStateHandle<TState> {
     const normalizedScope = scopeId.trim() || 'default'
     if (!instanceId.trim()) throw new WidgetViewStateError('widget view state instanceId must not be empty')
-    validateDefinition(definition)
+    validateWidgetViewStateDefinition(definition)
     const entryKey = key(normalizedScope, instanceId)
     let entry = this.bound.get(entryKey)
     if (entry && entry.widgetId !== widgetId) throw new WidgetViewStateError(`widget view state instance "${instanceId}" is already bound to "${entry.widgetId}"`)
