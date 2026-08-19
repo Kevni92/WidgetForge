@@ -29,27 +29,25 @@ export function initialEconomySnapshot(): EconomySnapshot {
   return { cycle: 28417, locations: baseLocations }
 }
 
+function advanceLocation(location: ColonyEconomy, tick: number, locationIndex: number): ColonyEconomy {
+  const delta = ((tick + locationIndex) % 3) - 1
+  return {
+    ...location,
+    production: location.production.map((line, index) => ({ ...line, rate: Math.max(1, line.rate + (index === 0 ? delta : -delta) * 0.25) })),
+    inventory: location.inventory.map((item, index) => ({ ...item, quantity: Math.max(0, Math.min(item.capacity, item.quantity + (index === 0 ? delta * 2 : delta))) })),
+    market: location.market.map((quote, index) => ({ ...quote, bid: quote.bid + delta * 0.08 * (index + 1), ask: quote.ask + delta * 0.08 * (index + 1), volume: Math.max(0, quote.volume + delta * 15) })),
+  }
+}
+
 export function advanceEconomy(current: EconomySnapshot, tick: number): EconomySnapshot {
-  const entries = colonyIds.map((id, locationIndex) => {
-    const location = current.locations[id]
-    const delta = ((tick + locationIndex) % 3) - 1
-    const production = location.production.map((line, index) => ({
-      ...line,
-      rate: Math.max(1, line.rate + (index === 0 ? delta : -delta) * 0.25),
-    }))
-    const inventory = location.inventory.map((item, index) => ({
-      ...item,
-      quantity: Math.max(0, Math.min(item.capacity, item.quantity + (index === 0 ? delta * 2 : delta))),
-    }))
-    const market = location.market.map((quote, index) => ({
-      ...quote,
-      bid: quote.bid + delta * 0.08 * (index + 1),
-      ask: quote.ask + delta * 0.08 * (index + 1),
-      volume: Math.max(0, quote.volume + delta * 15),
-    }))
-    return [id, { ...location, production, inventory, market }] as const
-  })
-  return { cycle: current.cycle + 1, locations: Object.fromEntries(entries) as Record<ColonyId, ColonyEconomy> }
+  return {
+    cycle: current.cycle + 1,
+    locations: {
+      'ARC-01': advanceLocation(current.locations['ARC-01'], tick, 0),
+      'ARC-02': advanceLocation(current.locations['ARC-02'], tick, 1),
+      'ARC-03': advanceLocation(current.locations['ARC-03'], tick, 2),
+    },
+  }
 }
 
 export function registerEconomyResources(provider: MockDataProvider): void {
