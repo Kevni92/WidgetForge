@@ -4,6 +4,7 @@ import App from '../src/App.vue'
 
 const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.fullscreen.v3'
 const GROUP_STORAGE_KEY = 'widgetforge.playground.groups.v1'
+const LAYOUT_STORAGE_KEY = 'widgetforge.playground.layouts.v1'
 
 describe('Fullscreen Playground App', () => {
   beforeEach(() => { window.localStorage.clear(); vi.useFakeTimers() })
@@ -42,6 +43,13 @@ describe('Fullscreen Playground App', () => {
     expect(wrapper.findAll('[data-pane-id="operations-metrics"] [role="tab"]')).toHaveLength(2)
     expect(wrapper.findAll('[data-window-instance-id="market-main"] .wf-data-table__row')).toHaveLength(14)
 
+    const layoutSelect = wrapper.get('select[aria-label="Workspace layout"]')
+    expect(layoutSelect.element.value).toBe('Default')
+    expect(layoutSelect.findAll('option').map((option) => option.text())).toEqual(['Custom', 'Default', 'Trading', 'Operations'])
+    const layoutCollection = JSON.parse(window.localStorage.getItem(LAYOUT_STORAGE_KEY) ?? '{}') as { defaultLayout?: string; layouts?: Array<{ name: string }> }
+    expect(layoutCollection.defaultLayout).toBe('Default')
+    expect(layoutCollection.layouts?.map((layout) => layout.name)).toEqual(['Default', 'Trading', 'Operations'])
+
     await wrapper.get('[data-demo-nav="modal"]').trigger('click')
     await wrapper.vm.$nextTick()
     const modal = wrapper.get('[data-window-role="modal"]')
@@ -71,6 +79,34 @@ describe('Fullscreen Playground App', () => {
     wrapper.unmount()
   })
 
+  it('switches Default, Trading and Operations presets without resetting shared domain data', async () => {
+    const wrapper = mount(App)
+    vi.advanceTimersByTime(1_200)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('[data-resource-id="grid-power"]').every((widget) => widget.text().includes('118.5 MW'))).toBe(true)
+
+    await wrapper.get('select[aria-label="Workspace layout"]').setValue('Trading')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('.wf-window-frame')).toHaveLength(2)
+    expect(wrapper.find('[data-window-instance-id="market-main"]').exists()).toBe(true)
+    expect(wrapper.find('[data-window-instance-id="telemetry-power"]').exists()).toBe(true)
+    expect(wrapper.find('[data-window-instance-id="colony-main"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-resource-id="grid-power"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-resource-id="grid-power"]').every((widget) => widget.text().includes('118.5 MW'))).toBe(true)
+
+    await wrapper.get('select[aria-label="Workspace layout"]').setValue('Operations')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('.wf-window-frame')).toHaveLength(4)
+    expect(wrapper.find('[data-window-instance-id="market-main"]').exists()).toBe(false)
+    expect(wrapper.find('[data-window-instance-id="operations-main"]').exists()).toBe(true)
+
+    await wrapper.get('select[aria-label="Workspace layout"]').setValue('Default')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
+    expect(wrapper.get('select[aria-label="Workspace layout"]').element.value).toBe('Default')
+    wrapper.unmount()
+  })
+
   it('restores changed window and dock layout after remounting', async () => {
     const first = mount(App)
     await first.get('[data-window-instance-id="alerts-main"] .wf-window-shell__close').trigger('click')
@@ -84,7 +120,7 @@ describe('Fullscreen Playground App', () => {
     second.unmount()
   })
 
-  it('reset restores the defined reference layout and reference group', async () => {
+  it('reset restores the defined Default preset and reference group', async () => {
     const wrapper = mount(App)
     await wrapper.get('[data-window-instance-id="alerts-main"] .wf-window-shell__close').trigger('click')
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(4)
@@ -94,6 +130,7 @@ describe('Fullscreen Playground App', () => {
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
     expect(wrapper.get('[data-window-instance-id="alerts-main"]').attributes('data-window-group')).toBe('operations-cluster')
     expect(wrapper.get('[data-pane-id="operations-root"]').element).toBeTruthy()
+    expect(wrapper.get('select[aria-label="Workspace layout"]').element.value).toBe('Default')
     wrapper.unmount()
   })
 })
