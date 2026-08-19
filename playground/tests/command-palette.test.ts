@@ -24,13 +24,14 @@ describe('playground command palette', () => {
   async function execute(wrapper: ReturnType<typeof mount>, query: string): Promise<void> {
     const input = wrapper.get('[data-command-palette] input')
     await input.setValue(query)
-    input.element.focus()
+    ;(input.element as HTMLInputElement).focus()
     await input.trigger('keydown', { key: 'Enter' })
     await nextTick()
   }
 
   it('uses Ctrl+K as primary access for layouts, registered commands and widget navigation', async () => {
-    const wrapper = mount(App, { attachTo: host ?? undefined })
+    if (!host) throw new Error('test host is unavailable')
+    const wrapper = mount(App, { attachTo: host })
 
     await openPalette()
     expect(wrapper.get('[role="dialog"]').text()).toContain('Command palette')
