@@ -20,6 +20,7 @@ import {
 import {
   containsPane,
   findPane,
+  removePane,
   reorderTab,
   type PaneNode,
 } from "../core/pane";
@@ -73,11 +74,19 @@ interface PaneDragSession {
   started: boolean;
 }
 interface PaneDropTarget {
+  readonly kind: "pane";
   readonly owner: WorkspacePaneOwner;
   readonly paneId: string;
   readonly zone: WorkspaceDropZone;
   readonly rect: WorkspaceDropRect;
 }
+interface PaneDetachTarget {
+  readonly kind: "detach";
+  readonly position: { x: number; y: number };
+  readonly size: { width: number; height: number };
+  readonly rect: WorkspaceDropRect;
+}
+type PaneDropPreview = PaneDropTarget | PaneDetachTarget;
 interface TabReorderSession {
   readonly sourceOwner: WorkspacePaneOwner;
   readonly tabPaneId: string;
@@ -127,7 +136,7 @@ const size = shallowRef<WindowSize>({ width: 0, height: 0 });
 const dockStates = shallowRef<readonly DockState[]>(dockManager.list());
 const editState = shallowRef<WorkspaceEditState>(editController.state);
 const paneDragActive = ref(false);
-const paneDropPreview = shallowRef<PaneDropTarget | null>(null);
+const paneDropPreview = shallowRef<PaneDropPreview | null>(null);
 const tabReorderPreview = shallowRef<TabReorderPreview | null>(null);
 let disposeSize: (() => void) | null = null;
 let disposePaneDrag: (() => void) | null = null;
@@ -304,6 +313,7 @@ function findDropTarget(
       continue;
     const rect = element.getBoundingClientRect();
     return {
+      kind: "pane",
       owner,
       paneId,
       zone:
@@ -322,8 +332,75 @@ function findDropTarget(
   return null;
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function findDetachTarget(
+  session: PaneDragSession,
+  x: number,
+  y: number,
+): PaneDetachTarget | null {
+  const workspace = root.value;
+  if (!workspace || layoutLocked.value) return null;
+  if (!findPane(ownerRoot(session.sourceOwner), session.sourcePaneId)) return null;
+
+  const workspaceRect = workspace.getBoundingClientRect();
+  if (!containsPoint(workspaceRect, x, y)) return null;
+
+  const occupied = [
+    ...workspace.querySelectorAll<HTMLElement>(
+      ".wf-pane-host[data-pane-id], [data-window-instance-id], [data-dock-id]",
+    ),
+  ].some((element) => containsPoint(element.getBoundingClientRect(), x, y));
+  if (occupied) return null;
+
+  const hit = document.elementFromPoint?.(x, y);
+  if (
+    hit?.closest(
+      ".wf-pane-host[data-pane-id], [data-window-instance-id], [data-dock-id]",
+    )
+  )
+    return null;
+
+  const sourceRect = session.captureTarget.getBoundingClientRect();
+  const availableWidth = Math.max(1, workspaceRect.width - 16);
+  const availableHeight = Math.max(1, workspaceRect.height - 16);
+  const width = Math.min(
+    session.sourceTabPaneId ? 320 : Math.max(sourceRect.width, 280),
+    availableWidth,
+  );
+  const height = Math.min(
+    session.sourceTabPaneId ? 220 : Math.max(sourceRect.height, 180),
+    availableHeight,
+  );
+  const position = {
+    x: clamp(
+      x - workspaceRect.left - width / 2,
+      0,
+      Math.max(0, workspaceRect.width - width),
+    ),
+    y: clamp(
+      y - workspaceRect.top - 24,
+      0,
+      Math.max(0, workspaceRect.height - height),
+    ),
+  };
+  return {
+    kind: "detach",
+    position,
+    size: { width, height },
+    rect: {
+      x: workspaceRect.left + position.x,
+      y: workspaceRect.top + position.y,
+      width,
+      height,
+    },
+  };
+}
+
 function localTargetRect(
-  target: PaneDropTarget | TabReorderPreview,
+  target: PaneDropTarget | PaneDetachTarget | TabReorderPreview,
 ): WorkspaceDropRect {
   const workspace = root.value;
   if (!workspace) return target.rect;
@@ -334,6 +411,54 @@ function localTargetRect(
     width: target.rect.width,
     height: target.rect.height,
   };
+}
+
+function nextDetachedWindowInstanceId(): string {
+  let sequence = dropSequence;
+  let instanceId = `workspace-detached-${sequence}`;
+  while (windowManager.list().some((window) => window.instanceId === instanceId)) {
+    sequence += 1;
+    instanceId = `workspace-detached-${sequence}`;
+  }
+  return instanceId;
+}
+
+function commitPaneDetach(
+  session: PaneDragSession,
+  target: PaneDetachTarget,
+): void {
+  if (layoutLocked.value) return;
+  dropSequence += 1;
+  const sourceRoot = ownerRoot(session.sourceOwner);
+  const removed = removePane(sourceRoot, session.sourcePaneId);
+  const instanceId = nextDetachedWindowInstanceId();
+
+  commitWorkspacePaneMutations(windowManager, dockManager, [
+    { owner: session.sourceOwner, rootPane: removed.root },
+  ]);
+  try {
+    windowManager.openPane(
+      {
+        instanceId,
+        pane: removed.removed,
+        position: target.position,
+        size: target.size,
+      },
+      "user",
+    );
+  } catch (error) {
+    try {
+      if (windowManager.list().some((window) => window.instanceId === instanceId))
+        windowManager.close(instanceId, "user");
+      commitWorkspacePaneMutations(windowManager, dockManager, [
+        { owner: session.sourceOwner, rootPane: sourceRoot },
+      ]);
+    } catch {
+      // Preserve the original error; the workspace mutation helper already
+      // reports rollback failures when the source commit itself fails.
+    }
+    throw error;
+  }
 }
 function tabReorderIndicatorStyle(
   preview: TabReorderPreview,
@@ -486,7 +611,9 @@ function startPaneDrag(event: PointerEvent): void {
     }
     next.preventDefault();
     next.stopPropagation();
-    paneDropPreview.value = findDropTarget(session, next.clientX, next.clientY);
+    paneDropPreview.value =
+      findDropTarget(session, next.clientX, next.clientY) ??
+      findDetachTarget(session, next.clientX, next.clientY);
   };
   const cleanup = (): void => {
     window.removeEventListener("pointermove", move);
@@ -512,7 +639,8 @@ function startPaneDrag(event: PointerEvent): void {
     const drop = paneDropPreview.value;
     if (next.type === "pointerup" && session.started && drop) {
       try {
-        commitPaneDrop(session, drop);
+        if (drop.kind === "detach") commitPaneDetach(session, drop);
+        else commitPaneDrop(session, drop);
       } catch {
         history?.cancelTransaction();
       }
@@ -968,12 +1096,22 @@ onBeforeUnmount(() => {
       aria-hidden="true"
     />
     <DockingOverlay
-      v-if="paneDropPreview && !layoutLocked"
+      v-if="paneDropPreview?.kind === 'pane' && !layoutLocked"
       :target-rect="localTargetRect(paneDropPreview)"
       :active-zone="paneDropPreview.zone"
       :source-id="paneDropPreview.owner.id"
       :target-id="paneDropPreview.paneId"
-    /><ContextMenuHost :controller="contextMenu" />
+    />
+    <div
+      v-if="paneDropPreview?.kind === 'detach' && !layoutLocked"
+      class="wf-pane-detach-preview"
+      data-pane-detach-preview
+      :style="rectStyle(localTargetRect(paneDropPreview))"
+      aria-hidden="true"
+    >
+      New window
+    </div>
+    <ContextMenuHost :controller="contextMenu" />
   </div>
 </template>
 <style scoped>
@@ -1034,6 +1172,18 @@ onBeforeUnmount(() => {
   pointer-events: none;
   background: var(--wf-color-focus);
   box-shadow: 0 0 0 1px var(--wf-color-border);
+}
+.wf-pane-detach-preview {
+  position: absolute;
+  z-index: var(--wf-layer-overlay);
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--wf-color-focus);
+  border-radius: var(--wf-radius-md);
+  background: var(--wf-color-surface-floating);
+  color: var(--wf-color-text-muted);
+  box-shadow: var(--wf-shadow-md);
+  pointer-events: none;
 }
 .wf-workspace-host--locked {
   cursor: default;

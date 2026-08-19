@@ -9,7 +9,7 @@ const navigator = useWidgetNavigation()
   <div class="workspace-commandbar">
     <span class="workspace-commandbar__prompt">APEX://</span>
     <CommandInput :commands="playgroundCommands" :navigator="navigator" placeholder="planet ARC-03" />
-    <span class="workspace-commandbar__hint">Ctrl+K palette · Tab grip → reorder · Edit/Ctrl pane surface → move pane</span>
+    <span class="workspace-commandbar__hint">Ctrl+K palette · Tab grip → reorder · Edit/Ctrl pane surface → move or detach</span>
   </div>
 </template>
 
