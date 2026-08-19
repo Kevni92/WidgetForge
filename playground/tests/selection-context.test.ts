@@ -15,6 +15,7 @@ describe('playground selection context', () => {
 
   it('updates multiple widgets, keeps pinned Market fixed and never opens new widget instances', async () => {
     const wrapper = mountApp()
+    await wrapper.vm.$nextTick()
     const colony = wrapper.get('select[aria-label="Colony selection"]')
     const market = () => wrapper.get('[data-window-instance-id="market-main"] .market-widget')
     const telemetry = () => wrapper.get('[data-window-instance-id="telemetry-power"] [data-resource-id="grid-power"]')
