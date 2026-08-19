@@ -9,7 +9,7 @@ describe('Fullscreen Playground App', () => {
   beforeEach(() => { window.localStorage.clear(); vi.useFakeTimers() })
   afterEach(() => { vi.useRealTimers() })
 
-  it('renders a cohesive fullscreen simulation workspace with docks, panes, groups and semantic window roles', async () => {
+  it('renders a cohesive fullscreen simulation workspace with docks, panes, groups, roles and chrome variants', async () => {
     const wrapper = mount(App)
     expect(wrapper.get('[data-fullscreen-workspace-demo]').element).toBeTruthy()
     expect(wrapper.findAll('.wf-dock-host')).toHaveLength(2)
@@ -20,8 +20,20 @@ describe('Fullscreen Playground App', () => {
     expect(wrapper.get('[data-dock-id="workspace-bottom"] .wf-command-input__field').element).toBeTruthy()
 
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
-    expect(wrapper.get('[data-window-instance-id="telemetry-power"]').attributes('data-window-layer')).toBe('always-on-top')
-    expect(wrapper.get('[data-window-instance-id="telemetry-power"]').attributes('data-window-role')).toBe('utility')
+    const telemetry = wrapper.get('[data-window-instance-id="telemetry-power"]')
+    expect(telemetry.attributes('data-window-layer')).toBe('always-on-top')
+    expect(telemetry.attributes('data-window-role')).toBe('utility')
+    const telemetryShell = telemetry.get('.wf-window-shell')
+    expect(telemetryShell.attributes('data-window-header')).toBe('hover')
+    expect(telemetryShell.attributes('data-window-chrome')).toBe('borderless')
+    expect(telemetryShell.attributes('data-window-glass')).toBe('true')
+    expect(telemetry.find('.wf-window-shell__titlebar').exists()).toBe(false)
+    await telemetryShell.trigger('mouseenter')
+    await wrapper.vm.$nextTick()
+    expect(telemetry.text()).toContain('LIVE')
+    expect(telemetry.text()).toContain('SYNC')
+    expect(telemetry.get('[data-window-header-action="refresh"]').attributes('title')).toBe('Refresh telemetry')
+
     expect(wrapper.get('[data-window-instance-id="colony-main"]').attributes('data-window-group')).toBe('operations-cluster')
     expect(wrapper.get('[data-window-instance-id="alerts-main"]').attributes('data-window-group')).toBe('operations-cluster')
     expect(wrapper.get('[data-window-instance-id="operations-main"] [data-pane-id="operations-root"]').attributes('data-pane-kind')).toBe('split')
@@ -33,6 +45,7 @@ describe('Fullscreen Playground App', () => {
     await wrapper.vm.$nextTick()
     const modal = wrapper.get('[data-window-role="modal"]')
     expect(modal.get('.wf-window-shell').attributes('role')).toBe('dialog')
+    expect(modal.get('.wf-window-shell').attributes('data-window-chrome')).toBe('borderless')
     expect(wrapper.find('[data-modal-backdrop]').exists()).toBe(true)
     expect(wrapper.get('[data-window-instance-id="colony-main"]').attributes('aria-hidden')).toBe('true')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
