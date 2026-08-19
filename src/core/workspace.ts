@@ -6,6 +6,7 @@ import type { WindowGeometry, WindowSizeConstraints } from './window-geometry'
 import { createWindowOptions, type WindowOptions } from './window-options'
 import { isWindowSnapZone, type WindowSnapState } from './window-snap'
 import { UnknownWidgetError, WidgetParameterValidationError } from './widget-registry'
+import { defaultWorkspaceMigrationRegistry, WorkspaceMigrationError, type WorkspaceMigrationRegistry } from './workspace-migrations'
 
 export const WORKSPACE_VERSION = 3 as const
 export type WorkspaceParameterValue = string | number | boolean
@@ -41,18 +42,8 @@ export interface WorkspaceSnapshot {
   readonly docks: readonly WorkspaceDockSnapshot[]
 }
 
-interface LegacyWorkspaceWindowSnapshot {
-  readonly instanceId: string
-  readonly widgetId: WidgetId
-  readonly parameters: WorkspaceParameters
-  readonly geometry: WindowGeometry
-  readonly mode: 'normal' | 'minimized'
-  readonly focused: boolean
-  readonly zIndex: number
-}
-
 export type WorkspaceRestoreIssueCode =
-  | 'invalid-workspace' | 'unsupported-version' | 'manager-not-empty' | 'dock-manager-not-empty'
+  | 'invalid-workspace' | 'unsupported-version' | 'migration-failed' | 'manager-not-empty' | 'dock-manager-not-empty'
   | 'dock-manager-required' | 'invalid-window' | 'invalid-dock' | 'duplicate-instance'
   | 'duplicate-dock' | 'unknown-widget' | 'invalid-parameters' | 'singleton-conflict'
   | 'open-failed' | 'dock-open-failed'
@@ -230,7 +221,7 @@ function readPane(value: unknown): PaneNode | null {
   try { validatePaneTree(pane); return pane } catch { return null }
 }
 
-function readWindowV2(value: unknown): WorkspaceWindowSnapshot | null {
+function readWindow(value: unknown): WorkspaceWindowSnapshot | null {
   if (!isRecord(value) || typeof value.instanceId !== 'string' || !value.instanceId.trim() || typeof value.title !== 'string' || !value.title.trim()) return null
   if (!['normal', 'minimized', 'maximized'].includes(String(value.mode)) || typeof value.focused !== 'boolean' || !Number.isInteger(value.zIndex) || (value.zIndex as number) < 0) return null
   const rootPane = readPane(value.rootPane), geometry = readGeometry(value.geometry), constraints = readConstraints(value.constraints), options = readWindowOptions(value.options), snap = readWindowSnap(value.snap)
@@ -238,13 +229,6 @@ function readWindowV2(value: unknown): WorkspaceWindowSnapshot | null {
   if (!rootPane || !geometry || !constraints || !options || snap === undefined || (value.restoreGeometry !== undefined && value.restoreGeometry !== null && !restoreGeometry)) return null
   if (value.mode === 'maximized' && !restoreGeometry) return null
   return { instanceId: value.instanceId, title: value.title, rootPane, geometry, constraints, options, snap, restoreGeometry, mode: value.mode as WindowMode, focused: value.focused, zIndex: value.zIndex as number }
-}
-
-function readWindowV1(value: unknown): LegacyWorkspaceWindowSnapshot | null {
-  if (!isRecord(value) || typeof value.instanceId !== 'string' || !value.instanceId.trim() || typeof value.widgetId !== 'string' || !value.widgetId.trim()) return null
-  if ((value.mode !== 'normal' && value.mode !== 'minimized') || typeof value.focused !== 'boolean' || !Number.isInteger(value.zIndex) || (value.zIndex as number) < 0) return null
-  const parameters = readParameters(value.parameters), geometry = readGeometry(value.geometry)
-  return parameters && geometry ? { instanceId: value.instanceId, widgetId: value.widgetId, parameters, geometry, mode: value.mode, focused: value.focused, zIndex: value.zIndex as number } : null
 }
 
 function readDock(value: unknown): WorkspaceDockSnapshot | null {
@@ -270,26 +254,37 @@ function restoreIssue(code: WorkspaceRestoreIssueCode, message: string, candidat
   return { code, message, index, ...(candidate ? { instanceId: candidate.instanceId, ...(candidate.widgetId ? { widgetId: candidate.widgetId } : {}) } : {}) }
 }
 
-export function restoreWorkspace(manager: WindowManager, input: unknown, dockManager?: DockManager): WorkspaceRestoreResult {
+export function restoreWorkspace(
+  manager: WindowManager,
+  input: unknown,
+  dockManager?: DockManager,
+  migrationRegistry: WorkspaceMigrationRegistry = defaultWorkspaceMigrationRegistry,
+): WorkspaceRestoreResult {
   if (manager.list().length > 0) return invalidRoot('manager-not-empty', 'workspace restore requires an empty WindowManager')
   if (dockManager && dockManager.list().length > 0) return invalidRoot('dock-manager-not-empty', 'workspace restore requires an empty DockManager')
-  const parsed = parseInput(input)
-  if (!isRecord(parsed)) return invalidRoot('invalid-workspace', 'workspace must be a valid object or JSON document')
-  if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== WORKSPACE_VERSION) return invalidRoot('unsupported-version', `unsupported workspace version "${String(parsed.version)}"`)
+  const inputDocument = parseInput(input)
+  if (!isRecord(inputDocument)) return invalidRoot('invalid-workspace', 'workspace must be a valid object or JSON document')
+
+  let parsed: Record<string, unknown>
+  try {
+    parsed = migrationRegistry.migrate(inputDocument, WORKSPACE_VERSION).document as Record<string, unknown>
+  } catch (error) {
+    if (error instanceof WorkspaceMigrationError) {
+      if (error.code === 'future-version') return invalidRoot('unsupported-version', error.message)
+      if (error.code === 'invalid-document' || error.code === 'invalid-version') return invalidRoot('invalid-workspace', error.message)
+      return invalidRoot('migration-failed', error.message)
+    }
+    return invalidRoot('migration-failed', error instanceof Error ? error.message : 'workspace migration failed')
+  }
+
   if (!Array.isArray(parsed.windows)) return invalidRoot('invalid-workspace', 'workspace windows must be an array')
-  const dockValues = parsed.version === 1 ? [] : (parsed.docks === undefined ? [] : parsed.docks)
+  const dockValues = parsed.docks === undefined ? [] : parsed.docks
   if (!Array.isArray(dockValues)) return invalidRoot('invalid-workspace', 'workspace docks must be an array')
   if (dockValues.length > 0 && !dockManager) return invalidRoot('dock-manager-required', 'workspace contains docks but no DockManager was provided')
 
   const issues: WorkspaceRestoreIssue[] = [], candidates: RestoreCandidate[] = []
   parsed.windows.forEach((value, index) => {
-    if (parsed.version === 1) {
-      const legacy = readWindowV1(value)
-      if (!legacy) { issues.push(restoreIssue('invalid-window', 'invalid workspace window entry', null, index)); return }
-      candidates.push({ index, instanceId: legacy.instanceId, widgetId: legacy.widgetId, focused: legacy.focused, mode: legacy.mode, zIndex: legacy.zIndex, open: (target) => target.open({ widgetId: legacy.widgetId, instanceId: legacy.instanceId, parameters: legacy.parameters, position: legacy.geometry.position, size: legacy.geometry.size }) })
-      return
-    }
-    const entry = readWindowV2(value)
+    const entry = readWindow(value)
     if (!entry) { issues.push(restoreIssue('invalid-window', 'invalid workspace window entry', null, index)); return }
     candidates.push({
       index, instanceId: entry.instanceId, widgetId: entry.rootPane.kind === 'widget' ? entry.rootPane.widgetId : undefined, focused: entry.focused, mode: entry.mode, zIndex: entry.zIndex,
