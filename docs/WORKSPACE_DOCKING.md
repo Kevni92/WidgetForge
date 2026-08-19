@@ -24,7 +24,7 @@ Während eines normalen Window-Drags prüft `WindowManagerHost` andere sichtbare
 
 ## Pane-Edit-Mode
 
-`WorkspaceHost` besitzt die zentrale Edit-Session. `Ctrl` macht Pane-Grenzen sichtbar. `Ctrl` + Pointer-Drag auf einem Pane kann diesen Pane oder einen vollständigen verschachtelten Subtree in einen anderen Window- oder Dock-Pane verschieben. Im permanenten und temporären Edit-Mode verwendet der Grip eines Tabs denselben strukturellen Pfad und reparented den direkten Tab-Pane-Knoten; im Normalmodus bleibt er auf Tab-Reordering innerhalb der aktuellen Tabbar begrenzt.
+`WorkspaceHost` besitzt die zentrale Edit-Session. `Ctrl` macht Pane-Grenzen sichtbar. `Ctrl` + Pointer-Drag auf einer beliebigen Pane-Fläche kann diesen Pane oder einen vollständigen verschachtelten Subtree in einen anderen Window- oder Dock-Pane verschieben. Pane- und Tab-Grip-Icons werden im Edit-Mode nicht angezeigt; ein Tab-Button ist die Drag-Fläche für seinen direkten Tab-Pane-Knoten. Der Drag wird erst nach einer kurzen Bewegungsschwelle aktiv, damit ein Klick weiterhin funktioniert. Im Normalmodus bleibt der sichtbare Tab-Grip auf Tab-Reordering innerhalb der aktuellen Tabbar begrenzt.
 
 Self-/Descendant-Drops werden verworfen. Ein kompletter Dock-Root kann nicht aus seinem Dock entfernt werden, weil ein Dock immer einen Root-Pane benötigt. Ein kompletter Window-Root darf in einen anderen Host verschoben werden; das anschließend leere Quellfenster wird geschlossen.
 

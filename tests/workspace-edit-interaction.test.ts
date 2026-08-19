@@ -27,7 +27,7 @@ function pointer(target: EventTarget, type: string, x: number, y: number): void 
 }
 
 describe('WorkspaceHost edit mode', () => {
-  it('gates generic pane handles by workspace mode', () => {
+  it('marks the full pane surface as draggable in edit mode without rendering drag icons', () => {
     const normal = setup('normal')
     const normalWrapper = mount(WorkspaceHost, { props: { windows: normal.windows, docks: normal.docks, registry: normal.registry, edit: normal.edit }, attachTo: document.body })
     expect(normalWrapper.findAll('[data-pane-drag-handle]')).toHaveLength(0)
@@ -35,12 +35,14 @@ describe('WorkspaceHost edit mode', () => {
 
     const edit = setup('edit')
     const editWrapper = mount(WorkspaceHost, { props: { windows: edit.windows, docks: edit.docks, registry: edit.registry, edit: edit.edit }, attachTo: document.body })
-    expect(editWrapper.findAll('[data-pane-drag-handle]')).toHaveLength(1)
+    expect(editWrapper.findAll('[data-pane-drag-handle]')).toHaveLength(0)
+    expect(editWrapper.findAll('[data-pane-edit-draggable="true"]')).toHaveLength(1)
     editWrapper.unmount()
 
     const locked = setup('locked')
     const lockedWrapper = mount(WorkspaceHost, { props: { windows: locked.windows, docks: locked.docks, registry: locked.registry, edit: locked.edit }, attachTo: document.body })
     expect(lockedWrapper.findAll('[data-pane-drag-handle]')).toHaveLength(0)
+    expect(lockedWrapper.findAll('[data-pane-edit-draggable="true"]')).toHaveLength(0)
     lockedWrapper.unmount()
   })
 
@@ -77,6 +79,17 @@ describe('WorkspaceHost edit mode', () => {
     await nextTick()
     expect(edit.isPaneLocked({ owner: { kind: 'window', id: 'window' }, paneId: 'window.root' })).toBe(true)
     expect(wrapper.get('.wf-pane-host').attributes('data-pane-layout-locked')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('keeps a click on pane content when the pointer does not cross the drag threshold', async () => {
+    const { registry, windows, docks, edit } = setup('edit')
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+    const action = wrapper.get('[data-widget-action]').element
+    pointer(action, 'pointerdown', 80, 90)
+    pointer(globalThis.window, 'pointerup', 80, 90)
+    await wrapper.get('[data-widget-action]').trigger('click')
+    expect(wrapper.get('[data-widget-action]').text()).toBe('1')
     wrapper.unmount()
   })
 
