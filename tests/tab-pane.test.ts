@@ -69,6 +69,7 @@ describe('PaneHost tabs', () => {
     const wrapper = mount(PaneHost, { props: { pane, registry } })
     expect(mounts).toBe(2)
     expect(wrapper.findAll('[role="tab"]')).toHaveLength(2)
+    expect(wrapper.findAll('.wf-pane-host__tab-drag-handle .wf-pane-host__drag-glyph')).toHaveLength(2)
     expect(wrapper.get('[data-tab-pane-id="first"]').attributes('aria-selected')).toBe('true')
 
     await wrapper.get('[data-tab-pane-id="second"]').trigger('click')

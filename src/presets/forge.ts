@@ -46,7 +46,16 @@ export const forgeDarkTheme: WidgetForgeTheme = {
     md: '0 10px 32px rgb(0 0 0 / 0.4)',
     lg: '0 18px 52px rgb(0 0 0 / 0.54)',
   },
-  size: { controlHeight: '30px', titlebarHeight: '34px' },
+  size: {
+    controlHeight: '30px',
+    controlHeightCompact: '28px',
+    titlebarHeight: '34px',
+    tabHeight: '30px',
+    iconSize: '12px',
+    iconButtonSize: '30px',
+    tableRowHeight: '28px',
+    tableRowHeightCompact: '24px',
+  },
   layer: { base: 0, window: 100, overlay: 1000, tooltip: 2000 },
 }
 
@@ -96,6 +105,15 @@ export const forgeLightTheme: WidgetForgeTheme = {
     md: '0 10px 28px rgb(31 50 68 / 0.22)',
     lg: '0 18px 46px rgb(31 50 68 / 0.30)',
   },
-  size: { controlHeight: '30px', titlebarHeight: '34px' },
+  size: {
+    controlHeight: '30px',
+    controlHeightCompact: '28px',
+    titlebarHeight: '34px',
+    tabHeight: '30px',
+    iconSize: '12px',
+    iconButtonSize: '30px',
+    tableRowHeight: '28px',
+    tableRowHeightCompact: '24px',
+  },
   layer: { base: 0, window: 100, overlay: 1000, tooltip: 2000 },
 }

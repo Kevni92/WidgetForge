@@ -56,7 +56,13 @@ export interface WidgetForgeTheme {
   }
   size: {
     controlHeight: string
+    controlHeightCompact: string
     titlebarHeight: string
+    tabHeight: string
+    iconSize: string
+    iconButtonSize: string
+    tableRowHeight: string
+    tableRowHeightCompact: string
   }
   layer: {
     base: number
@@ -118,7 +124,16 @@ export const defaultTheme: WidgetForgeTheme = {
     md: '0 8px 24px rgb(0 0 0 / 0.28)',
     lg: '0 16px 48px rgb(0 0 0 / 0.42)',
   },
-  size: { controlHeight: '32px', titlebarHeight: '36px' },
+  size: {
+    controlHeight: '32px',
+    controlHeightCompact: '30px',
+    titlebarHeight: '36px',
+    tabHeight: '32px',
+    iconSize: '14px',
+    iconButtonSize: '30px',
+    tableRowHeight: '30px',
+    tableRowHeightCompact: '24px',
+  },
   layer: { base: 0, window: 100, overlay: 1000, tooltip: 2000 },
 }
 

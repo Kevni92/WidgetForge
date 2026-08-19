@@ -92,7 +92,7 @@ function handleEscape(event: KeyboardEvent): void {
 .wf-info-popover__trigger {
   display: inline-flex;
   align-items: center;
-  min-height: var(--wf-size-control-height);
+  min-height: var(--wf-size-control-height-compact);
   padding: 0 var(--wf-space-sm);
   border: 1px solid var(--wf-color-border);
   border-radius: var(--wf-radius-sm);

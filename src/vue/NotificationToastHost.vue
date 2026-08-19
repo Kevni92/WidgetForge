@@ -146,7 +146,7 @@ onUnmounted(() => {
 
 .wf-notification-toast__action,
 .wf-notification-toast__dismiss {
-  min-height: var(--wf-size-control-height);
+  min-height: var(--wf-size-control-height-compact);
   border: 1px solid var(--wf-color-border);
   border-radius: var(--wf-radius-sm);
   background: transparent;
@@ -161,7 +161,7 @@ onUnmounted(() => {
 }
 
 .wf-notification-toast__dismiss {
-  width: var(--wf-size-control-height);
+  width: var(--wf-size-icon-button-size);
   padding: 0;
 }
 

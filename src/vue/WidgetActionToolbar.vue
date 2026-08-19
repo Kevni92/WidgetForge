@@ -1,3 +1,13 @@
+<style scoped>
+.wf-widget-action-toolbar .wf-widget-action-toolbar__action { height: var(--wf-size-control-height-compact); }
+.wf-widget-action-toolbar .wf-widget-action-toolbar__more { width: var(--wf-size-icon-button-size); height: var(--wf-size-icon-button-size); }
+.wf-widget-action-toolbar.wf-widget-action-toolbar--compact .wf-widget-action-toolbar__action { width: var(--wf-size-icon-button-size); height: var(--wf-size-icon-button-size); }
+.wf-widget-action-toolbar .wf-widget-action-toolbar__menu-action { min-height: var(--wf-size-control-height-compact); }
+.wf-widget-action-toolbar .wf-widget-action-toolbar__action > span:first-child,
+.wf-widget-action-toolbar .wf-widget-action-toolbar__menu-action > span:first-child,
+.wf-widget-action-toolbar .wf-widget-action-toolbar__measurement .wf-widget-action-toolbar__action > span:first-child { font-size: var(--wf-size-icon-size); line-height: 1; }
+</style>
+
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { WidgetActionBinding } from '../core/widget-actions'
@@ -22,7 +32,7 @@ const props = withDefaults(defineProps<Props>(), {
   ariaLabel: 'Widget actions',
   compact: false,
   orientation: 'horizontal',
-  overflowButtonSize: 34,
+  overflowButtonSize: 30,
 })
 
 let nextToolbarId = 0
@@ -58,8 +68,8 @@ function actionAttributes(binding: WidgetActionBinding): Record<string, string> 
 }
 
 function fallbackActionSize(binding: WidgetActionBinding): number {
-  if (props.compact) return 32
-  return Math.max(52, 32 + binding.action.label.length * 7 + binding.action.icon.length * 3)
+  if (props.compact) return 30
+  return Math.max(50, 30 + binding.action.label.length * 7 + binding.action.icon.length * 3)
 }
 
 function actionSize(binding: WidgetActionBinding): number {

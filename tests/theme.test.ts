@@ -10,6 +10,8 @@ describe('theme', () => {
     expect(theme.color.success).toBe(defaultTheme.color.success)
     expect(theme.color.surfaceModal).toBe(defaultTheme.color.surfaceModal)
     expect(theme.shadow.lg).toBe(defaultTheme.shadow.lg)
+    expect(theme.size.controlHeightCompact).toBe(defaultTheme.size.controlHeightCompact)
+    expect(theme.size.iconButtonSize).toBe(defaultTheme.size.iconButtonSize)
   })
 
   it('serializes tokens to stable CSS variables', () => {
@@ -29,6 +31,12 @@ describe('theme', () => {
     expect(variables['--wf-color-focus']).toBe(defaultTheme.color.focus)
     expect(variables['--wf-color-hover']).toBe(defaultTheme.color.hover)
     expect(variables['--wf-color-selected']).toBe(defaultTheme.color.selected)
+    expect(variables['--wf-size-control-height-compact']).toBe(defaultTheme.size.controlHeightCompact)
+    expect(variables['--wf-size-tab-height']).toBe(defaultTheme.size.tabHeight)
+    expect(variables['--wf-size-icon-size']).toBe(defaultTheme.size.iconSize)
+    expect(variables['--wf-size-icon-button-size']).toBe(defaultTheme.size.iconButtonSize)
+    expect(variables['--wf-size-table-row-height']).toBe(defaultTheme.size.tableRowHeight)
+    expect(variables['--wf-size-table-row-height-compact']).toBe(defaultTheme.size.tableRowHeightCompact)
     expect(variables['--wf-layer-tooltip']).toBe(String(defaultTheme.layer.tooltip))
   })
 })

@@ -98,7 +98,7 @@ const emit = defineEmits<{
 }
 
 .wf-error-state__retry {
-  min-height: var(--wf-size-control-height);
+  min-height: var(--wf-size-control-height-compact);
   padding: 0 var(--wf-space-md);
   border: 1px solid var(--wf-color-danger);
   border-radius: var(--wf-radius-sm);
