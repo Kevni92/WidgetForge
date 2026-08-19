@@ -41,6 +41,16 @@ While open, the overlay reads the public DOM data attributes emitted by WidgetFo
 
 It draws independent fixed-position diagnostic outlines. It does not modify workspace, pane, window, dock or data state. A `target` element can scope DOM inspection to a particular workspace root.
 
+The visual overlay provides three modes:
+
+- **All bounds** keeps the complete overview;
+- **Selected node** isolates the node selected in the panel;
+- **Hovered node** temporarily highlights the node below the pointer.
+
+Window, dock, pane and widget-host bounds can be filtered independently. Selecting an entry in the Windows, Docks, Pane tree or Widget hosts section synchronizes the panel selection with the corresponding visual mark. Labels use deterministic offsets and place compact-node labels outside the marked rectangle when necessary so nested layouts remain readable.
+
+Visual marks use `pointer-events: none` by default. The **Inspect bounds** control explicitly enables pointer selection on the marks; normal workspace pointer interaction remains untouched otherwise. Inspecting and selecting are local to the DevTools component and do not update workspace history, persistence or runtime state.
+
 ## Production behavior
 
 DevTools is a normal exported component, not part of `WorkspaceHost` or another runtime host. Consumers decide whether to import/mount it and whether `enabled` can ever become true. When disabled it renders nothing and does not install its shortcut or runtime observers.
