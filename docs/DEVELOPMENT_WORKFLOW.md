@@ -28,6 +28,8 @@ Ein Issue ist fertig, wenn:
 - der Playground das Feature zeigt, sofern sinnvoll,
 - keine unnötigen Abhängigkeiten oder Domänenkopplungen eingeführt wurden.
 
+`npm run lint` prüft Source-, Test- und Konfigurationsdateien. Verschachtelte generierte Ausgaben wie `**/dist/**`, `**/coverage/**` und `**/node_modules/**` gehören nicht zum Lint-Scope. Ein Build darf das Ergebnis des anschließenden Lint-Laufs nicht verändern.
+
 ## Tests
 
 **Jede neue Komponente muss Tests erhalten.** Neue Core-Logik, Composables, Parser und Provider ebenfalls.
