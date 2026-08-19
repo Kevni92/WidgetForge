@@ -19,7 +19,7 @@ export interface LinkedSelectionAdapter<
 
 export interface LinkedSelectionBinding<TSelection extends WidgetViewStateValue> {
   readonly selection: ComputedRef<TSelection | null>
-  readonly globalSelection: Readonly<ReturnType<typeof computed<TSelection | null>>>
+  readonly globalSelection: ComputedRef<TSelection | null>
   readonly following: ComputedRef<boolean>
   follow(): void
   pin(value?: TSelection | null): void
@@ -35,10 +35,7 @@ export function useLinkedSelection<
   const following = computed(() => linked.value.followSelection)
   const globalSelection = computed<TSelection | null>(() => source.value.value)
   const selection = computed<TSelection | null>(() => following.value ? globalSelection.value : linked.value.pinnedSelection)
-
-  const write = (next: LinkedSelectionViewState<TSelection>): void => {
-    viewState.update((state) => adapter.write(state, next))
-  }
+  const write = (next: LinkedSelectionViewState<TSelection>): void => viewState.update((state) => adapter.write(state, next))
 
   return {
     selection,
