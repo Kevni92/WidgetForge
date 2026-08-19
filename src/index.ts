@@ -62,6 +62,8 @@ export { captureWorkspace, restoreWorkspace, serializeWorkspace, WORKSPACE_VERSI
 export type { WorkspaceParameters, WorkspaceParameterValue, WorkspaceRestoreIssue, WorkspaceRestoreIssueCode, WorkspaceRestoreResult, WorkspaceSnapshot, WorkspaceWindowSnapshot, WorkspaceDockSnapshot } from './core/workspace'
 export { createWorkspaceHistory, WorkspaceHistory, WorkspaceHistoryError } from './core/workspace-history'
 export type { WorkspaceHistoryOptions, WorkspaceHistoryState, WorkspaceHistoryListener } from './core/workspace-history'
+export { createWorkspaceEditController, WorkspaceEditController, createPaneEditContextMenuItems, removePaneForEdit, retargetWidgetPane } from './core/workspace-edit'
+export type { WorkspaceEditMode, WorkspacePaneOwnerKind, WorkspacePaneOwner, WorkspacePaneSelection, WorkspaceEditSnapshot, WorkspaceEditState, WorkspaceEditListener, PaneEditActionId } from './core/workspace-edit'
 export { createWindowManager, DuplicateWindowInstanceError, UnknownWindowInstanceError, WindowManager } from './core/window-manager'
 export type { OpenPaneWindowRequest, OpenWindowRequest, WindowInstanceId, WindowManagerChange, WindowManagerChangeKind, WindowManagerListener, WindowMode, WindowOperationOrigin, WindowState } from './core/window-manager'
 export { createWindowOptions, defaultWindowOptions, WindowOptionsError } from './core/window-options'
