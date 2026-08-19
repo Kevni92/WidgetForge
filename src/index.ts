@@ -70,7 +70,7 @@ export type { OpenPaneWindowRequest, OpenWindowRequest, WindowInstanceId, Window
 export { createWindowGroupManager, getWindowGroupManager, WindowGroupDefinitionError, WindowGroupManager } from './core/window-groups'
 export type { WindowGroupId, WindowGroupState, WindowGroupSnapshot, WindowGroupMoveSnapshot, WindowGroupChange, WindowGroupListener } from './core/window-groups'
 export { createWindowOptions, defaultWindowOptions, windowRoleRank, WindowOptionsError } from './core/window-options'
-export type { WindowHeaderMode, WindowLayer, WindowRole, WindowOptions, WindowOptionsOverride } from './core/window-options'
+export type { WindowChromeMode, WindowHeaderAction, WindowHeaderActionInput, WindowHeaderActionSide, WindowHeaderMode, WindowLayer, WindowRole, WindowOptions, WindowOptionsOverride } from './core/window-options'
 export { DEFAULT_MIN_VISIBLE, DEFAULT_MIN_WINDOW_SIZE, DEFAULT_WINDOW_SIZE, constrainGeometry, constrainPosition, constrainSize, moveWindow, moveWindowGroup, resizeWindow, sameGeometry } from './core/window-geometry'
 export type { ResizeHandle, WindowGeometry, WindowGroupGeometry, WindowPosition, WindowSize, WindowSizeConstraints } from './core/window-geometry'
 export { DEFAULT_SNAP_THRESHOLD, WINDOW_SNAP_LAYOUTS, WINDOW_SNAP_ZONES, detectWindowSnapZone, isWindowSnapZone, maximizeWindowGeometry, restoreFloatingWindowGeometry, snapWindowGeometry } from './core/window-snap'
