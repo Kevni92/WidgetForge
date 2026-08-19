@@ -36,12 +36,14 @@ interface WindowShellProps {
   windowRole?: WindowRole
   lifecycle?: WidgetLifecycleController | undefined
   layoutLocked?: boolean
+  editMode?: boolean
+  paneDragEnabled?: (paneId: string) => boolean
 }
 
 const props = withDefaults(defineProps<WindowShellProps>(), {
   parameters: () => ({}), focused: false, closable: true, minimizable: true, maximizable: true,
   minimized: false, maximized: false, movable: true, header: 'always', chrome: 'default', glass: false,
-  headerActions: () => [], windowRole: 'normal', layoutLocked: false,
+  headerActions: () => [], windowRole: 'normal', layoutLocked: false, editMode: false, paneDragEnabled: () => true,
 })
 const emit = defineEmits<{
   focus: [event: WindowShellEvent]
@@ -109,7 +111,7 @@ function setHovered(value: boolean): void { hovered.value = value; if (!value &&
       </div>
     </header>
     <div v-show="!minimized" class="wf-window-shell__content" :aria-hidden="minimized ? 'true' : undefined">
-      <slot><PaneHost v-if="contentPane" :pane="contentPane" :registry="registry" :lifecycle="lifecycle" :layout-locked="layoutLocked" host-type="window" action-chrome="none" :host-visible="!minimized" :host-focused="focused" @actions-change="setWidgetActions" @update:pane="emit('update:pane', $event)" /></slot>
+      <slot><PaneHost v-if="contentPane" :pane="contentPane" :registry="registry" :lifecycle="lifecycle" :layout-locked="layoutLocked" :edit-mode="editMode" :pane-drag-enabled="paneDragEnabled" host-type="window" action-chrome="none" :host-visible="!minimized" :host-focused="focused" @actions-change="setWidgetActions" @update:pane="emit('update:pane', $event)" /></slot>
     </div>
   </section>
 </template>

@@ -45,7 +45,7 @@ Pane-IDs und Widget-Instanz-IDs müssen innerhalb eines Baums eindeutig sein. Be
 
 `PaneHost` ist der generische Vue-Renderer des Pane-Baums. Widget-Panes werden über `WidgetHost` gerendert; Split-, Tab- und Stack-Panes rekursiv über weitere `PaneHost`-Instanzen. Der Host kennt weder `WindowManager` noch `DockManager`.
 
-Split-Divider sind nur zwischen zwei nicht kollabierten, entsperrten, resizablen `flex`-Panes aktiv. Fixed- und Content-Panes bleiben über ihre deklarativen Constraints bestimmt. Pane-/Tab-Docking startet ausschließlich über die markierten Drag-Handles; ein Separator besitzt während seiner Resize-Session exklusiv den Pointer. Pointer-Listener werden bei Ende, Abbruch, Escape, verlorenem Pointer-Capture und Unmount deterministisch entfernt.
+Split-Divider sind nur zwischen zwei nicht kollabierten, entsperrten, resizablen `flex`-Panes aktiv. Fixed- und Content-Panes bleiben über ihre deklarativen Constraints bestimmt. Pane-/Tab-Docking startet ausschließlich über die markierten Drag-Handles; ein Separator besitzt während seiner Resize-Session exklusiv den Pointer. Im Normalmodus existieren keine generischen Pane-Handles: der Tab-Grip ist ausschließlich eine Reorder-Affordance für die direkte TabPane. Im Edit-Mode bzw. temporären Ctrl-Edit wird derselbe Tab-Grip zum Pane-Handle; generische Handles werden nur für bewegliche Panes angeboten. Pointer-Listener werden bei Ende, Abbruch, Escape, verlorenem Pointer-Capture und Unmount deterministisch entfernt.
 
 Stack-Layer werden im selben Host übereinander angeordnet. Es gibt dafür keine Window-/Dock-Sonderlogik.
 

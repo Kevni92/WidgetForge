@@ -408,6 +408,8 @@ export function reorderTab(root: PaneNode, tabPaneId: PaneId, sourceId: PaneId, 
   if (pane.settings?.locked) throw new InvalidPaneOperationError(`tab pane "${tabPaneId}" is locked`)
   const sourceIndex = pane.children.findIndex((child) => child.id === sourceId)
   if (sourceIndex < 0) throw new InvalidPaneOperationError(`pane "${sourceId}" is not a direct tab of "${tabPaneId}"`)
+  const source = pane.children[sourceIndex]
+  if (source) assertUnlocked(source, 'reorder tab')
   if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= pane.children.length) throw new InvalidPaneOperationError('target tab index is out of range')
   const children = [...pane.children]
   const [moved] = children.splice(sourceIndex, 1)

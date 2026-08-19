@@ -27,6 +27,23 @@ function pointer(target: EventTarget, type: string, x: number, y: number): void 
 }
 
 describe('WorkspaceHost edit mode', () => {
+  it('gates generic pane handles by workspace mode', () => {
+    const normal = setup('normal')
+    const normalWrapper = mount(WorkspaceHost, { props: { windows: normal.windows, docks: normal.docks, registry: normal.registry, edit: normal.edit }, attachTo: document.body })
+    expect(normalWrapper.findAll('[data-pane-drag-handle]')).toHaveLength(0)
+    normalWrapper.unmount()
+
+    const edit = setup('edit')
+    const editWrapper = mount(WorkspaceHost, { props: { windows: edit.windows, docks: edit.docks, registry: edit.registry, edit: edit.edit }, attachTo: document.body })
+    expect(editWrapper.findAll('[data-pane-drag-handle]')).toHaveLength(1)
+    editWrapper.unmount()
+
+    const locked = setup('locked')
+    const lockedWrapper = mount(WorkspaceHost, { props: { windows: locked.windows, docks: locked.docks, registry: locked.registry, edit: locked.edit }, attachTo: document.body })
+    expect(lockedWrapper.findAll('[data-pane-drag-handle]')).toHaveLength(0)
+    lockedWrapper.unmount()
+  })
+
   it('prevents structural window interaction while locked but leaves widget interaction active', async () => {
     const { registry, windows, docks, edit } = setup('locked')
     const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
