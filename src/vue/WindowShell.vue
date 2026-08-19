@@ -27,9 +27,9 @@ interface WindowShellProps {
   header?: WindowHeaderMode
   chrome?: WindowChromeMode
   glass?: boolean
-  icon?: string
-  badge?: string
-  status?: string
+  icon?: string | undefined
+  badge?: string | undefined
+  status?: string | undefined
   headerActions?: readonly WindowHeaderActionInput[]
   windowRole?: WindowRole
   lifecycle?: WidgetLifecycleController | undefined
