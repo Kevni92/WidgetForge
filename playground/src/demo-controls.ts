@@ -15,6 +15,8 @@ export interface DemoControls {
   readonly layoutNames?: () => readonly string[]
   readonly activeLayout?: () => string | null
   readonly loadLayout?: (name: string) => void
+  readonly developerMode?: () => boolean
+  readonly setDeveloperMode?: (enabled: boolean) => void
 }
 const key:InjectionKey<DemoControls>=Symbol('WidgetForgePlaygroundDemoControls')
 export function provideDemoControls(controls:DemoControls):void{provide(key,controls)}
