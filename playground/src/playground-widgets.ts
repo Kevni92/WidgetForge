@@ -15,6 +15,15 @@ export const planetSummaryWidget = defineWidget({
 export const marketTickerWidget = defineWidget({
   id: 'market.ticker', title: 'Commodity Exchange', component: MarketTickerWidget,
   parameters: { commodity: { type: 'string' }, rows: { type: 'number', default: 10 } },
+  viewState: {
+    version: 1,
+    defaultState: { filter: '', sortColumn: 'volume', sortDirection: 'desc', selected: null },
+    validate: (value): value is { filter: string; sortColumn: string; sortDirection: 'asc' | 'desc'; selected: string | null } => {
+      if (typeof value !== 'object' || value === null) return false
+      const state = value as { filter?: unknown; sortColumn?: unknown; sortDirection?: unknown; selected?: unknown }
+      return typeof state.filter === 'string' && typeof state.sortColumn === 'string' && (state.sortDirection === 'asc' || state.sortDirection === 'desc') && (state.selected === null || typeof state.selected === 'string')
+    },
+  },
   window: { defaultSize: { width: 620, height: 430 }, minSize: { width: 420, height: 260 }, singleton: true },
 })
 

@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import { validateWidgetActions, type WidgetAction } from './widget-actions'
+import { validateWidgetViewStateDefinition, WidgetViewStateError, type WidgetViewStateDefinition } from './widget-view-state'
 import { createWindowOptions, type WindowOptionsOverride } from './window-options'
 
 export type WidgetId = string
@@ -53,6 +54,7 @@ export interface WidgetManifest<TSchema extends WidgetParameterSchema = WidgetPa
   parameters?: TSchema
   window?: WidgetWindowMetadata
   actions?: readonly WidgetAction[]
+  viewState?: WidgetViewStateDefinition
 }
 
 export class WidgetDefinitionError extends Error {
@@ -66,7 +68,6 @@ const widgetIdPattern = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/
 
 function validateSize(name: string, size?: WidgetSize): void {
   if (!size) return
-
   if (!Number.isFinite(size.width) || !Number.isFinite(size.height) || size.width <= 0 || size.height <= 0) {
     throw new WidgetDefinitionError(`${name} must contain finite positive width and height values`)
   }
@@ -74,65 +75,39 @@ function validateSize(name: string, size?: WidgetSize): void {
 
 function validateWindowMetadata(window?: WidgetWindowMetadata): void {
   if (!window) return
-
   validateSize('window.defaultSize', window.defaultSize)
   validateSize('window.minSize', window.minSize)
   validateSize('window.maxSize', window.maxSize)
   if (window.options) {
-    try {
-      createWindowOptions(window.options)
-    } catch (error) {
-      throw new WidgetDefinitionError(error instanceof Error ? error.message : 'invalid window options')
-    }
+    try { createWindowOptions(window.options) }
+    catch (error) { throw new WidgetDefinitionError(error instanceof Error ? error.message : 'invalid window options') }
   }
-
   const { defaultSize, minSize, maxSize } = window
-
-  if (minSize && maxSize && (minSize.width > maxSize.width || minSize.height > maxSize.height)) {
-    throw new WidgetDefinitionError('window.minSize must not exceed window.maxSize')
-  }
-
-  if (defaultSize && minSize && (defaultSize.width < minSize.width || defaultSize.height < minSize.height)) {
-    throw new WidgetDefinitionError('window.defaultSize must not be smaller than window.minSize')
-  }
-
-  if (defaultSize && maxSize && (defaultSize.width > maxSize.width || defaultSize.height > maxSize.height)) {
-    throw new WidgetDefinitionError('window.defaultSize must not exceed window.maxSize')
-  }
+  if (minSize && maxSize && (minSize.width > maxSize.width || minSize.height > maxSize.height)) throw new WidgetDefinitionError('window.minSize must not exceed window.maxSize')
+  if (defaultSize && minSize && (defaultSize.width < minSize.width || defaultSize.height < minSize.height)) throw new WidgetDefinitionError('window.defaultSize must not be smaller than window.minSize')
+  if (defaultSize && maxSize && (defaultSize.width > maxSize.width || defaultSize.height > maxSize.height)) throw new WidgetDefinitionError('window.defaultSize must not exceed window.maxSize')
 }
 
 function validateParameterSchema(parameters?: WidgetParameterSchema): void {
   if (!parameters) return
-
   for (const [name, definition] of Object.entries(parameters)) {
     if (!name.trim()) throw new WidgetDefinitionError('parameter names must not be empty')
-
-    if ('default' in definition && definition.default !== undefined && typeof definition.default !== definition.type) {
-      throw new WidgetDefinitionError(`default value for parameter "${name}" must be a ${definition.type}`)
-    }
+    if ('default' in definition && definition.default !== undefined && typeof definition.default !== definition.type) throw new WidgetDefinitionError(`default value for parameter "${name}" must be a ${definition.type}`)
   }
 }
 
-export function defineWidget<const TSchema extends WidgetParameterSchema = WidgetParameterSchema>(
-  manifest: WidgetManifest<TSchema>,
-): WidgetManifest<TSchema> {
-  if (!widgetIdPattern.test(manifest.id)) {
-    throw new WidgetDefinitionError(
-      'widget id must start with a lowercase letter and contain only lowercase letters, numbers, dots or hyphens',
-    )
-  }
-
+export function defineWidget<const TSchema extends WidgetParameterSchema = WidgetParameterSchema>(manifest: WidgetManifest<TSchema>): WidgetManifest<TSchema> {
+  if (!widgetIdPattern.test(manifest.id)) throw new WidgetDefinitionError('widget id must start with a lowercase letter and contain only lowercase letters, numbers, dots or hyphens')
   if (!manifest.title.trim()) throw new WidgetDefinitionError('widget title must not be empty')
-
   const componentType = typeof manifest.component
-  if (componentType !== 'object' && componentType !== 'function') {
-    throw new WidgetDefinitionError('widget component must be a Vue component')
-  }
-
+  if (componentType !== 'object' && componentType !== 'function') throw new WidgetDefinitionError('widget component must be a Vue component')
   validateParameterSchema(manifest.parameters)
   validateWindowMetadata(manifest.window)
   try { validateWidgetActions(manifest.actions) }
   catch (error) { throw new WidgetDefinitionError(error instanceof Error ? error.message : 'invalid widget actions') }
-
+  if (manifest.viewState) {
+    try { validateWidgetViewStateDefinition(manifest.viewState) }
+    catch (error) { throw new WidgetDefinitionError(error instanceof WidgetViewStateError ? error.message : 'invalid widget view state') }
+  }
   return manifest
 }

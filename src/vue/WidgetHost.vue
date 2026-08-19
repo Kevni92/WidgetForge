@@ -3,10 +3,12 @@ import { computed, inject, markRaw, onBeforeUnmount, onMounted, provide, shallow
 import type { WidgetId } from '../core/widget'
 import { cloneWidgetAction, validateWidgetAction, WidgetActionDefinitionError, WidgetActionExecutionError, type WidgetAction, type WidgetActionBinding, type WidgetActionExecutionContext, type WidgetActionHandler, type WidgetActionStatePatch } from '../core/widget-actions'
 import { createWidgetLifecycle, type WidgetLifecycleController } from '../core/widget-lifecycle'
+import { createWidgetViewStateStore, type WidgetViewStateDefinition, type WidgetViewStateValue } from '../core/widget-view-state'
 import type { ResolvedWidget, WidgetRegistry } from '../core/widget-registry'
 import { widgetActionExecutorKey } from './widget-action-execution'
 import { widgetContextKey, type WidgetActionContext, type WidgetContext } from './widget-context'
 import { widgetNavigationKey } from './widget-navigation'
+import { widgetViewStateContextKey, widgetViewStateHostKey, type WidgetViewStateContext } from './widget-view-state'
 
 interface WidgetHostProps {
   registry: WidgetRegistry
@@ -28,6 +30,7 @@ const externalLifecycle = props.lifecycle ? markRaw(toRaw(props.lifecycle)) : nu
 const lifecycleController = externalLifecycle ?? markRaw(createWidgetLifecycle(instanceId))
 const navigator = inject(widgetNavigationKey, null)
 const actionExecutor = inject(widgetActionExecutorKey, null)
+const viewStateHost = inject(widgetViewStateHostKey, null)
 const runtimeActions = shallowRef<readonly RuntimeAction[]>([])
 const actionState = shallowRef<Readonly<Record<string, WidgetActionStatePatch>>>({})
 
@@ -47,6 +50,18 @@ const actionItems = computed<readonly WidgetAction[]>(() => {
   const combined = [...manifestActions.value, ...runtimeActions.value.map((entry) => entry.action)]
   return combined.map((action) => cloneWidgetAction({ ...action, ...(actionState.value[action.id] ?? {}) } as WidgetAction))
 })
+
+const viewStateDefinition: WidgetViewStateDefinition | null = (() => {
+  try { return markRaw(toRaw(props.registry)).get(props.widgetId).viewState ?? null }
+  catch { return null }
+})()
+if (viewStateDefinition) {
+  const store = viewStateHost?.store ?? createWidgetViewStateStore()
+  const scopeId = viewStateHost?.scopeId.value ?? 'default'
+  const handle = store.bind(scopeId, instanceId, props.widgetId, viewStateDefinition)
+  const context: WidgetViewStateContext<WidgetViewStateValue> = { ...handle, definition: viewStateDefinition }
+  provide(widgetViewStateContextKey, context)
+}
 
 function hasAction(actionId: string): boolean { return actionItems.value.some((action) => action.id === actionId) }
 function registerAction(action: WidgetAction, handler?: WidgetActionHandler): () => void {
