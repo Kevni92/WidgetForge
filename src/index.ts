@@ -68,6 +68,8 @@ export { createWidgetViewStateStore, isWidgetViewStateValue, validateWidgetViewS
 export type { WidgetViewStateDefinition, WidgetViewStateHandle, WidgetViewStatePrimitive, WidgetViewStateSnapshot, WidgetViewStateSnapshotEntry, WidgetViewStateStorage, WidgetViewStateValue } from './core/widget-view-state'
 export { cloneWidgetAction, validateWidgetAction, validateWidgetActions, WidgetActionDefinitionError, WidgetActionExecutionError } from './core/widget-actions'
 export type { WidgetAction, WidgetActionTone, WidgetActionTarget, WidgetActionStatePatch, WidgetActionExecutionContext, WidgetActionHandler, WidgetActionBinding, WidgetActionExecutor } from './core/widget-actions'
+export { calculateWidgetActionOverflow } from './core/widget-action-overflow'
+export type { WidgetActionOverflowLayout, WidgetActionOverflowOptions } from './core/widget-action-overflow'
 export { createWidgetPane, createSplitPane, createTabPane, createStackPane, clonePaneTree, validatePaneTree, findPane, containsPane, replacePane, removePane, splitPaneAt, tabPaneAt, movePane, movePaneToTabs, setSplitWeights, setActiveTab, reorderTab, setPaneCollapsed, PaneDefinitionError, UnknownPaneError, InvalidPaneOperationError } from './core/pane'
 export type { PaneId, PaneAxis, PaneOverflow, PaneBackground, PaneParameterValue, PaneParameters, PaneSplitEdge, PaneSizeMode, PaneSettings, WidgetPane, SplitPane, TabPane, StackPane, PaneNode, CreateWidgetPaneOptions, CreateSplitPaneOptions, CreateTabPaneOptions, CreateStackPaneOptions, RemovePaneResult } from './core/pane'
 export { calculatePaneSplitLayout, resizePaneSplitWeights } from './core/pane-layout'
