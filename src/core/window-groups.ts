@@ -3,6 +3,7 @@ import type { WindowInstanceId, WindowManager, WindowOperationOrigin } from './w
 
 export type WindowGroupId = string
 export interface WindowGroupState { readonly id: WindowGroupId; readonly members: readonly WindowInstanceId[] }
+export interface WindowGroupSnapshot { readonly groups: readonly WindowGroupState[] }
 export interface WindowGroupMoveSnapshot { readonly groupId: WindowGroupId | null; readonly members: readonly { readonly instanceId: WindowInstanceId; readonly geometry: WindowGeometry }[] }
 export interface WindowGroupChange { readonly groups: readonly WindowGroupState[] }
 export type WindowGroupListener = (change: WindowGroupChange) => void
@@ -31,6 +32,13 @@ export class WindowGroupManager {
   add(groupId:WindowGroupId,instanceId:WindowInstanceId):WindowGroupState{const current=this.get(groupId);return this.assign(groupId,[...(current?.members??[]),instanceId])}
   remove(instanceId:WindowInstanceId,emit=true):void{let changed=false;for(const[groupId,members]of[...this.groups]){if(!members.includes(instanceId))continue;const remaining=members.filter((member)=>member!==instanceId);if(remaining.length===0)this.groups.delete(groupId);else this.groups.set(groupId,remaining);changed=true}if(changed&&emit)this.emit()}
   clear(groupId:WindowGroupId):void{if(!this.groups.delete(groupId))return;this.emit()}
+  snapshot():WindowGroupSnapshot{return{groups:this.list()}}
+  restore(snapshot:WindowGroupSnapshot):readonly WindowGroupState[]{
+    if(!snapshot||!Array.isArray(snapshot.groups))throw new WindowGroupDefinitionError('invalid window group snapshot')
+    this.groups.clear()
+    for(const group of snapshot.groups){if(!group||typeof group.id!=='string'||!Array.isArray(group.members))throw new WindowGroupDefinitionError('invalid window group snapshot entry');this.assign(group.id,group.members)}
+    return this.list()
+  }
   captureMove(instanceId:WindowInstanceId):WindowGroupMoveSnapshot{const groupId=this.groupOf(instanceId),ids=groupId?this.groups.get(groupId)??[instanceId]:[instanceId];return{groupId,members:ids.map((id)=>({instanceId:id,geometry:cloneGeometry(this.windows.get(id).geometry)}))}}
   moveCaptured(snapshot:WindowGroupMoveSnapshot,delta:WindowPosition,container:WindowSize,origin:WindowOperationOrigin='user'):void{const moved=moveWindowGroup(snapshot.members.map((member)=>({id:member.instanceId,geometry:member.geometry})),delta,container);for(const member of moved)this.windows.setGeometry(member.id,member.geometry,origin)}
   minimizeGroup(groupId:WindowGroupId,origin:WindowOperationOrigin='user'):void{for(const instanceId of this.groups.get(groupId)??[])if(this.windows.get(instanceId).mode!=='minimized')this.windows.minimize(instanceId,origin)}
