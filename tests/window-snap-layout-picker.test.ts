@@ -14,7 +14,7 @@ describe('WindowSnapLayoutPicker', () => {
   it('supports keyboard navigation and Escape cleanup', async () => {
     const wrapper = mount(WindowSnapLayoutPicker, { attachTo: document.body })
     const first = wrapper.get('[data-window-layout="maximize"]')
-    first.element.focus()
+    ;(first.element as HTMLElement).focus()
     await first.trigger('keydown', { key: 'ArrowRight' })
     await Promise.resolve()
     expect(document.activeElement?.getAttribute('data-window-layout')).toBe('left')
