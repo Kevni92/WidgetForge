@@ -17,13 +17,15 @@ function mountWithProviders(component: Component, navigator: WidgetNavigator, co
 }
 
 describe('fullscreen workspace demo widgets', () => {
-  it('topbar navigates, switches theme, exposes history and resets the reference layout', async () => {
+  it('topbar navigates, switches theme, exposes history/edit/lock and resets the reference layout', async () => {
     const { navigator, navigate } = navigatorSpy()
-    const setTheme = vi.fn(); const resetWorkspace = vi.fn(); const undo = vi.fn(); const redo = vi.fn()
-    const controls: DemoControls = { theme: () => 'forge-dark', setTheme, resetWorkspace, canUndo: () => true, canRedo: () => true, undo, redo }
+    const setTheme = vi.fn(); const resetWorkspace = vi.fn(); const undo = vi.fn(); const redo = vi.fn(); const setWorkspaceMode = vi.fn()
+    const controls: DemoControls = { theme: () => 'forge-dark', setTheme, resetWorkspace, canUndo: () => true, canRedo: () => true, undo, redo, workspaceMode: () => 'normal', setWorkspaceMode }
     const wrapper = mountWithProviders(WorkspaceTopbarWidget, navigator, controls)
     await wrapper.get('[data-demo-nav="market"]').trigger('click')
     expect(navigate).toHaveBeenCalledWith({ widgetId: 'market.ticker', parameters: { commodity: 'METALS', rows: 10 } })
+    await wrapper.get('[data-demo-action="edit"]').trigger('click'); expect(setWorkspaceMode).toHaveBeenCalledWith('edit')
+    await wrapper.get('[data-demo-action="lock"]').trigger('click'); expect(setWorkspaceMode).toHaveBeenCalledWith('locked')
     await wrapper.get('[data-demo-action="undo"]').trigger('click'); expect(undo).toHaveBeenCalledOnce()
     await wrapper.get('[data-demo-action="redo"]').trigger('click'); expect(redo).toHaveBeenCalledOnce()
     await wrapper.get('select[aria-label="Theme"]').setValue('forge-light'); expect(setTheme).toHaveBeenCalledWith('forge-light')
