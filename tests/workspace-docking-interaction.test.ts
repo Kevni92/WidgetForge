@@ -150,4 +150,37 @@ describe('workspace docking interactions', () => {
     expect(windows.get('source').rootPane).toMatchObject({ id: 'second' })
     wrapper.unmount()
   })
+
+  it('detaches a tab to a new floating window when dropped on free workspace space', async () => {
+    const { registry, windows, docks } = setup()
+    windows.openPane({ instanceId: 'source', pane: createTabPane({ id: 'source-tabs', children: [
+      createWidgetPane({ id: 'first', widgetId: 'dock.a', instanceId: 'first-instance' }),
+      createWidgetPane({ id: 'second', widgetId: 'dock.b', instanceId: 'second-instance' }),
+    ] }) })
+    const edit = createWorkspaceEditController({ mode: 'edit' })
+    const history = createWorkspaceHistory(windows, docks)
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit, history }, attachTo: document.body })
+    const workspace = wrapper.get('.wf-workspace-host').element
+    const sourceTab = wrapper.get('[data-tab-pane-id="first"]').element
+    stubRect(workspace, rect(0, 0, 900, 650))
+    stubRect(sourceTab, rect(40, 70, 100, 30))
+
+    pointer(sourceTab, 'pointerdown', 80, 84)
+    pointer(globalThis.window, 'pointermove', 760, 480)
+    await nextTick()
+    expect(wrapper.find('[data-pane-detach-preview]').exists()).toBe(true)
+    expect(wrapper.find('.wf-docking-overlay').exists()).toBe(false)
+
+    pointer(globalThis.window, 'pointerup', 760, 480)
+    await nextTick()
+    await Promise.resolve()
+
+    const detached = windows.list().find((window) => window.instanceId.startsWith('workspace-detached-'))
+    expect(detached).toBeDefined()
+    expect(detached?.rootPane).toMatchObject({ id: 'first', instanceId: 'first-instance' })
+    expect(windows.get('source').rootPane).toMatchObject({ id: 'second' })
+    expect(findPane(windows.get('source').rootPane, 'first')).toBeUndefined()
+    expect(history.state.undoDepth).toBe(1)
+    wrapper.unmount(); history.dispose()
+  })
 })
