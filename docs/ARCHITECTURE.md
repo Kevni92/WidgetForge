@@ -89,7 +89,7 @@ Der Window Manager verwaltet ausschließlich UI-Zustand und Lifecycle. Fachliche
 
 Ein Fenster besitzt eine eigene Instanz-ID. Widget-Typ und Widget-Parameter sind davon getrennt. Dadurch sind mehrere Instanzen desselben Widgets möglich.
 
-Strukturelle Änderungen werden als immutable Pane-Operationen vorbereitet. Ein Multi-Owner-Commit validiert den vollständigen Ziel-Workspace vor der Manager-Mutation und rollt bei einem Fehler auf den vorherigen serialisierbaren Snapshot zurück. Preview-Zustände bleiben Vue-lokal und werden nie als kanonischer Workspace-State behandelt.
+Strukturelle Änderungen werden als immutable Pane-Operationen vorbereitet. Ein Multi-Owner-Commit validiert den vollständigen Ziel-Workspace vor der Manager-Mutation und rollt bei einem Fehler auf den vorherigen serialisierbaren Snapshot zurück. Fenstergeometrie wird über pure Core-Funktionen relativ zur aktuellen Floating-Fläche normalisiert; DOM-Messung liefert nur die Containergröße. Preview-Zustände bleiben Vue-lokal und werden nie als kanonischer Workspace-State behandelt.
 
 ## Navigation
 

@@ -43,6 +43,15 @@ describe('workspace persistence', () => {
     target.restore('max');expect(target.get('max').geometry).toEqual({position:{x:90,y:70},size:{width:420,height:280}})
   })
 
+  it('normalizes persisted geometry against the current workspace during restore', () => {
+    const registry=createRegistry(),source=createWindowManager(registry)
+    source.open({widgetId:'test.alpha',instanceId:'large',parameters:{name:'large'},position:{x:860,y:620},size:{width:420,height:280}})
+    const target=createWindowManager(registry),result=restoreWorkspace(target,serializeWorkspace(source),undefined,undefined,{container:{width:400,height:300}})
+
+    expect(result.valid).toBe(true);expect(result.issues).toEqual([])
+    expect(target.get('large').geometry).toEqual({position:{x:336,y:268},size:{width:420,height:280}})
+  })
+
   it('migrates legacy workspace v1 widget entries into root panes', () => {
     const manager=createWindowManager(createRegistry());const result=restoreWorkspace(manager,{version:1,windows:[{instanceId:'legacy-alpha',widgetId:'test.alpha',parameters:{name:'legacy',count:2},geometry:{position:{x:10,y:20},size:{width:320,height:220}},mode:'normal',focused:true,zIndex:0}]})
     expect(result.valid).toBe(true);expect(result.issues).toEqual([]);expect(manager.get('legacy-alpha').rootPane).toMatchObject({kind:'widget',widgetId:'test.alpha',instanceId:'legacy-alpha',parameters:{name:'legacy',count:2}})

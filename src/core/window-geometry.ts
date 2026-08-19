@@ -75,7 +75,14 @@ export function constrainPosition(
   }
 }
 
-export function constrainGeometry(
+/**
+ * Returns the deterministic, workspace-relative representation of a window.
+ *
+ * The declared minimum size is retained even when the workspace is smaller
+ * than that minimum. In that impossible case the position is recovered so
+ * that the configured minimum visible region remains reachable.
+ */
+export function normalizeWindowGeometry(
   geometry: WindowGeometry,
   constraints: WindowSizeConstraints,
   container: WindowSize,
@@ -86,6 +93,16 @@ export function constrainGeometry(
     size,
     position: constrainPosition(geometry.position, size, container, minimumVisible),
   }
+}
+
+/** @deprecated Use normalizeWindowGeometry for new code. */
+export function constrainGeometry(
+  geometry: WindowGeometry,
+  constraints: WindowSizeConstraints,
+  container: WindowSize,
+  minimumVisible: WindowSize = DEFAULT_MIN_VISIBLE,
+): WindowGeometry {
+  return normalizeWindowGeometry(geometry, constraints, container, minimumVisible)
 }
 
 export function moveWindow(
