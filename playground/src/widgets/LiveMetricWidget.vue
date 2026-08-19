@@ -14,6 +14,9 @@ const linked = useLinkedSelection<string, MetricViewState>(colonySelectionKey, {
   read: (viewState) => viewState.selection,
   write: (viewState, selection) => ({ ...viewState, selection }),
 })
+const currentSelection = linked.selection
+const followingSelection = linked.following
+const pinnedSelection = computed(() => !followingSelection.value)
 const lastAction = ref('idle')
 context.actions.register({ id: 'refresh', label: 'Refresh', icon: '↻', shortcut: 'Ctrl+R', group: 'data', priority: 100 }, () => {
   lastAction.value = 'refresh'
@@ -48,12 +51,12 @@ const dimensions = computed(() => pane.size.value.width > 0 ? `${pane.size.value
     :data-pane-host="paneHost"
     :data-pane-visible="String(paneVisible)"
     :data-pane-compact="String(compact)"
-    :data-pinned="String(!linked.following)"
-    :data-following="String(linked.following)"
-    :data-selection="linked.selection ?? undefined"
+    :data-pinned="String(pinnedSelection)"
+    :data-following="String(followingSelection)"
+    :data-selection="currentSelection ?? undefined"
     :data-last-action="lastAction"
   >
-    <span v-if="!compact" class="live-metric-widget__eyebrow">Live resource · {{ linked.selection ?? 'No colony' }}</span>
+    <span v-if="!compact" class="live-metric-widget__eyebrow">Live resource · {{ currentSelection ?? 'No colony' }}</span>
     <template v-if="state.status === 'ready'">
       <strong>{{ state.data.label }}</strong>
       <span class="live-metric-widget__value">{{ valueText }} {{ state.data.unit }}</span>
