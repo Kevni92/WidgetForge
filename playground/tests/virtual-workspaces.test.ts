@@ -18,8 +18,9 @@ describe('virtual desktop playground', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.get('[data-active-workspace]').attributes('data-active-workspace')).toBe('trading')
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(2)
-    await wrapper.get('[data-window-instance-id="telemetry-power"] .wf-window-shell__close').trigger('click')
+    await wrapper.get('[data-window-instance-id="market-main"] .wf-window-shell__close').trigger('click')
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(1)
+    expect(wrapper.find('[data-window-instance-id="telemetry-power"]').exists()).toBe(true)
 
     await wrapper.get('[data-workspace-tab="operations"]').trigger('click')
     await wrapper.vm.$nextTick()
@@ -31,6 +32,7 @@ describe('virtual desktop playground', () => {
     await wrapper.get('[data-workspace-tab="trading"]').trigger('click')
     await wrapper.vm.$nextTick()
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(1)
+    expect(wrapper.find('[data-window-instance-id="market-main"]').exists()).toBe(false)
 
     const persisted = JSON.parse(window.localStorage.getItem(COLLECTION_STORAGE_KEY) ?? '{}') as { activeWorkspaceId?: string; workspaces?: unknown[] }
     expect(persisted.activeWorkspaceId).toBe('trading')
@@ -40,6 +42,7 @@ describe('virtual desktop playground', () => {
     const restored = mount(App)
     expect(restored.get('[data-workspace-tab="trading"]').attributes('aria-pressed')).toBe('true')
     expect(restored.findAll('.wf-window-frame')).toHaveLength(1)
+    expect(restored.find('[data-window-instance-id="telemetry-power"]').exists()).toBe(true)
     restored.unmount()
   })
 })
