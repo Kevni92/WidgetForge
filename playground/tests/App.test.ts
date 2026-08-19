@@ -33,7 +33,7 @@ describe('Fullscreen Playground App', () => {
     await wrapper.vm.$nextTick()
     expect(telemetry.text()).toContain('LIVE')
     expect(telemetry.text()).toContain('SYNC')
-    expect(telemetry.get('[data-window-header-action="refresh"]').attributes('title')).toBe('Refresh telemetry')
+    expect(telemetry.get('[data-widget-action="refresh"]').attributes('title')).toBe('Refresh (Ctrl+R)')
 
     expect(wrapper.get('[data-window-instance-id="colony-main"]').attributes('data-window-group')).toBe('operations-cluster')
     expect(wrapper.get('[data-window-instance-id="alerts-main"]').attributes('data-window-group')).toBe('operations-cluster')

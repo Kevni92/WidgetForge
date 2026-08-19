@@ -21,12 +21,12 @@ export const marketTickerWidget = defineWidget({
 export const liveMetricWidget = defineWidget({
   id: 'demo.live-metric', title: 'Live Telemetry', component: LiveMetricWidget,
   parameters: { resourceId: { type: 'string', required: true } },
+  actions: [{ id: 'open-colony', label: 'Open colony', icon: '↗', group: 'navigation', priority: 20, target: { kind: 'navigation', intent: { widgetId: 'planet.summary', parameters: { planetId: 'ARC-01', compact: true } } } }],
   window: {
     defaultSize: { width: 260, height: 170 }, minSize: { width: 220, height: 140 }, maxSize: { width: 460, height: 320 },
     options: {
       role: 'utility', layer: 'always-on-top', opacity: 0.94, header: 'hover', chrome: 'borderless', glass: true,
       icon: '◇', badge: 'LIVE', status: 'SYNC',
-      headerActions: [{ id: 'refresh', label: 'Refresh telemetry', icon: '↻', tooltip: 'Refresh telemetry', actionRef: 'demo.refresh-telemetry' }],
     },
   },
 })

@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import { validateWidgetActions, type WidgetAction } from './widget-actions'
 import { createWindowOptions, type WindowOptionsOverride } from './window-options'
 
 export type WidgetId = string
@@ -51,6 +52,7 @@ export interface WidgetManifest<TSchema extends WidgetParameterSchema = WidgetPa
   component: Component
   parameters?: TSchema
   window?: WidgetWindowMetadata
+  actions?: readonly WidgetAction[]
 }
 
 export class WidgetDefinitionError extends Error {
@@ -129,6 +131,8 @@ export function defineWidget<const TSchema extends WidgetParameterSchema = Widge
 
   validateParameterSchema(manifest.parameters)
   validateWindowMetadata(manifest.window)
+  try { validateWidgetActions(manifest.actions) }
+  catch (error) { throw new WidgetDefinitionError(error instanceof Error ? error.message : 'invalid widget actions') }
 
   return manifest
 }
