@@ -36,33 +36,61 @@ export interface WidgetNavigator {
   navigate(intent: NavigationIntent): NavigationResult
 }
 
+export interface ActiveWorkspaceNavigationSource {
+  getActive(): { readonly windows: WindowManager }
+}
+
+function navigateWidget(
+  registry: WidgetRegistry,
+  windowManager: WindowManager,
+  intent: NavigationIntent,
+): NavigationResult {
+  try {
+    registry.resolve(intent.widgetId, intent.parameters ?? {})
+  } catch (error) {
+    if (error instanceof UnknownWidgetError) {
+      throw new WidgetNavigationError('unknown-widget', intent)
+    }
+    if (error instanceof WidgetParameterValidationError) {
+      throw new WidgetNavigationError('invalid-parameters', intent, error.issues)
+    }
+    throw error
+  }
+
+  const window = windowManager.open({
+    widgetId: intent.widgetId,
+    parameters: intent.parameters ?? {},
+  })
+  return { widgetId: intent.widgetId, instanceId: window.instanceId }
+}
+
 export class WidgetNavigatorService implements WidgetNavigator {
   constructor(
     private readonly registry: WidgetRegistry,
     private readonly windowManager: WindowManager,
   ) {}
 
-  navigate(intent: NavigationIntent): NavigationResult {
-    try {
-      this.registry.resolve(intent.widgetId, intent.parameters ?? {})
-    } catch (error) {
-      if (error instanceof UnknownWidgetError) {
-        throw new WidgetNavigationError('unknown-widget', intent)
-      }
-      if (error instanceof WidgetParameterValidationError) {
-        throw new WidgetNavigationError('invalid-parameters', intent, error.issues)
-      }
-      throw error
-    }
+  navigate(intent: NavigationIntent): NavigationResult { return navigateWidget(this.registry, this.windowManager, intent) }
+}
 
-    const window = this.windowManager.open({
-      widgetId: intent.widgetId,
-      parameters: intent.parameters ?? {},
-    })
-    return { widgetId: intent.widgetId, instanceId: window.instanceId }
+export class ActiveWorkspaceNavigatorService implements WidgetNavigator {
+  constructor(
+    private readonly registry: WidgetRegistry,
+    private readonly source: ActiveWorkspaceNavigationSource,
+  ) {}
+
+  navigate(intent: NavigationIntent): NavigationResult {
+    return navigateWidget(this.registry, this.source.getActive().windows, intent)
   }
 }
 
 export function createWidgetNavigator(registry: WidgetRegistry, windowManager: WindowManager): WidgetNavigatorService {
   return new WidgetNavigatorService(registry, windowManager)
+}
+
+export function createActiveWorkspaceNavigator(
+  registry: WidgetRegistry,
+  source: ActiveWorkspaceNavigationSource,
+): ActiveWorkspaceNavigatorService {
+  return new ActiveWorkspaceNavigatorService(registry, source)
 }
