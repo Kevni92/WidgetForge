@@ -12,6 +12,9 @@ export interface DemoControls {
   readonly redo?: () => void
   readonly workspaceMode?: () => WorkspaceEditMode
   readonly setWorkspaceMode?: (mode: WorkspaceEditMode) => void
+  readonly layoutNames?: () => readonly string[]
+  readonly activeLayout?: () => string | null
+  readonly loadLayout?: (name: string) => void
 }
 const key:InjectionKey<DemoControls>=Symbol('WidgetForgePlaygroundDemoControls')
 export function provideDemoControls(controls:DemoControls):void{provide(key,controls)}
