@@ -9,7 +9,7 @@ describe('Fullscreen Playground App', () => {
   beforeEach(() => { window.localStorage.clear(); vi.useFakeTimers() })
   afterEach(() => { vi.useRealTimers() })
 
-  it('renders a cohesive fullscreen simulation workspace with docks, panes, grouped windows and window states', async () => {
+  it('renders a cohesive fullscreen simulation workspace with docks, panes, groups and semantic window roles', async () => {
     const wrapper = mount(App)
     expect(wrapper.get('[data-fullscreen-workspace-demo]').element).toBeTruthy()
     expect(wrapper.findAll('.wf-dock-host')).toHaveLength(2)
@@ -21,12 +21,23 @@ describe('Fullscreen Playground App', () => {
 
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
     expect(wrapper.get('[data-window-instance-id="telemetry-power"]').attributes('data-window-layer')).toBe('always-on-top')
+    expect(wrapper.get('[data-window-instance-id="telemetry-power"]').attributes('data-window-role')).toBe('utility')
     expect(wrapper.get('[data-window-instance-id="colony-main"]').attributes('data-window-group')).toBe('operations-cluster')
     expect(wrapper.get('[data-window-instance-id="alerts-main"]').attributes('data-window-group')).toBe('operations-cluster')
     expect(wrapper.get('[data-window-instance-id="operations-main"] [data-pane-id="operations-root"]').attributes('data-pane-kind')).toBe('split')
     expect(wrapper.get('[data-pane-id="operations-metrics"]').attributes('data-pane-kind')).toBe('tabs')
     expect(wrapper.findAll('[data-pane-id="operations-metrics"] [role="tab"]')).toHaveLength(2)
     expect(wrapper.findAll('[data-window-instance-id="market-main"] .wf-data-table__row')).toHaveLength(14)
+
+    await wrapper.get('[data-demo-nav="modal"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    const modal = wrapper.get('[data-window-role="modal"]')
+    expect(modal.get('.wf-window-shell').attributes('role')).toBe('dialog')
+    expect(wrapper.find('[data-modal-backdrop]').exists()).toBe(true)
+    expect(wrapper.get('[data-window-instance-id="colony-main"]').attributes('aria-hidden')).toBe('true')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-window-role="modal"]').exists()).toBe(false)
 
     const snapshot = JSON.parse(window.localStorage.getItem(WORKSPACE_STORAGE_KEY) ?? '{}') as { windows?: Array<{ instanceId: string; snap?: { zone?: string } | null }>; docks?: unknown[] }
     expect(snapshot.docks).toHaveLength(2)
