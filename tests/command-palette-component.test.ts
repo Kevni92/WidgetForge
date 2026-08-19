@@ -44,7 +44,7 @@ describe('CommandPalette', () => {
 
     expect(wrapper.get('[role="dialog"]').attributes('aria-modal')).toBe('true')
     expect(wrapper.get('[role="combobox"]').attributes('aria-expanded')).toBe('true')
-    expect(wrapper.get('[role="listbox"]').exists()).toBe(true)
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(true)
     expect(document.activeElement).toBe(wrapper.get('input').element)
   })
 
