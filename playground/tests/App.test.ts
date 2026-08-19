@@ -107,6 +107,30 @@ describe('Fullscreen Playground App', () => {
     wrapper.unmount()
   })
 
+  it('traps focus in the topbar modal and restores the opening control', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    const trigger = wrapper.get('[data-demo-nav="modal"]')
+    ;(trigger.element as HTMLElement).focus()
+    await trigger.trigger('click')
+    await wrapper.vm.$nextTick(); await wrapper.vm.$nextTick()
+
+    const dialog = wrapper.get('[data-window-role="modal"] .wf-window-shell')
+    expect(dialog.attributes('role')).toBe('dialog')
+    expect(dialog.attributes('aria-modal')).toBe('true')
+    expect(dialog.element.contains(document.activeElement)).toBe(true)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    expect(dialog.element.contains(document.activeElement)).toBe(true)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }))
+    expect(dialog.element.contains(document.activeElement)).toBe(true)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await wrapper.vm.$nextTick(); await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-window-role="modal"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
+    wrapper.unmount()
+  })
+
   it('routes global widget navigation to the active virtual workspace', async () => {
     const wrapper = mount(App)
 
