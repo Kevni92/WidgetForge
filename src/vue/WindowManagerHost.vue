@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref, shallowRef, toRaw } from 'vue'
 import { createWidgetNavigator } from '../core/navigation'
 import type { WidgetRegistry } from '../core/widget-registry'
 import type { WindowGeometry, WindowPosition, WindowSize } from '../core/window-geometry'
+import type { WindowGroupManager, WindowGroupState } from '../core/window-groups'
 import type { WindowManager, WindowState } from '../core/window-manager'
 import { detectWindowSnapZone, snapWindowGeometry, type WindowSnapZone } from '../core/window-snap'
 import { detectWorkspaceDropZone, dockWindowIntoWindow, type WorkspaceDropRect } from '../core/workspace-docking'
@@ -11,18 +12,20 @@ import { observeElementSize } from './observe-element-size'
 import { provideWidgetNavigation } from './widget-navigation'
 import WindowFrame, { type WindowDropTarget } from './WindowFrame.vue'
 
-interface WindowManagerHostProps { manager: WindowManager; registry: WidgetRegistry; layoutLocked?: boolean }
+interface WindowManagerHostProps { manager: WindowManager; registry: WidgetRegistry; layoutLocked?: boolean; groups?: WindowGroupManager }
 interface SnapPreviewState { readonly instanceId: string; readonly zone: WindowSnapZone; readonly geometry: WindowGeometry }
 interface WindowDockPreviewState { readonly sourceInstanceId: string; readonly target: WindowDropTarget; readonly targetRect: WorkspaceDropRect }
 
 const props = defineProps<WindowManagerHostProps>()
 const manager = toRaw(props.manager)
 const registry = toRaw(props.registry)
+const groups = props.groups ? toRaw(props.groups) : undefined
 const navigator = createWidgetNavigator(registry, manager)
 provideWidgetNavigation(navigator)
 const hostElement = ref<HTMLElement | null>(null)
 const containerSize = shallowRef<WindowSize>({ width: 0, height: 0 })
 const windows = shallowRef<readonly WindowState[]>(manager.list())
+const groupStates = shallowRef<readonly WindowGroupState[]>(groups?.list() ?? [])
 const snapPreview = shallowRef<SnapPreviewState | null>(null)
 const windowDockPreview = shallowRef<WindowDockPreviewState | null>(null)
 let disposeSizeObserver: (() => void) | null = null
@@ -36,7 +39,9 @@ const unsubscribe = manager.subscribe((change) => {
   }
   if (change.kind === 'open' && containerSize.value.width > 0 && containerSize.value.height > 0) manager.constrainToContainer(change.instanceId, containerSize.value)
 })
+const unsubscribeGroups = groups?.subscribe((change) => { groupStates.value = change.groups }) ?? (() => {})
 
+function groupId(instanceId: string): string | null { return groupStates.value.find((group) => group.members.includes(instanceId))?.id ?? null }
 function localPoint(clientX: number, clientY: number): WindowPosition | null { const host=hostElement.value;if(!host)return null;const rect=host.getBoundingClientRect();return{x:clientX-rect.left,y:clientY-rect.top} }
 function resolveSnapZone(clientX:number,clientY:number):WindowSnapZone|null{if(props.layoutLocked)return null;const point=localPoint(clientX,clientY);return point?detectWindowSnapZone(point,containerSize.value):null}
 function previewSnap(instanceId:string,zone:WindowSnapZone|null):void{if(props.layoutLocked){snapPreview.value=null;return}if(!zone){if(snapPreview.value?.instanceId===instanceId)snapPreview.value=null;return}snapPreview.value={instanceId,zone,geometry:snapWindowGeometry(zone,containerSize.value)}}
@@ -47,15 +52,15 @@ function targetWindowElement(sourceInstanceId:string,x:number,y:number):HTMLElem
 function targetPaneElement(windowElement:HTMLElement,x:number,y:number):HTMLElement|null{return[...windowElement.querySelectorAll<HTMLElement>('.wf-pane-host[data-pane-id]')].filter((element)=>containsClientPoint(element.getBoundingClientRect(),x,y)).sort((a,b)=>{const ar=a.getBoundingClientRect(),br=b.getBoundingClientRect();return ar.width*ar.height-br.width*br.height})[0]??null}
 function findWindowElement(instanceId:string):HTMLElement|null{const host=hostElement.value;if(!host)return null;return[...host.querySelectorAll<HTMLElement>('.wf-window-frame[data-window-instance-id]')].find((element)=>element.dataset.windowInstanceId===instanceId)??null}
 function findPaneElement(windowElement:HTMLElement,paneId:string):HTMLElement|null{return[...windowElement.querySelectorAll<HTMLElement>('.wf-pane-host[data-pane-id]')].find((element)=>element.dataset.paneId===paneId)??null}
-function resolveWindowDrop(sourceInstanceId:string,x:number,y:number):WindowDropTarget|null{if(props.layoutLocked)return null;const windowElement=targetWindowElement(sourceInstanceId,x,y);if(!windowElement)return null;const paneElement=targetPaneElement(windowElement,x,y);const targetInstanceId=windowElement.dataset.windowInstanceId;const targetPaneId=paneElement?.dataset.paneId;if(!paneElement||!targetInstanceId||!targetPaneId)return null;const rect=paneElement.getBoundingClientRect();const zone=detectWorkspaceDropZone({x,y},{x:rect.left,y:rect.top,width:rect.width,height:rect.height});return zone?{targetInstanceId,targetPaneId,zone}:null}
-function previewWindowDrop(sourceInstanceId:string,target:WindowDropTarget|null):void{if(props.layoutLocked){windowDockPreview.value=null;return}if(!target){if(windowDockPreview.value?.sourceInstanceId===sourceInstanceId)windowDockPreview.value=null;return}const host=hostElement.value;const targetWindow=findWindowElement(target.targetInstanceId);const paneElement=targetWindow?findPaneElement(targetWindow,target.targetPaneId):null;if(!host||!paneElement)return;const hostRect=host.getBoundingClientRect(),paneRect=paneElement.getBoundingClientRect();windowDockPreview.value={sourceInstanceId,target,targetRect:{x:paneRect.left-hostRect.left,y:paneRect.top-hostRect.top,width:paneRect.width,height:paneRect.height}}}
-function commitWindowDrop(sourceInstanceId:string,target:WindowDropTarget):void{if(props.layoutLocked)return;windowDockPreview.value=null;windowDockSequence+=1;dockWindowIntoWindow(manager,sourceInstanceId,target.targetInstanceId,target.targetPaneId,target.zone,`window-dock-${windowDockSequence}`)}
+function resolveWindowDrop(sourceInstanceId:string,x:number,y:number):WindowDropTarget|null{if(props.layoutLocked||groupId(sourceInstanceId))return null;const windowElement=targetWindowElement(sourceInstanceId,x,y);if(!windowElement)return null;const paneElement=targetPaneElement(windowElement,x,y);const targetInstanceId=windowElement.dataset.windowInstanceId,targetPaneId=paneElement?.dataset.paneId;if(!paneElement||!targetInstanceId||!targetPaneId)return null;const rect=paneElement.getBoundingClientRect();const zone=detectWorkspaceDropZone({x,y},{x:rect.left,y:rect.top,width:rect.width,height:rect.height});return zone?{targetInstanceId,targetPaneId,zone}:null}
+function previewWindowDrop(sourceInstanceId:string,target:WindowDropTarget|null):void{if(props.layoutLocked){windowDockPreview.value=null;return}if(!target){if(windowDockPreview.value?.sourceInstanceId===sourceInstanceId)windowDockPreview.value=null;return}const host=hostElement.value,targetWindow=findWindowElement(target.targetInstanceId),paneElement=targetWindow?findPaneElement(targetWindow,target.targetPaneId):null;if(!host||!paneElement)return;const hostRect=host.getBoundingClientRect(),paneRect=paneElement.getBoundingClientRect();windowDockPreview.value={sourceInstanceId,target,targetRect:{x:paneRect.left-hostRect.left,y:paneRect.top-hostRect.top,width:paneRect.width,height:paneRect.height}}}
+function commitWindowDrop(sourceInstanceId:string,target:WindowDropTarget):void{if(props.layoutLocked||groupId(sourceInstanceId))return;windowDockPreview.value=null;windowDockSequence+=1;dockWindowIntoWindow(manager,sourceInstanceId,target.targetInstanceId,target.targetPaneId,target.zone,`window-dock-${windowDockSequence}`)}
 function geometryStyle(geometry:WindowGeometry):Record<string,string>{return{left:`${geometry.position.x}px`,top:`${geometry.position.y}px`,width:`${geometry.size.width}px`,height:`${geometry.size.height}px`}}
 function onKeyDown(event:KeyboardEvent):void{if(event.key==='Escape')windowDockPreview.value=null}
 
 onMounted(()=>{if(!hostElement.value)return;disposeSizeObserver=observeElementSize(hostElement.value,(size)=>{containerSize.value=size;if(snapPreview.value)snapPreview.value={...snapPreview.value,geometry:snapWindowGeometry(snapPreview.value.zone,size)};for(const window of manager.list())manager.constrainToContainer(window.instanceId,size)});globalThis.window.addEventListener('keydown',onKeyDown)})
-onBeforeUnmount(()=>{snapPreview.value=null;windowDockPreview.value=null;disposeSizeObserver?.();disposeSizeObserver=null;unsubscribe();globalThis.window.removeEventListener('keydown',onKeyDown)})
+onBeforeUnmount(()=>{snapPreview.value=null;windowDockPreview.value=null;disposeSizeObserver?.();disposeSizeObserver=null;unsubscribe();unsubscribeGroups();globalThis.window.removeEventListener('keydown',onKeyDown)})
 </script>
 
-<template><div ref="hostElement" class="wf-window-manager-host" :data-layout-locked="layoutLocked || undefined"><div v-if="snapPreview && !layoutLocked" class="wf-window-snap-preview" :data-window-snap-preview="snapPreview.instanceId" :data-window-snap-zone="snapPreview.zone" :style="geometryStyle(snapPreview.geometry)" aria-hidden="true"/><DockingOverlay v-if="windowDockPreview && !layoutLocked" :target-rect="windowDockPreview.targetRect" :active-zone="windowDockPreview.target.zone" :source-id="windowDockPreview.sourceInstanceId" :target-id="windowDockPreview.target.targetInstanceId"/><WindowFrame v-for="window in windows" :key="window.instanceId" :window="window" :manager="manager" :registry="registry" :container-size="containerSize" :lifecycle="manager.getLifecycle(window.instanceId)" :layout-locked="layoutLocked" :resolve-snap-zone="resolveSnapZone" :preview-snap="previewSnap" :commit-snap="commitSnap" :unsnap-for-pointer="unsnapForPointer" :resolve-window-drop="resolveWindowDrop" :preview-window-drop="previewWindowDrop" :commit-window-drop="commitWindowDrop"/></div></template>
+<template><div ref="hostElement" class="wf-window-manager-host" :data-layout-locked="layoutLocked || undefined"><div v-if="snapPreview && !layoutLocked" class="wf-window-snap-preview" :data-window-snap-preview="snapPreview.instanceId" :data-window-snap-zone="snapPreview.zone" :style="geometryStyle(snapPreview.geometry)" aria-hidden="true"/><DockingOverlay v-if="windowDockPreview && !layoutLocked" :target-rect="windowDockPreview.targetRect" :active-zone="windowDockPreview.target.zone" :source-id="windowDockPreview.sourceInstanceId" :target-id="windowDockPreview.target.targetInstanceId"/><WindowFrame v-for="window in windows" :key="window.instanceId" :window="window" :manager="manager" :registry="registry" :container-size="containerSize" :lifecycle="manager.getLifecycle(window.instanceId)" :layout-locked="layoutLocked" :groups="groups" :group-id="groupId(window.instanceId)" :resolve-snap-zone="resolveSnapZone" :preview-snap="previewSnap" :commit-snap="commitSnap" :unsnap-for-pointer="unsnapForPointer" :resolve-window-drop="resolveWindowDrop" :preview-window-drop="previewWindowDrop" :commit-window-drop="commitWindowDrop"/></div></template>
 <style scoped>.wf-window-manager-host{position:relative;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden}.wf-window-snap-preview{position:absolute;z-index:var(--wf-layer-overlay);pointer-events:none;border:1px solid var(--wf-color-focus);border-radius:var(--wf-radius-sm);background:var(--wf-color-selected);box-shadow:inset 0 0 0 1px var(--wf-color-border)}</style>
