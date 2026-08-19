@@ -35,6 +35,24 @@ export interface DataClientOptions {
   readonly cacheTimeMs?: number
 }
 
+export interface DataClientResourceDiagnostic {
+  readonly key: DataKey
+  readonly keyId: string
+  readonly status: DataState<unknown>['status']
+  readonly consumers: number
+  readonly subscribed: boolean
+  readonly cached: boolean
+  readonly pendingEviction: boolean
+}
+
+export interface DataClientDiagnostics {
+  readonly resources: readonly DataClientResourceDiagnostic[]
+  readonly activeResources: number
+  readonly totalConsumers: number
+}
+
+export type DataClientDiagnosticsListener = (diagnostics: DataClientDiagnostics) => void
+
 interface DataCacheEntry<T> {
   readonly key: DataKey<T>
   readonly state: ShallowRef<DataState<T>>
@@ -54,6 +72,7 @@ export class InvalidDataKeyError extends Error {
 export class DataClient {
   private readonly cache = new Map<string, DataCacheEntry<unknown>>()
   private readonly cacheTimeMs: number
+  private readonly diagnosticsListeners = new Set<DataClientDiagnosticsListener>()
 
   constructor(
     private readonly provider: DataProvider,
@@ -90,6 +109,7 @@ export class DataClient {
 
     entry.consumers += 1
     if (entry.consumers === 1) this.subscribeEntry(entry)
+    this.emitDiagnostics()
 
     let active = true
     return {
@@ -103,6 +123,30 @@ export class DataClient {
     }
   }
 
+  diagnostics(): DataClientDiagnostics {
+    const resources = [...this.cache.entries()]
+      .map(([keyId, entry]): DataClientResourceDiagnostic => ({
+        key: Object.freeze({ kind: entry.key.kind, id: entry.key.id }),
+        keyId,
+        status: entry.state.value.status,
+        consumers: entry.consumers,
+        subscribed: entry.unsubscribe !== null,
+        cached: entry.consumers === 0,
+        pendingEviction: entry.evictionTimer !== null,
+      }))
+      .sort((left, right) => left.keyId.localeCompare(right.keyId))
+    return Object.freeze({
+      resources: Object.freeze(resources),
+      activeResources: resources.filter((resource) => resource.consumers > 0).length,
+      totalConsumers: resources.reduce((total, resource) => total + resource.consumers, 0),
+    })
+  }
+
+  subscribeDiagnostics(listener: DataClientDiagnosticsListener): DataUnsubscribe {
+    this.diagnosticsListeners.add(listener)
+    return () => this.diagnosticsListeners.delete(listener)
+  }
+
   private subscribeEntry<T>(entry: DataCacheEntry<T>): void {
     entry.subscriptionVersion += 1
     const version = entry.subscriptionVersion
@@ -112,10 +156,12 @@ export class DataClient {
       loading: () => {
         if (!isCurrent()) return
         entry.state.value = { status: 'loading', data: null, error: null }
+        this.emitDiagnostics()
       },
       next: (value) => {
         if (!isCurrent()) return
         entry.state.value = { status: 'ready', data: value, error: null }
+        this.emitDiagnostics()
       },
       error: (error) => {
         if (!isCurrent()) return
@@ -127,6 +173,7 @@ export class DataClient {
           data: previous,
           error: error instanceof Error ? error : new Error(String(error)),
         }
+        this.emitDiagnostics()
       },
     }
 
@@ -140,7 +187,10 @@ export class DataClient {
 
   private releaseEntry<T>(cacheKey: string, entry: DataCacheEntry<T>): void {
     entry.consumers = Math.max(0, entry.consumers - 1)
-    if (entry.consumers > 0) return
+    if (entry.consumers > 0) {
+      this.emitDiagnostics()
+      return
+    }
 
     entry.subscriptionVersion += 1
     const unsubscribe = entry.unsubscribe
@@ -150,6 +200,7 @@ export class DataClient {
       unsubscribe?.()
     } finally {
       this.scheduleEviction(cacheKey, entry)
+      this.emitDiagnostics()
     }
   }
 
@@ -162,7 +213,14 @@ export class DataClient {
     entry.evictionTimer = setTimeout(() => {
       entry.evictionTimer = null
       if (entry.consumers === 0 && this.cache.get(cacheKey) === entry) this.cache.delete(cacheKey)
+      this.emitDiagnostics()
     }, this.cacheTimeMs)
+  }
+
+  private emitDiagnostics(): void {
+    if (this.diagnosticsListeners.size === 0) return
+    const snapshot = this.diagnostics()
+    for (const listener of [...this.diagnosticsListeners]) listener(snapshot)
   }
 }
 
