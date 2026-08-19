@@ -44,7 +44,7 @@ describe('Fullscreen Playground App', () => {
     expect(wrapper.findAll('[data-window-instance-id="market-main"] .wf-data-table__row')).toHaveLength(14)
 
     const layoutSelect = wrapper.get('select[aria-label="Workspace layout"]')
-    expect(layoutSelect.element.value).toBe('Default')
+    expect((layoutSelect.element as HTMLSelectElement).value).toBe('Default')
     expect(layoutSelect.findAll('option').map((option) => option.text())).toEqual(['Custom', 'Default', 'Trading', 'Operations'])
     const layoutCollection = JSON.parse(window.localStorage.getItem(LAYOUT_STORAGE_KEY) ?? '{}') as { defaultLayout?: string; layouts?: Array<{ name: string }> }
     expect(layoutCollection.defaultLayout).toBe('Default')
@@ -103,7 +103,7 @@ describe('Fullscreen Playground App', () => {
     await wrapper.get('select[aria-label="Workspace layout"]').setValue('Default')
     await wrapper.vm.$nextTick()
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
-    expect(wrapper.get('select[aria-label="Workspace layout"]').element.value).toBe('Default')
+    expect((wrapper.get('select[aria-label="Workspace layout"]').element as HTMLSelectElement).value).toBe('Default')
     wrapper.unmount()
   })
 
@@ -130,7 +130,7 @@ describe('Fullscreen Playground App', () => {
     expect(wrapper.findAll('.wf-window-frame')).toHaveLength(5)
     expect(wrapper.get('[data-window-instance-id="alerts-main"]').attributes('data-window-group')).toBe('operations-cluster')
     expect(wrapper.get('[data-pane-id="operations-root"]').element).toBeTruthy()
-    expect(wrapper.get('select[aria-label="Workspace layout"]').element.value).toBe('Default')
+    expect((wrapper.get('select[aria-label="Workspace layout"]').element as HTMLSelectElement).value).toBe('Default')
     wrapper.unmount()
   })
 })
