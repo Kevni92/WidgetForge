@@ -4,7 +4,7 @@
 
 Pane- und Tab-Griffe sind an den Workspace-Modus gebunden. Im `normal`-Modus sind generische Pane-Griffe nicht sichtbar; ein Tab-Grip sortiert den Tab ausschließlich innerhalb seiner aktuellen TabPane. Der Grip zeigt während einer gültigen Bewegung eine Einfügemarke und erzeugt keinen Docking-Preview. Ein Drag außerhalb der Tabbar wird verworfen.
 
-Im `edit`-Modus sowie im temporären Ctrl-Edit werden generische Handles und die strukturelle Docking-Semantik aktiviert. Der Tab-Grip repräsentiert dann den Pane-Knoten hinter dem Tab und nutzt die normalen Center-/Edge-Drop-Zonen. Gesperrte Quellen und Ziele bieten keine aktive Affordance. Reorder und Pane-Docking sind exklusive Pointer-Session-Typen; Escape, Pointer-Abbruch, verlorenes Capture und Unmount setzen Preview und Session vollständig zurück.
+Im `edit`-Modus sowie im temporären Ctrl-Edit ist die gesamte sichtbare Pane-Fläche draggable; separate Pane- oder Tab-Grip-Icons werden nicht gerendert. Ein Tab-Button repräsentiert dabei seinen direkten Tab-Pane-Knoten und nutzt die normalen Center-/Edge-Drop-Zonen. Der Drag startet erst nach einer kurzen Bewegungsschwelle, damit ein einfacher Klick weiterhin Auswahl, Tab-Wechsel oder Widget-Aktion auslösen kann. Gesperrte Quellen und Ziele bieten keine aktive Affordance. Reorder und Pane-Docking sind exklusive Pointer-Session-Typen; Escape, Pointer-Abbruch, verlorenes Capture und Unmount setzen Preview und Session vollständig zurück.
 
 ## Context menu
 
