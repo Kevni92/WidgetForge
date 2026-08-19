@@ -11,7 +11,7 @@ function openMarket():void{navigation.navigate({widgetId:'market.ticker',paramet
 function changeTheme(event:Event):void{const select=event.target;if(select instanceof HTMLSelectElement)controls.setTheme(select.value as DemoThemeName)}
 function changeLayout(event:Event):void{const select=event.target;if(select instanceof HTMLSelectElement&&select.value)controls.loadLayout?.(select.value)}
 function changeColony(event:Event):void{const select=event.target;if(select instanceof HTMLSelectElement)colony.select(select.value)}
-function toggleEdit():void{controls.setWorkspaceMode?.(workspaceMode.value==='edit'?'normal':'edit')}function toggleLock():void{controls.setWorkspaceMode?.(workspaceMode.value==='locked'?'normal':'locked')}function toggleDevTools():void{controls.setDeveloperMode?.(!developerMode.value)}function toggleFeed():void{feedOnline.value?controls.simulateFeedFailure?.():controls.recoverFeed?.()}
+function toggleEdit():void{controls.setWorkspaceMode?.(workspaceMode.value==='edit'?'normal':'edit')}function toggleLock():void{controls.setWorkspaceMode?.(workspaceMode.value==='locked'?'normal':'locked')}function toggleDevTools():void{controls.setDeveloperMode?.(!developerMode.value)}function toggleFeed():void{if(feedOnline.value)controls.simulateFeedFailure?.();else controls.recoverFeed?.()}
 const palette=ref<{open:()=>Promise<void>}|null>(null)
 const paletteRegistry=markRaw(createCommandPaletteRegistry([
   createCommandRegistryPaletteProvider(playgroundCommands,navigation,'demo-commands'),
