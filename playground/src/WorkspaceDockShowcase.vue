@@ -3,9 +3,11 @@ import { markRaw } from 'vue'
 import {
   WorkspaceHost,
   createDockManager,
+  createSelectionStore,
   createSplitPane,
   createWidgetPane,
   createWindowManager,
+  provideSelectionStore,
   provideWidgetNavigation,
   type WidgetNavigator,
 } from 'widgetforge'
@@ -13,6 +15,7 @@ import { playgroundWidgetRegistry } from './playground-widgets'
 
 const props = defineProps<{ navigator: WidgetNavigator }>()
 provideWidgetNavigation(props.navigator)
+provideSelectionStore(markRaw(createSelectionStore()))
 
 const docks = markRaw(createDockManager(playgroundWidgetRegistry))
 const windows = markRaw(createWindowManager(playgroundWidgetRegistry))

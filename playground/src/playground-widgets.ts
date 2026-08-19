@@ -6,6 +6,13 @@ import PlanetSummaryWidget from './widgets/PlanetSummaryWidget.vue'
 import WorkspaceCommandBarWidget from './widgets/WorkspaceCommandBarWidget.vue'
 import WorkspaceTopbarWidget from './widgets/WorkspaceTopbarWidget.vue'
 
+type DemoLinkedSelection = { followSelection: boolean; pinnedSelection: string | null }
+function isLinkedSelection(value: unknown): value is DemoLinkedSelection {
+  if (typeof value !== 'object' || value === null) return false
+  const linked = value as { followSelection?: unknown; pinnedSelection?: unknown }
+  return typeof linked.followSelection === 'boolean' && (linked.pinnedSelection === null || typeof linked.pinnedSelection === 'string')
+}
+
 export const planetSummaryWidget = defineWidget({
   id: 'planet.summary', title: 'Colony Overview', component: PlanetSummaryWidget,
   parameters: { planetId: { type: 'string', required: true }, compact: { type: 'boolean', default: false } },
@@ -19,11 +26,11 @@ export const marketTickerWidget = defineWidget({
   capabilities: { multipleInstances: false, dockable: true, tabCompatible: true, preferredAspectRatio: 1.45, minimumUsefulSize: { width: 420, height: 260 }, supportsCompactMode: false },
   viewState: {
     version: 1,
-    defaultState: { filter: '', sortColumn: 'volume', sortDirection: 'desc', selected: null },
-    validate: (value): value is { filter: string; sortColumn: string; sortDirection: 'asc' | 'desc'; selected: string | null } => {
+    defaultState: { filter: '', sortColumn: 'volume', sortDirection: 'desc', selected: null, selection: { followSelection: true, pinnedSelection: null } },
+    validate: (value): value is { filter: string; sortColumn: string; sortDirection: 'asc' | 'desc'; selected: string | null; selection: DemoLinkedSelection } => {
       if (typeof value !== 'object' || value === null) return false
-      const state = value as { filter?: unknown; sortColumn?: unknown; sortDirection?: unknown; selected?: unknown }
-      return typeof state.filter === 'string' && typeof state.sortColumn === 'string' && (state.sortDirection === 'asc' || state.sortDirection === 'desc') && (state.selected === null || typeof state.selected === 'string')
+      const state = value as { filter?: unknown; sortColumn?: unknown; sortDirection?: unknown; selected?: unknown; selection?: unknown }
+      return typeof state.filter === 'string' && typeof state.sortColumn === 'string' && (state.sortDirection === 'asc' || state.sortDirection === 'desc') && (state.selected === null || typeof state.selected === 'string') && isLinkedSelection(state.selection)
     },
   },
   window: { defaultSize: { width: 620, height: 430 }, minSize: { width: 420, height: 260 } },
@@ -33,6 +40,11 @@ export const liveMetricWidget = defineWidget({
   id: 'demo.live-metric', title: 'Live Telemetry', component: LiveMetricWidget,
   parameters: { resourceId: { type: 'string', required: true } },
   capabilities: { multipleInstances: true, dockable: true, tabCompatible: true, preferredAspectRatio: 1.55, minimumUsefulSize: { width: 180, height: 110 }, supportsCompactMode: true },
+  viewState: {
+    version: 1,
+    defaultState: { selection: { followSelection: true, pinnedSelection: null } },
+    validate: (value): value is { selection: DemoLinkedSelection } => typeof value === 'object' && value !== null && isLinkedSelection((value as { selection?: unknown }).selection),
+  },
   actions: [{ id: 'open-colony', label: 'Open colony', icon: '↗', group: 'navigation', priority: 20, target: { kind: 'navigation', intent: { widgetId: 'planet.summary', parameters: { planetId: 'ARC-01', compact: true } } } }],
   window: {
     defaultSize: { width: 260, height: 170 }, minSize: { width: 220, height: 140 }, maxSize: { width: 460, height: 320 },

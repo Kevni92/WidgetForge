@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, shallowRef, toRaw } from 'vue'
+import { computed, markRaw, onBeforeUnmount, shallowRef, toRaw } from 'vue'
+import { createSelectionStore, type SelectionStore } from '../core/selection'
 import type { WidgetRegistry } from '../core/widget-registry'
 import type { WorkspaceCollectionManager, WorkspaceRuntime } from '../core/workspace-collection'
+import { provideSelectionStore } from './selection-context'
 import WorkspaceHost from './WorkspaceHost.vue'
 
 interface Props {
   manager: WorkspaceCollectionManager
   registry: WidgetRegistry
   layoutLocked?: boolean
+  selectionStore?: SelectionStore
 }
 
 const props = withDefaults(defineProps<Props>(), { layoutLocked: false })
 const manager = toRaw(props.manager)
 const registry = toRaw(props.registry)
+const selectionStore = props.selectionStore ? markRaw(toRaw(props.selectionStore)) : markRaw(createSelectionStore())
+provideSelectionStore(selectionStore)
 const workspaces = shallowRef<readonly WorkspaceRuntime[]>(manager.list())
 const activeWorkspaceId = shallowRef(manager.getActiveWorkspaceId())
 const unsubscribe = manager.subscribe((change) => {

@@ -1,28 +1,39 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { createDataKey, useData, usePaneContext, useWidgetContext } from 'widgetforge'
+import { createDataKey, useData, useLinkedSelection, usePaneContext, useWidgetContext } from 'widgetforge'
+import { colonySelectionKey } from '../selection-demo'
 
 interface DemoMetric { label: string; value: number; unit: string }
+type MetricViewState = { selection: { followSelection: boolean; pinnedSelection: string | null } }
 
 const context = useWidgetContext<{ resourceId: string }>()
 const pane = usePaneContext()
 const resourceId = context.parameters.value.resourceId
 const state = useData(createDataKey<DemoMetric>('demo.metric', resourceId))
-const pinned = ref(false), following = ref(false), lastAction = ref('idle')
+const linked = useLinkedSelection<string, MetricViewState>(colonySelectionKey, {
+  read: (viewState) => viewState.selection,
+  write: (viewState, selection) => ({ ...viewState, selection }),
+})
+const currentSelection = linked.selection
+const followingSelection = linked.following
+const pinnedSelection = computed(() => !followingSelection.value)
+const lastAction = ref('idle')
 context.actions.register({ id: 'refresh', label: 'Refresh', icon: '↻', shortcut: 'Ctrl+R', group: 'data', priority: 100 }, () => {
   lastAction.value = 'refresh'
   context.actions.setState('refresh', { disabled: true })
   queueMicrotask(() => context.actions.setState('refresh', { disabled: false }))
 })
 context.actions.register({ id: 'pin', label: 'Pin', icon: '◆', group: 'tracking', priority: 80 }, () => {
-  pinned.value = !pinned.value
-  lastAction.value = pinned.value ? 'pinned' : 'unpinned'
-  context.actions.setState('pin', { label: pinned.value ? 'Unpin' : 'Pin', tone: pinned.value ? 'accent' : 'neutral' })
+  linked.pin()
+  lastAction.value = 'pinned'
+  context.actions.setState('pin', { label: 'Unpin', tone: 'accent' })
+  context.actions.setState('follow', { label: 'Follow', tone: 'neutral' })
 })
 context.actions.register({ id: 'follow', label: 'Follow', icon: '◎', group: 'tracking', priority: 70 }, () => {
-  following.value = !following.value
-  lastAction.value = following.value ? 'following' : 'unfollowed'
-  context.actions.setState('follow', { label: following.value ? 'Unfollow' : 'Follow', tone: following.value ? 'accent' : 'neutral' })
+  linked.follow()
+  lastAction.value = 'following'
+  context.actions.setState('pin', { label: 'Pin', tone: 'neutral' })
+  context.actions.setState('follow', { label: 'Unfollow', tone: 'accent' })
 })
 const valueText = computed(() => state.value.status === 'ready' ? state.value.data.value.toFixed(1) : '—')
 const compact = computed(() => pane.size.value.width > 0 && pane.size.value.width < 220)
@@ -33,8 +44,19 @@ const dimensions = computed(() => pane.size.value.width > 0 ? `${pane.size.value
 </script>
 
 <template>
-  <article class="live-metric-widget" :class="{ 'live-metric-widget--compact': compact }" :data-resource-id="resourceId" :data-pane-host="paneHost" :data-pane-visible="String(paneVisible)" :data-pane-compact="String(compact)" :data-pinned="String(pinned)" :data-following="String(following)" :data-last-action="lastAction">
-    <span v-if="!compact" class="live-metric-widget__eyebrow">Live resource</span>
+  <article
+    class="live-metric-widget"
+    :class="{ 'live-metric-widget--compact': compact }"
+    :data-resource-id="resourceId"
+    :data-pane-host="paneHost"
+    :data-pane-visible="String(paneVisible)"
+    :data-pane-compact="String(compact)"
+    :data-pinned="String(pinnedSelection)"
+    :data-following="String(followingSelection)"
+    :data-selection="currentSelection ?? undefined"
+    :data-last-action="lastAction"
+  >
+    <span v-if="!compact" class="live-metric-widget__eyebrow">Live resource · {{ currentSelection ?? 'No colony' }}</span>
     <template v-if="state.status === 'ready'">
       <strong>{{ state.data.label }}</strong>
       <span class="live-metric-widget__value">{{ valueText }} {{ state.data.unit }}</span>
