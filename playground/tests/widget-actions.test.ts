@@ -33,7 +33,11 @@ describe('playground widget actions', () => {
     expect(telemetry.get('[data-resource-id="grid-power"]').attributes('data-last-action')).toBe('refresh')
 
     const before = wrapper.findAll('.wf-window-frame').length
-    await telemetry.get('[data-widget-action="open-colony"]').trigger('click')
+    await telemetry.get('[data-overflow-trigger]').trigger('click')
+    await wrapper.vm.$nextTick()
+    const openColony = document.querySelector<HTMLElement>('[data-overflow-menu] [data-widget-action="open-colony"]')
+    expect(openColony).not.toBeNull()
+    openColony?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await wrapper.vm.$nextTick()
     expect(wrapper.findAll('.wf-window-frame').length).toBe(before + 1)
     expect(wrapper.findAll('[data-widget-id="planet.summary"]').length).toBeGreaterThan(1)

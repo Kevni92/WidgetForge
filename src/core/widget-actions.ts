@@ -16,6 +16,9 @@ export interface WidgetAction {
   readonly tone?: WidgetActionTone
   readonly group?: string
   readonly priority?: number
+  readonly alwaysVisible?: boolean
+  readonly overflowOnly?: boolean
+  readonly pressed?: boolean
   readonly disabled?: boolean
   readonly visible?: boolean
   readonly target?: WidgetActionTarget
@@ -28,6 +31,9 @@ export interface WidgetActionStatePatch {
   readonly tone?: WidgetActionTone | undefined
   readonly group?: string | undefined
   readonly priority?: number | undefined
+  readonly alwaysVisible?: boolean
+  readonly overflowOnly?: boolean
+  readonly pressed?: boolean
   readonly disabled?: boolean
   readonly visible?: boolean
 }
@@ -107,6 +113,9 @@ export function cloneWidgetAction(action: WidgetAction): WidgetAction {
     ...(action.tone !== undefined ? { tone: action.tone } : {}),
     ...(action.group !== undefined ? { group: action.group } : {}),
     ...(action.priority !== undefined ? { priority: action.priority } : {}),
+    ...(action.alwaysVisible !== undefined ? { alwaysVisible: action.alwaysVisible } : {}),
+    ...(action.overflowOnly !== undefined ? { overflowOnly: action.overflowOnly } : {}),
+    ...(action.pressed !== undefined ? { pressed: action.pressed } : {}),
     ...(action.disabled !== undefined ? { disabled: action.disabled } : {}),
     ...(action.visible !== undefined ? { visible: action.visible } : {}),
     ...(action.target ? { target: action.target.kind === 'navigation' ? { kind: 'navigation', intent: { ...action.target.intent, ...(action.target.intent.parameters ? { parameters: { ...action.target.intent.parameters } } : {}) } } : { ...action.target } } : {}),

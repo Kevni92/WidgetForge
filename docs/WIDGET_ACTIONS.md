@@ -4,7 +4,7 @@ Widget Actions trennen deklarative Bedienaktionen von Window-, Pane- und Dock-Ch
 
 ## Contract
 
-`WidgetAction` enthält mindestens `id`, `label` und einen Icon-Key bzw. ein darstellbares Icon-Token. Optional stehen `shortcut`, `tone`, `group`, `priority`, `disabled`, `visible` und ein `target` zur Verfügung.
+`WidgetAction` enthält mindestens `id`, `label` und einen Icon-Key bzw. ein darstellbares Icon-Token. Optional stehen `shortcut`, `tone`, `group`, `priority`, `alwaysVisible`, `overflowOnly`, `pressed`, `disabled`, `visible` und ein `target` zur Verfügung. `alwaysVisible` reserviert eine Action für die primäre Darstellung; `overflowOnly` hält sie ausschließlich im Overflow. Gruppen werden bei der Platzverteilung als Einheit behandelt, soweit der verfügbare Platz dies zulässt.
 
 Unterstützte Targets:
 
@@ -29,11 +29,11 @@ Ein lokal registrierter Handler läuft im Widget-Kontext und erhält nur Instanz
 
 `WidgetActionToolbar` ist der gemeinsame Renderer. Root-Widget-Fenster zeigen Actions in der Window-Titlebar. Widget-Panes in zusammengesetzten Layouts und Docks verwenden denselben Renderer als Pane-Toolbar. Dadurch bleiben Contract, Disabled/Visible-State, Tooltips und Keyboard-Verhalten identisch.
 
-Die Toolbar sortiert nach `priority`, markiert `group` über strukturierte Action-Metadaten und verschiebt Actions oberhalb von `maxVisible` in ein Overflow-Menü. `PaneHost` passt `maxVisible` an die gemessene Pane-Breite an. Hidden Actions werden nicht gerendert; Disabled Actions bleiben sichtbar, aber nicht ausführbar.
+Die Toolbar sortiert nach `priority`, misst ihre verfügbare Breite bzw. Höhe über den Host und verschiebt weniger priorisierte Actions deterministisch in ein Overflow-Menü. `maxVisible` bleibt als optionale Obergrenze für kompakte Chrome bestehen; `PaneHost` passt sie an die gemessene Pane-Breite an. Hidden Actions werden nicht gerendert; Disabled Actions bleiben sichtbar, aber nicht ausführbar. Das Menü wird außerhalb potenziell clip-pender Dock-Flächen gerendert und verwendet weiterhin dieselben `WidgetActionBinding`-Instanzen, sodass die Ausführung nicht dupliziert wird. `orientation: 'vertical'` unterstützt Seiten-Docks und andere vertikale Toolbar-Flächen.
 
 ## Accessibility und Keyboard
 
-Jede Action ist ein echtes `<button>` mit `aria-label` und Tooltip. Shortcuts werden im Tooltip und im Overflow-Menü angezeigt. Enter und Leertaste aktivieren Actions über denselben Ausführungspfad wie Pointer-Klicks. Das Overflow-Menü verwendet `role="menu"`/`menuitem`, die Hauptleiste `role="toolbar"`.
+Jede Action ist ein echtes `<button>` mit `aria-label` und Tooltip. Shortcuts werden im Tooltip und im Overflow-Menü angezeigt; Icon-only-Darstellungen behalten ihren Accessible Name. Enter und Leertaste aktivieren Actions über denselben Ausführungspfad wie Pointer-Klicks. Das Overflow-Menü verwendet `role="menu"`/`menuitem`, die Hauptleiste `role="toolbar"`, unterstützt Pfeiltasten und Home/End, schließt mit Escape oder Außenklick und stellt den Fokus auf den Overflow-Trigger zurück.
 
 ## Fehlerverhalten
 
