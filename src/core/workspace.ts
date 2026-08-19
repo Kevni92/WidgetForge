@@ -68,11 +68,95 @@ export class WorkspaceSerializationError extends Error {
   constructor(message: string) { super(message); this.name = 'WorkspaceSerializationError' }
 }
 
+export class WorkspaceInvariantError extends Error {
+  constructor(message: string) { super(message); this.name = 'WorkspaceInvariantError' }
+}
+
+export class WorkspaceMutationError extends Error {
+  constructor(message: string, public override readonly cause?: unknown) { super(message); this.name = 'WorkspaceMutationError' }
+}
+
+export interface WorkspaceRestoreOptions {
+  readonly atomic?: boolean
+}
+
+export interface WorkspaceMutationOwner {
+  readonly kind: 'window' | 'dock'
+  readonly id: string
+}
+
+export interface WorkspacePaneMutation {
+  readonly owner: WorkspaceMutationOwner
+  readonly rootPane: PaneNode | null
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function isFiniteNumber(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) }
 function cloneGeometry(geometry: WindowGeometry): WindowGeometry { return { position: { ...geometry.position }, size: { ...geometry.size } } }
 function cloneConstraints(constraints: WindowSizeConstraints): WindowSizeConstraints { return { minSize: { ...constraints.minSize }, maxSize: constraints.maxSize ? { ...constraints.maxSize } : null } }
 function cloneSnap(snap: WindowSnapState | null): WindowSnapState | null { return snap ? { zone: snap.zone, floatingGeometry: cloneGeometry(snap.floatingGeometry) } : null }
+
+function validateGeometry(geometry: WindowGeometry, label: string): void {
+  if (!isFiniteNumber(geometry.position.x) || !isFiniteNumber(geometry.position.y) || !isFiniteNumber(geometry.size.width) || !isFiniteNumber(geometry.size.height) || geometry.size.width <= 0 || geometry.size.height <= 0) {
+    throw new WorkspaceInvariantError(`${label} must contain finite positive geometry`)
+  }
+}
+
+function validatePaneOwnership(root: PaneNode, paneIds: Set<string>, widgetInstances: Set<string>): void {
+  const ownership = collectPaneOwnership(root)
+  for (const paneId of ownership.paneIds) {
+    if (paneIds.has(paneId)) throw new WorkspaceInvariantError(`duplicate pane id "${paneId}" in workspace`)
+  }
+  for (const instanceId of ownership.widgetInstances) {
+    if (widgetInstances.has(instanceId)) throw new WorkspaceInvariantError(`duplicate widget instance id "${instanceId}" in workspace`)
+  }
+  for (const paneId of ownership.paneIds) paneIds.add(paneId)
+  for (const instanceId of ownership.widgetInstances) widgetInstances.add(instanceId)
+}
+
+function collectPaneOwnership(root: PaneNode): { paneIds: readonly string[]; widgetInstances: readonly string[] } {
+  const paneIds: string[] = [], widgetInstances: string[] = []
+  function visit(pane: PaneNode): void {
+    paneIds.push(pane.id)
+    if (pane.kind === 'widget') { widgetInstances.push(pane.instanceId); return }
+    for (const child of pane.children) visit(child)
+  }
+  visit(root)
+  return { paneIds, widgetInstances }
+}
+
+export function validateWorkspaceSnapshot(snapshot: WorkspaceSnapshot): void {
+  if (snapshot.version !== WORKSPACE_VERSION) throw new WorkspaceInvariantError(`unsupported workspace version "${String(snapshot.version)}"`)
+  if (!Array.isArray(snapshot.windows) || !Array.isArray(snapshot.docks)) throw new WorkspaceInvariantError('workspace windows and docks must be arrays')
+
+  const windowIds = new Set<string>(), dockIds = new Set<string>(), paneIds = new Set<string>(), widgetInstances = new Set<string>(), zIndexes = new Set<number>()
+  let focusedCount = 0
+  for (const window of snapshot.windows) {
+    if (windowIds.has(window.instanceId)) throw new WorkspaceInvariantError(`duplicate window instance id "${window.instanceId}" in workspace`)
+    windowIds.add(window.instanceId)
+    if (zIndexes.has(window.zIndex)) throw new WorkspaceInvariantError(`duplicate window z-index "${window.zIndex}" in workspace`)
+    zIndexes.add(window.zIndex)
+    if (window.focused) focusedCount += 1
+    if (!Number.isInteger(window.zIndex) || window.zIndex < 0) throw new WorkspaceInvariantError(`invalid z-index for window "${window.instanceId}"`)
+    validateGeometry(window.geometry, `window "${window.instanceId}" geometry`)
+    if (window.restoreGeometry) validateGeometry(window.restoreGeometry, `window "${window.instanceId}" restore geometry`)
+    if (window.mode === 'maximized' && !window.restoreGeometry) throw new WorkspaceInvariantError(`maximized window "${window.instanceId}" must have restore geometry`)
+    if (window.snap && window.restoreGeometry) throw new WorkspaceInvariantError(`window "${window.instanceId}" cannot have snap and restore geometry simultaneously`)
+    try { validatePaneTree(window.rootPane) } catch (error) { throw new WorkspaceInvariantError(error instanceof Error ? error.message : `invalid pane tree for window "${window.instanceId}"`) }
+    validatePaneOwnership(window.rootPane, paneIds, widgetInstances)
+  }
+  if (focusedCount > 1) throw new WorkspaceInvariantError('workspace may contain at most one focused window')
+
+  for (const dock of snapshot.docks) {
+    if (dockIds.has(dock.id)) throw new WorkspaceInvariantError(`duplicate dock id "${dock.id}" in workspace`)
+    dockIds.add(dock.id)
+    if (!isFiniteNumber(dock.minThickness) || dock.minThickness < 0 || !isFiniteNumber(dock.thickness) || dock.thickness < dock.minThickness || (dock.maxThickness !== null && (!isFiniteNumber(dock.maxThickness) || dock.maxThickness < dock.minThickness || dock.thickness > dock.maxThickness))) {
+      throw new WorkspaceInvariantError(`invalid thickness constraints for dock "${dock.id}"`)
+    }
+    try { validatePaneTree(dock.rootPane) } catch (error) { throw new WorkspaceInvariantError(error instanceof Error ? error.message : `invalid pane tree for dock "${dock.id}"`) }
+    validatePaneOwnership(dock.rootPane, paneIds, widgetInstances)
+  }
+}
 
 export function captureWorkspace(manager: WindowManager, dockManager?: DockManager): WorkspaceSnapshot {
   const windows = manager.list().slice().sort((a, b) => a.zIndex - b.zIndex).map((window) => ({
@@ -89,7 +173,9 @@ export function captureWorkspace(manager: WindowManager, dockManager?: DockManag
     zIndex: window.zIndex,
   }))
   const docks = (dockManager?.list() ?? []).map((dock) => ({ ...dock, rootPane: clonePaneTree(dock.rootPane) }))
-  return { version: WORKSPACE_VERSION, windows, docks }
+  const snapshot: WorkspaceSnapshot = { version: WORKSPACE_VERSION, windows, docks }
+  validateWorkspaceSnapshot(snapshot)
+  return snapshot
 }
 
 export function serializeWorkspace(manager: WindowManager, dockManager?: DockManager): string {
@@ -98,6 +184,11 @@ export function serializeWorkspace(manager: WindowManager, dockManager?: DockMan
 
 function invalidRoot(code: WorkspaceRestoreIssueCode, message: string): WorkspaceRestoreResult {
   return { valid: false, restored: [], restoredDocks: [], issues: [{ code, message }] }
+}
+
+function clearWorkspaceManagers(manager: WindowManager, dockManager?: DockManager): void {
+  for (const window of [...manager.list()]) manager.close(window.instanceId, 'api')
+  if (dockManager) for (const dock of [...dockManager.list()]) dockManager.remove(dock.id)
 }
 
 function parseInput(input: unknown): unknown {
@@ -236,7 +327,7 @@ function readDock(value: unknown): WorkspaceDockSnapshot | null {
   const rootPane = readPane(value.rootPane)
   if (!rootPane || !isFiniteNumber(value.thickness) || value.thickness < 0 || !isFiniteNumber(value.minThickness) || value.minThickness < 0) return null
   const max = value.maxThickness === null ? null : value.maxThickness
-  if ((max !== null && (!isFiniteNumber(max) || max < value.minThickness)) || typeof value.resizable !== 'boolean') return null
+  if (value.thickness < value.minThickness || (max !== null && (!isFiniteNumber(max) || max < value.minThickness || value.thickness > max)) || typeof value.resizable !== 'boolean') return null
   return { id: value.id, position: value.position as DockPosition, rootPane, thickness: value.thickness, minThickness: value.minThickness, maxThickness: max, resizable: value.resizable }
 }
 
@@ -259,6 +350,7 @@ export function restoreWorkspace(
   input: unknown,
   dockManager?: DockManager,
   migrationRegistry: WorkspaceMigrationRegistry = defaultWorkspaceMigrationRegistry,
+  options: WorkspaceRestoreOptions = {},
 ): WorkspaceRestoreResult {
   if (manager.list().length > 0) return invalidRoot('manager-not-empty', 'workspace restore requires an empty WindowManager')
   if (dockManager && dockManager.list().length > 0) return invalidRoot('dock-manager-not-empty', 'workspace restore requires an empty DockManager')
@@ -297,13 +389,18 @@ export function restoreWorkspace(
   })
 
   candidates.sort((a, b) => a.zIndex - b.zIndex || a.index - b.index)
-  const seen = new Set<string>(), openedIds = new Set<string>()
+  const seen = new Set<string>(), openedIds = new Set<string>(), paneIds = new Set<string>(), widgetInstances = new Set<string>()
   for (const candidate of candidates) {
     if (seen.has(candidate.instanceId)) { issues.push(restoreIssue('duplicate-instance', 'duplicate workspace instance id', candidate, candidate.index)); continue }
     seen.add(candidate.instanceId)
     try {
       const opened = candidate.open(manager)
       if (opened.instanceId !== candidate.instanceId) { issues.push(restoreIssue('singleton-conflict', 'singleton widget was already restored', candidate, candidate.index)); continue }
+      try { validatePaneOwnership(opened.rootPane, paneIds, widgetInstances) } catch (error) {
+        manager.close(opened.instanceId, 'api')
+        issues.push(restoreIssue('invalid-workspace', error instanceof Error ? error.message : 'workspace pane identities are not unique', candidate, candidate.index))
+        continue
+      }
       openedIds.add(candidate.instanceId)
     } catch (error) {
       if (error instanceof UnknownWidgetError) issues.push(restoreIssue('unknown-widget', error.message, candidate, candidate.index))
@@ -320,10 +417,83 @@ export function restoreWorkspace(
     const dock = readDock(value)
     if (!dock) { issues.push({ code: 'invalid-dock', message: 'invalid workspace dock entry', index }); return }
     try {
-      dockManager.add({ id: dock.id, position: dock.position, pane: dock.rootPane, thickness: dock.thickness, minThickness: dock.minThickness, ...(dock.maxThickness !== null ? { maxThickness: dock.maxThickness } : {}), resizable: dock.resizable })
+      const added = dockManager.add({ id: dock.id, position: dock.position, pane: dock.rootPane, thickness: dock.thickness, minThickness: dock.minThickness, ...(dock.maxThickness !== null ? { maxThickness: dock.maxThickness } : {}), resizable: dock.resizable })
+      try { validatePaneOwnership(added.rootPane, paneIds, widgetInstances) } catch (error) {
+        dockManager.remove(dock.id)
+        issues.push({ code: 'invalid-workspace', message: error instanceof Error ? error.message : 'workspace pane identities are not unique', index, dockId: dock.id })
+      }
     } catch (error) {
       issues.push({ code: error instanceof DuplicateDockError ? 'duplicate-dock' : 'dock-open-failed', message: error instanceof Error ? error.message : 'dock restore failed', index, dockId: dock.id })
     }
   })
-  return { valid: true, restored: manager.list(), restoredDocks: dockManager?.list() ?? [], issues }
+  const result: WorkspaceRestoreResult = { valid: true, restored: manager.list(), restoredDocks: dockManager?.list() ?? [], issues }
+  if (options.atomic && issues.length > 0) {
+    clearWorkspaceManagers(manager, dockManager)
+    return { valid: false, restored: [], restoredDocks: [], issues }
+  }
+  return result
+}
+
+function applyPaneMutation(manager: WindowManager, dockManager: DockManager | undefined, mutation: WorkspacePaneMutation): void {
+  if (mutation.owner.kind === 'window') {
+    if (mutation.rootPane === null) manager.close(mutation.owner.id, 'user')
+    else manager.setRootPane(mutation.owner.id, mutation.rootPane, 'user')
+    return
+  }
+  if (!dockManager) throw new WorkspaceMutationError('workspace mutation requires a DockManager')
+  if (mutation.rootPane === null) throw new WorkspaceMutationError(`dock "${mutation.owner.id}" cannot be removed by a pane mutation`)
+  dockManager.setRootPane(mutation.owner.id, mutation.rootPane)
+}
+
+export function commitWorkspacePaneMutations(
+  manager: WindowManager,
+  dockManager: DockManager | undefined,
+  mutations: readonly WorkspacePaneMutation[],
+): void {
+  if (mutations.length === 0) return
+  const before = captureWorkspace(manager, dockManager)
+  const mutationKeys = new Set<string>()
+  const nextWindows: WorkspaceWindowSnapshot[] = [], nextDocks: WorkspaceDockSnapshot[] = []
+  const byOwner = new Map<string, WorkspacePaneMutation>()
+  for (const mutation of mutations) {
+    const key = `${mutation.owner.kind}:${mutation.owner.id}`
+    if (mutationKeys.has(key)) throw new WorkspaceMutationError(`workspace owner "${key}" has multiple pane mutations`)
+    mutationKeys.add(key); byOwner.set(key, mutation)
+  }
+
+  for (const window of before.windows) {
+    const mutation = byOwner.get(`window:${window.instanceId}`)
+    if (!mutation) { nextWindows.push(window); continue }
+    if (mutation.rootPane === null) continue
+    nextWindows.push({ ...window, rootPane: clonePaneTree(mutation.rootPane) })
+  }
+  for (const dock of before.docks) {
+    const mutation = byOwner.get(`dock:${dock.id}`)
+    if (!mutation) { nextDocks.push(dock); continue }
+    if (mutation.rootPane === null) throw new WorkspaceMutationError(`dock "${dock.id}" cannot be removed by a pane mutation`)
+    nextDocks.push({ ...dock, rootPane: clonePaneTree(mutation.rootPane) })
+  }
+  for (const mutation of mutations) {
+    const exists = mutation.owner.kind === 'window'
+      ? before.windows.some((window) => window.instanceId === mutation.owner.id)
+      : before.docks.some((dock) => dock.id === mutation.owner.id)
+    if (!exists) throw new WorkspaceMutationError(`unknown workspace owner "${mutation.owner.kind}:${mutation.owner.id}"`)
+  }
+
+  const next: WorkspaceSnapshot = { version: WORKSPACE_VERSION, windows: nextWindows, docks: nextDocks }
+  validateWorkspaceSnapshot(next)
+  try {
+    for (const mutation of mutations) if (mutation.rootPane === null) applyPaneMutation(manager, dockManager, mutation)
+    for (const mutation of mutations) if (mutation.rootPane !== null) applyPaneMutation(manager, dockManager, mutation)
+    validateWorkspaceSnapshot(captureWorkspace(manager, dockManager))
+  } catch (error) {
+    try {
+      clearWorkspaceManagers(manager, dockManager)
+      const restored = restoreWorkspace(manager, before, dockManager, defaultWorkspaceMigrationRegistry, { atomic: true })
+      if (!restored.valid || restored.issues.length > 0) throw new WorkspaceMutationError('workspace rollback restore reported issues', restored.issues)
+    } catch (rollbackError) {
+      throw new WorkspaceMutationError('workspace mutation failed and rollback also failed', rollbackError)
+    }
+    throw error
+  }
 }

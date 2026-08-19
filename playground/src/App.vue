@@ -16,7 +16,8 @@ const workspaces=markRaw(createDemoWorkspaceCollection()),restoredWorkspaceColle
 const commandWorkspace=workspaces.list().find((workspace)=>workspace.id==='command')??workspaces.createWorkspace({id:'command',name:'Command',activate:true})
 const windows=markRaw(commandWorkspace.windows),docks=markRaw(commandWorkspace.docks),navigator=markRaw(createWidgetNavigator(playgroundWidgetRegistry,windows)),edit=markRaw(createWorkspaceEditController())
 provideWidgetNavigation(navigator)
-function persistWorkspace():void{try{window.localStorage.setItem(WORKSPACE_STORAGE_KEY,serializeWorkspace(windows,docks))}catch{/* best effort */}}
+let workspacePersistQueued=false
+function persistWorkspace():void{if(workspacePersistQueued)return;workspacePersistQueued=true;queueMicrotask(()=>{workspacePersistQueued=false;try{window.localStorage.setItem(WORKSPACE_STORAGE_KEY,serializeWorkspace(windows,docks))}catch{/* best effort */}})}
 function persistEdit():void{try{window.localStorage.setItem(EDIT_STORAGE_KEY,JSON.stringify(edit.snapshot()))}catch{/* best effort */}}
 function restoreEdit():void{try{const stored=window.localStorage.getItem(EDIT_STORAGE_KEY);if(stored)edit.restore(JSON.parse(stored) as WorkspaceEditSnapshot)}catch{/* invalid storage falls back */}}
 function openReferenceLayout():void{
@@ -29,7 +30,7 @@ function openReferenceLayout():void{
 }
 function clearWorkspace():void{for(const window of[...windows.list()])windows.close(window.instanceId,'api');for(const dock of[...docks.list()])docks.remove(dock.id)}
 let restoredPersistedWorkspace=restoredWorkspaceCollection
-function restoreReferenceLayout():void{if(restoredWorkspaceCollection)return;let stored:string|null=null;try{stored=window.localStorage.getItem(WORKSPACE_STORAGE_KEY)}catch{/* unavailable */}const restored=stored?restoreWorkspace(windows,stored,docks):null;if(restored?.valid&&restored.issues.length===0&&restored.restoredDocks.length>0){restoredPersistedWorkspace=true;return}clearWorkspace();openReferenceLayout()}
+function restoreReferenceLayout():void{if(restoredWorkspaceCollection)return;let stored:string|null=null;try{stored=window.localStorage.getItem(WORKSPACE_STORAGE_KEY)}catch{/* unavailable */}const restored=stored?restoreWorkspace(windows,stored,docks,undefined,{atomic:true}):null;if(restored?.valid&&restored.issues.length===0&&restored.restoredDocks.length>0){restoredPersistedWorkspace=true;return}clearWorkspace();openReferenceLayout()}
 restoreReferenceLayout();restoreEdit()
 function createDemoLayoutManager(){const create=(persist:boolean)=>createWorkspaceLayoutManager({registry:playgroundWidgetRegistry,windows,docks,...(persist?{storage:createLocalStorageWorkspaceLayoutStorage(window.localStorage,LAYOUT_STORAGE_KEY)}:{})});try{return create(true)}catch{try{window.localStorage.removeItem(LAYOUT_STORAGE_KEY);return create(true)}catch{return create(false)}}}
 const layouts=markRaw(createDemoLayoutManager())

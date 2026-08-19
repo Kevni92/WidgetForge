@@ -117,4 +117,12 @@ describe('pane model', () => {
     )
     expect(() => validatePaneTree({ ...tree(), weights: [1, 0] })).toThrow(PaneDefinitionError)
   })
+
+  it('rejects duplicate widget instance identities within one pane tree', () => {
+    expect(() => createSplitPane({
+      id: 'duplicate-instances',
+      axis: 'horizontal',
+      children: [left, { ...right, instanceId: left.instanceId }],
+    })).toThrow(PaneDefinitionError)
+  })
 })

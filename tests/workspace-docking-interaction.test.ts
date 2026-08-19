@@ -6,6 +6,7 @@ import { createSplitPane, createWidgetPane, findPane } from '../src/core/pane'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
+import { createWorkspaceHistory } from '../src/core/workspace-history'
 import WorkspaceHost from '../src/vue/WorkspaceHost.vue'
 
 const Widget = defineComponent({ template: '<span>widget</span>' })
@@ -37,7 +38,7 @@ describe('workspace docking interactions', () => {
   it('moves a pane with ctrl drag between windows while preserving its widget instance id', async () => {
     const { registry, windows, docks }=setup();const movable=createWidgetPane({id:'movable-pane',widgetId:'dock.a',instanceId:'stable-widget'});const stay=createWidgetPane({id:'stay-pane',widgetId:'dock.b',instanceId:'stay-widget'})
     windows.openPane({instanceId:'source',pane:createSplitPane({id:'source-root',axis:'horizontal',children:[movable,stay]}),position:{x:20,y:20},size:{width:320,height:220}});windows.open({widgetId:'dock.b',instanceId:'target',position:{x:420,y:80},size:{width:300,height:240}})
-    const targetPaneId=windows.get('target').rootPane.id;const wrapper=mount(WorkspaceHost,{props:{windows,docks,registry},attachTo:document.body});const workspace=wrapper.get('.wf-workspace-host').element;const sourcePane=wrapper.get('[data-pane-id="movable-pane"]').element;const targetPane=wrapper.get(`[data-window-instance-id="target"] [data-pane-id="${targetPaneId}"]`).element
+    const targetPaneId=windows.get('target').rootPane.id;const wrapper=mount(WorkspaceHost,{props:{windows,docks,registry},attachTo:document.body});const workspace=wrapper.get('.wf-workspace-host').element;const sourcePane=wrapper.get('[data-pane-id="movable-pane"] .wf-pane-host__drag-handle').element;const targetPane=wrapper.get(`[data-window-instance-id="target"] [data-pane-id="${targetPaneId}"]`).element
     stubRect(workspace,rect(0,0,900,650));stubRect(sourcePane,rect(40,70,140,150));stubRect(targetPane,rect(420,114,300,206))
     pointer(sourcePane,'pointerdown',80,120,true);pointer(globalThis.window,'pointermove',710,180,true);await nextTick()
     expect(wrapper.get(`[data-docking-target="${targetPaneId}"]`).attributes('data-docking-active-zone')).toBe('right')
@@ -47,10 +48,26 @@ describe('workspace docking interactions', () => {
 
   it('cleans the pane docking overlay when Escape aborts an edit drag', async () => {
     const { registry, windows, docks }=setup();windows.openPane({instanceId:'source',pane:createSplitPane({id:'source-root',axis:'horizontal',children:[createWidgetPane({id:'move',widgetId:'dock.a'}),createWidgetPane({id:'stay',widgetId:'dock.b'})]})});windows.open({widgetId:'dock.b',instanceId:'target'})
-    const targetPaneId=windows.get('target').rootPane.id;const wrapper=mount(WorkspaceHost,{props:{windows,docks,registry},attachTo:document.body});const workspace=wrapper.get('.wf-workspace-host').element;const sourcePane=wrapper.get('[data-pane-id="move"]').element;const targetPane=wrapper.get(`[data-window-instance-id="target"] [data-pane-id="${targetPaneId}"]`).element
+    const targetPaneId=windows.get('target').rootPane.id;const wrapper=mount(WorkspaceHost,{props:{windows,docks,registry},attachTo:document.body});const workspace=wrapper.get('.wf-workspace-host').element;const sourcePane=wrapper.get('[data-pane-id="move"] .wf-pane-host__drag-handle').element;const targetPane=wrapper.get(`[data-window-instance-id="target"] [data-pane-id="${targetPaneId}"]`).element
     stubRect(workspace,rect(0,0,900,650));stubRect(sourcePane,rect(40,70,140,150));stubRect(targetPane,rect(420,114,300,206))
     pointer(sourcePane,'pointerdown',80,120,true);pointer(globalThis.window,'pointermove',500,180,true);await nextTick();expect(wrapper.find('.wf-docking-overlay').exists()).toBe(true)
     globalThis.window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await nextTick()
     expect(wrapper.find('.wf-docking-overlay').exists()).toBe(false);expect(wrapper.get('.wf-workspace-host').attributes('data-workspace-edit-mode')).toBe('false');wrapper.unmount()
+  })
+
+  it('gives a split separator exclusive resize ownership and cancels it without history', async () => {
+    const { registry, windows, docks }=setup();windows.openPane({instanceId:'resizable',pane:createSplitPane({id:'root',axis:'horizontal',children:[createWidgetPane({id:'left',widgetId:'dock.a'}),createWidgetPane({id:'right',widgetId:'dock.b'})]})})
+    const history=createWorkspaceHistory(windows,docks),wrapper=mount(WorkspaceHost,{props:{windows,docks,registry,history},attachTo:document.body});const root=wrapper.get('[data-pane-id="root"]');stubRect(root.element,rect(0,0,400,200));const divider=wrapper.get('[data-pane-divider-index="0"]').element
+    pointer(divider,'pointerdown',200,80);pointer(globalThis.window,'pointermove',300,80);await nextTick()
+    const resized=windows.get('resizable').rootPane;expect(wrapper.find('.wf-docking-overlay').exists()).toBe(false);expect(resized.kind==='split'&&resized.weights[0]).toBeGreaterThan(1)
+    pointer(globalThis.window,'pointercancel',300,80);await nextTick();await Promise.resolve()
+    const restored=windows.get('resizable').rootPane;expect(restored.kind==='split'&&restored.weights).toEqual([1,1]);expect(history.state.undoDepth).toBe(0);wrapper.unmount();history.dispose()
+  })
+
+  it('does not start pane docking from an arbitrary pane surface', async () => {
+    const { registry, windows, docks }=setup();windows.openPane({instanceId:'source',pane:createSplitPane({id:'source-root',axis:'horizontal',children:[createWidgetPane({id:'move',widgetId:'dock.a'}),createWidgetPane({id:'stay',widgetId:'dock.b'})]})});windows.open({widgetId:'dock.b',instanceId:'target'})
+    const targetPaneId=windows.get('target').rootPane.id,wrapper=mount(WorkspaceHost,{props:{windows,docks,registry},attachTo:document.body}),workspace=wrapper.get('.wf-workspace-host').element,sourcePane=wrapper.get('[data-pane-id="move"]').element,targetPane=wrapper.get(`[data-window-instance-id="target"] [data-pane-id="${targetPaneId}"]`).element
+    stubRect(workspace,rect(0,0,900,650));stubRect(sourcePane,rect(40,70,140,150));stubRect(targetPane,rect(420,114,300,206));pointer(sourcePane,'pointerdown',80,120,true);pointer(globalThis.window,'pointermove',710,180,true);await nextTick()
+    expect(wrapper.find('.wf-docking-overlay').exists()).toBe(false);pointer(globalThis.window,'pointerup',710,180,true);wrapper.unmount()
   })
 })

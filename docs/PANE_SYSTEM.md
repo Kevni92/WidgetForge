@@ -39,13 +39,13 @@ Die Fallback-Regel bei zu kleinen Containern ist deterministisch: Content-Panes 
 
 Tree-Operationen sind pure Funktionen und erzeugen neue Bäume. Unterstützt werden Finden, Ersetzen, Entfernen mit automatischem Parent-Collapse, Splitten an einer Kante, Tab-Docking, Verschieben eines Subtrees, Tab-Reihenfolge, Collapse und Split-Gewichte.
 
-Pane-IDs müssen innerhalb eines Baums eindeutig sein. Ein Pane darf nicht in einen eigenen Descendant verschoben werden. Der Root-Pane darf nicht in sich selbst reparented werden.
+Pane-IDs und Widget-Instanz-IDs müssen innerhalb eines Baums eindeutig sein. Bei einem vollständigen Workspace müssen beide Identitäten auch über alle Window- und Dock-Bäume hinweg eindeutig bleiben. Ein Pane darf nicht in einen eigenen Descendant verschoben werden. Der Root-Pane darf nicht in sich selbst reparented werden.
 
 ## PaneHost
 
 `PaneHost` ist der generische Vue-Renderer des Pane-Baums. Widget-Panes werden über `WidgetHost` gerendert; Split-, Tab- und Stack-Panes rekursiv über weitere `PaneHost`-Instanzen. Der Host kennt weder `WindowManager` noch `DockManager`.
 
-Split-Divider sind nur zwischen zwei nicht kollabierten, entsperrten, resizablen `flex`-Panes aktiv. Fixed- und Content-Panes bleiben über ihre deklarativen Constraints bestimmt. Pointer-Listener werden bei Ende, Abbruch und Unmount deterministisch entfernt.
+Split-Divider sind nur zwischen zwei nicht kollabierten, entsperrten, resizablen `flex`-Panes aktiv. Fixed- und Content-Panes bleiben über ihre deklarativen Constraints bestimmt. Pane-/Tab-Docking startet ausschließlich über die markierten Drag-Handles; ein Separator besitzt während seiner Resize-Session exklusiv den Pointer. Pointer-Listener werden bei Ende, Abbruch, Escape, verlorenem Pointer-Capture und Unmount deterministisch entfernt.
 
 Stack-Layer werden im selben Host übereinander angeordnet. Es gibt dafür keine Window-/Dock-Sonderlogik.
 

@@ -4,7 +4,7 @@ import { createSplitPane, createStackPane, createWidgetPane } from '../src/core/
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
-import { captureWorkspace, restoreWorkspace, serializeWorkspace, WORKSPACE_VERSION } from '../src/core/workspace'
+import { captureWorkspace, commitWorkspacePaneMutations, restoreWorkspace, serializeWorkspace, WorkspaceInvariantError, WORKSPACE_VERSION } from '../src/core/workspace'
 
 const TestWidget = defineComponent({ template: '<div>test</div>' })
 function createRegistry() { return createWidgetRegistry([
@@ -64,4 +64,30 @@ describe('workspace persistence', () => {
   it('rejects invalid documents without mutating the manager', () => { const manager=createWindowManager(createRegistry());expect(restoreWorkspace(manager,'{broken').valid).toBe(false);expect(manager.list()).toEqual([]);expect(restoreWorkspace(manager,{version:999,windows:[]}).issues[0]?.code).toBe('unsupported-version');expect(manager.list()).toEqual([]) })
   it('does not collide with restored automatic instance ids', () => { const registry=createRegistry(),manager=createWindowManager(registry),source=createWindowManager(registry);source.open({widgetId:'test.alpha',instanceId:'wf-window-1',parameters:{name:'restored'}});restoreWorkspace(manager,serializeWorkspace(source));expect(manager.open({widgetId:'test.alpha',parameters:{name:'new'}}).instanceId).toBe('wf-window-2') })
   it('requires an empty manager so restore cannot mix runtime workspaces accidentally', () => { const manager=createWindowManager(createRegistry());manager.open({widgetId:'test.alpha',parameters:{name:'existing'}});const result=restoreWorkspace(manager,{version:WORKSPACE_VERSION,windows:[]});expect(result.valid).toBe(false);expect(result.issues[0]?.code).toBe('manager-not-empty');expect(manager.list()).toHaveLength(1) })
+
+  it('rejects duplicate widget identities across windows and recovers atomically', () => {
+    const registry=createRegistry(), source=createWindowManager(registry)
+    source.openPane({instanceId:'first',pane:createWidgetPane({id:'first-pane',widgetId:'test.alpha',instanceId:'shared-widget',parameters:{name:'first'}})})
+    source.openPane({instanceId:'second',pane:createWidgetPane({id:'second-pane',widgetId:'test.alpha',instanceId:'shared-widget',parameters:{name:'second'}})})
+    expect(() => captureWorkspace(source)).toThrow(WorkspaceInvariantError)
+    const document={version:WORKSPACE_VERSION,windows:source.list().map((window,index)=>({...window,focused:index===1,zIndex:index}))}
+    const target=createWindowManager(registry), partial=restoreWorkspace(target,document)
+    expect(partial.issues.some((issue)=>issue.code==='invalid-workspace')).toBe(true)
+    expect(target.list()).toHaveLength(1)
+    const atomicTarget=createWindowManager(registry), atomic=restoreWorkspace(atomicTarget,document,undefined,undefined,{atomic:true})
+    expect(atomic.valid).toBe(false)
+    expect(atomicTarget.list()).toEqual([])
+  })
+
+  it('rolls back a multi-owner pane mutation when the second operation fails', () => {
+    const registry=createRegistry(), manager=createWindowManager(registry)
+    manager.open({widgetId:'test.alpha',instanceId:'source',parameters:{name:'source'}})
+    manager.open({widgetId:'test.alpha',instanceId:'target',parameters:{name:'target'}})
+    const before=serializeWorkspace(manager), targetRoot=createSplitPane({id:'target-split',axis:'horizontal',children:[manager.get('target').rootPane,createWidgetPane({id:'incoming',widgetId:'test.alpha',instanceId:'source'})]})
+    const originalSetRootPane=manager.setRootPane.bind(manager);let fail=true
+    manager.setRootPane=((instanceId,pane,origin='api')=>{if(fail){fail=false;throw new Error('synthetic commit failure')}return originalSetRootPane(instanceId,pane,origin)}) as typeof manager.setRootPane
+    expect(()=>commitWorkspacePaneMutations(manager,undefined,[{owner:{kind:'window',id:'source'},rootPane:null},{owner:{kind:'window',id:'target'},rootPane:targetRoot}])).toThrow()
+    expect(serializeWorkspace(manager)).toBe(before)
+    expect(manager.list().map((window)=>window.instanceId)).toEqual(['source','target'])
+  })
 })
