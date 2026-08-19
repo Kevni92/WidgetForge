@@ -22,7 +22,8 @@ function openReferenceLayout():void{
   windows.openPane({instanceId:'operations-main',title:'Operations Matrix · fixed/flex/stack',position:{x:470,y:400},size:{width:590,height:270},minSize:{width:420,height:220},pane:createSplitPane({id:'operations-root',axis:'horizontal',weights:[1,1],children:[createWidgetPane({id:'operations-colony',widgetId:'planet.summary',instanceId:'operations-colony-widget',parameters:{planetId:'ARC-02',compact:true},settings:{sizeMode:'fixed',size:260,minSize:230,maxSize:300,background:'surface'}}),createStackPane({id:'operations-stack',settings:{sizeMode:'flex',background:'surface-raised'},children:[createTabPane({id:'operations-metrics',activeId:'operations-power',children:[createWidgetPane({id:'operations-power',widgetId:'demo.live-metric',instanceId:'operations-power-widget',parameters:{resourceId:'grid-power'},settings:{minSize:90,background:'surface-raised'}}),createWidgetPane({id:'operations-stock',widgetId:'demo.live-metric',instanceId:'operations-stock-widget',parameters:{resourceId:'warehouse-stock'},settings:{minSize:90,background:'canvas'}})]})]})]})})
 }
 function clearWorkspace():void{for(const window of[...windows.list()])windows.close(window.instanceId,'api');for(const dock of[...docks.list()])docks.remove(dock.id)}
-function restoreReferenceLayout():void{let stored:string|null=null;try{stored=window.localStorage.getItem(WORKSPACE_STORAGE_KEY)}catch{/* unavailable */}const restored=stored?restoreWorkspace(windows,stored,docks):null;if(!restored?.valid||restored.issues.length>0||restored.restoredDocks.length===0){clearWorkspace();openReferenceLayout()}}
+let restoredPersistedWorkspace=false
+function restoreReferenceLayout():void{let stored:string|null=null;try{stored=window.localStorage.getItem(WORKSPACE_STORAGE_KEY)}catch{/* unavailable */}const restored=stored?restoreWorkspace(windows,stored,docks):null;if(restored?.valid&&restored.issues.length===0&&restored.restoredDocks.length>0){restoredPersistedWorkspace=true;return}clearWorkspace();openReferenceLayout()}
 restoreReferenceLayout();restoreEdit()
 function createDemoLayoutManager(){
   const create=(persist:boolean)=>createWorkspaceLayoutManager({registry:playgroundWidgetRegistry,windows,docks,...(persist?{storage:createLocalStorageWorkspaceLayoutStorage(window.localStorage,LAYOUT_STORAGE_KEY)}:{})})
@@ -40,11 +41,11 @@ function seedDemoLayouts():void{
   const startup=serializeWorkspace(windows,docks),missing=(['Default','Trading','Operations'] as const).filter((name)=>!hasLayout(name))
   for(const name of missing)buildReferencePreset(name)
   if(!layouts.getDefaultLayout()&&hasLayout('Default'))layouts.setDefaultLayout('Default')
-  if(missing.length>0){clearWorkspace();const restored=restoreWorkspace(windows,startup,docks);if(!restored.valid||restored.issues.length>0){clearWorkspace();openReferenceLayout()}}
+  if(missing.length>0){clearWorkspace();const restored=restoreWorkspace(windows,startup,docks);if(!restored.valid||restored.issues.length>0){clearWorkspace();openReferenceLayout();restoredPersistedWorkspace=false}}
 }
 seedDemoLayouts()
 function detectActiveLayout():string|null{const current=JSON.stringify(captureWorkspace(windows,docks));return layouts.listLayouts().find((layout)=>JSON.stringify(layout.workspace)===current)?.name??null}
-const activeLayout=ref<string|null>(detectActiveLayout())
+const activeLayout=ref<string|null>(restoredPersistedWorkspace?detectActiveLayout():'Default')
 const groups=markRaw(createWindowGroupManager(windows))
 function defaultGroup():void{try{if(windows.get('colony-main').mode==='normal'&&windows.get('alerts-main').mode==='normal')groups.assign('operations-cluster',['colony-main','alerts-main'])}catch{/* demo windows may not exist in custom layouts */}}
 function restoreGroups():void{try{const stored=window.localStorage.getItem(GROUP_STORAGE_KEY);if(stored){groups.restore(JSON.parse(stored) as WindowGroupSnapshot);return}}catch{/* stale group data falls back */}defaultGroup()}
