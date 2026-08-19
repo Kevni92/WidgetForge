@@ -8,6 +8,7 @@ import { createWorkspaceCollection } from '../src/core/workspace-collection'
 import DataClientProvider from '../src/vue/DataClientProvider.vue'
 import WorkspaceCollectionHost from '../src/vue/WorkspaceCollectionHost.vue'
 import { useData } from '../src/vue/data-context'
+import { useWidgetContext } from '../src/vue/widget-context'
 
 const key = createDataKey<number>('test', 'shared')
 
@@ -18,8 +19,14 @@ describe('WorkspaceCollectionHost', () => {
     const provider: DataProvider = { subscribe }
     const client = createDataClient(provider)
     const Probe = defineComponent({
-      props: { marker: { type: String, required: true } },
-      setup(props) { useData(key); onMounted(() => mounted.push(props.marker)); onUnmounted(() => unmounted.push(props.marker)); return () => h('span', props.marker) },
+      setup() {
+        useData(key)
+        const context = useWidgetContext()
+        const marker = () => String(context.parameters.value.marker)
+        onMounted(() => mounted.push(marker()))
+        onUnmounted(() => unmounted.push(marker()))
+        return () => h('span', marker())
+      },
     })
     const widgets = createWidgetRegistry([defineWidget({ id: 'test.probe', title: 'Probe', component: Probe, parameters: { marker: { type: 'string', required: true } } })])
     const collection = createWorkspaceCollection({ registry: widgets })
