@@ -10,19 +10,17 @@ import WorkspaceCollectionHost from '../src/vue/WorkspaceCollectionHost.vue'
 import { useData } from '../src/vue/data-context'
 import { useWidgetContext } from '../src/vue/widget-context'
 
-const key = createDataKey<number>('test', 'shared')
-
 describe('WorkspaceCollectionHost', () => {
-  it('mounts only the active workspace and suspends data subscriptions while a workspace is inactive', async () => {
-    const mounted: string[] = [], unmounted: string[] = []
-    const subscribe = vi.fn<DataProvider['subscribe']>((_key, observer) => { observer.next(1); return vi.fn() })
+  it('mounts only the active workspace and suspends workspace-specific data resources while inactive', async () => {
+    const mounted: string[] = [], unmounted: string[] = [], unsubscribed: string[] = []
+    const subscribe = vi.fn<DataProvider['subscribe']>((key, observer) => { observer.next(1); return () => { unsubscribed.push(key.id) } })
     const provider: DataProvider = { subscribe }
     const client = createDataClient(provider)
     const Probe = defineComponent({
       setup() {
-        useData(key)
         const context = useWidgetContext()
         const marker = () => String(context.parameters.value.marker)
+        useData(createDataKey<number>('test', marker()))
         onMounted(() => mounted.push(marker()))
         onUnmounted(() => unmounted.push(marker()))
         return () => h('span', marker())
@@ -50,6 +48,7 @@ describe('WorkspaceCollectionHost', () => {
     expect(unmounted).toEqual(['first'])
     expect(mounted).toEqual(['first', 'second'])
     expect(subscribe).toHaveBeenCalledTimes(2)
+    expect(unsubscribed).toContain('first')
     expect(first.windows.getLifecycle('first-widget').state).not.toBe('destroyed')
 
     collection.activateWorkspace('first')
@@ -57,6 +56,7 @@ describe('WorkspaceCollectionHost', () => {
     expect(wrapper.text()).toContain('first')
     expect(mounted).toEqual(['first', 'second', 'first'])
     expect(subscribe).toHaveBeenCalledTimes(3)
+    expect(unsubscribed).toContain('second')
     wrapper.unmount()
   })
 })
