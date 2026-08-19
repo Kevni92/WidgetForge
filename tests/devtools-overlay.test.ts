@@ -79,7 +79,7 @@ describe('DevToolsOverlay', () => {
   })
 
   it('copies live workspace JSON and cleans global listeners on unmount', async () => {
-    const writeText = vi.fn(async () => undefined)
+    const writeText = vi.fn(async (_text: string) => undefined)
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
     const remove = vi.spyOn(window, 'removeEventListener')
     const { wrapper } = mountOverlay(true)
