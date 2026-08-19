@@ -86,4 +86,19 @@ describe('WindowShell', () => {
     expect(first.emitted('focus')).toHaveLength(1)
     expect(second.emitted('focus')).toBeUndefined()
   })
+
+  it('keeps semantic window role classes available for surface/elevation styling', () => {
+    const registry = createWidgetRegistry()
+    const roles = ['normal', 'utility', 'overlay', 'modal'] as const
+
+    for (const role of roles) {
+      const wrapper = mount(WindowShell, {
+        props: { registry, widgetId: `unused.${role}`, instanceId: `role-${role}`, title: role, windowRole: role },
+      })
+
+      expect(wrapper.get('.wf-window-shell').classes()).toContain(`wf-window-shell--role-${role}`)
+      expect(wrapper.get('.wf-window-shell').attributes('data-window-role')).toBe(role)
+      wrapper.unmount()
+    }
+  })
 })

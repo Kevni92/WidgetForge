@@ -50,4 +50,29 @@ describe('ThemeProvider', () => {
     expect(wrapper.get('.wf-theme').attributes('style')).toContain(`--wf-color-canvas: ${forgeLightTheme.color.canvas}`)
     expect(mountCount).toBe(1)
   })
+
+  it('exposes role and backdrop tokens to custom themes without component overrides', () => {
+    const wrapper = mount(ThemeProvider, {
+      props: { theme: {
+        color: {
+          surfaceWindow: 'window-surface',
+          surfaceFloating: 'floating-surface',
+          surfaceOverlay: 'overlay-surface',
+          surfaceModal: 'modal-surface',
+          borderModal: 'modal-border',
+          backdrop: 'modal-backdrop',
+        },
+        shadow: { lg: 'modal-shadow' },
+      } },
+    })
+
+    const style = wrapper.get('.wf-theme').attributes('style')
+    expect(style).toContain('--wf-color-surface-window: window-surface')
+    expect(style).toContain('--wf-color-surface-floating: floating-surface')
+    expect(style).toContain('--wf-color-surface-overlay: overlay-surface')
+    expect(style).toContain('--wf-color-surface-modal: modal-surface')
+    expect(style).toContain('--wf-color-border-modal: modal-border')
+    expect(style).toContain('--wf-color-backdrop: modal-backdrop')
+    expect(style).toContain('--wf-shadow-lg: modal-shadow')
+  })
 })

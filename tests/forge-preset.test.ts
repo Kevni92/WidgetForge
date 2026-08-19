@@ -32,4 +32,15 @@ describe('Forge preset', () => {
     expect(lightVariables['--wf-color-focus']).toBe(forgeLightTheme.color.focus)
     expect(lightVariables['--wf-color-hover']).toBe(forgeLightTheme.color.hover)
   })
+
+  it('provides distinct role surfaces, borders, shadows and backdrops for both modes', () => {
+    expect(forgeDarkTheme.color.surfaceWindow).not.toBe(forgeDarkTheme.color.surfaceFloating)
+    expect(forgeDarkTheme.color.surfaceFloating).not.toBe(forgeDarkTheme.color.surfaceOverlay)
+    expect(forgeDarkTheme.color.surfaceOverlay).not.toBe(forgeDarkTheme.color.surfaceModal)
+    expect(forgeLightTheme.color.surfaceWindow).not.toBe(forgeLightTheme.color.surfaceOverlay)
+    expect(forgeLightTheme.color.surfaceFloating).not.toBe(forgeLightTheme.color.surfaceModal)
+    expect(forgeDarkTheme.color.borderModal).not.toBe(forgeLightTheme.color.borderModal)
+    expect(forgeDarkTheme.shadow.lg).not.toBe(forgeLightTheme.shadow.lg)
+    expect(forgeDarkTheme.color.backdrop).not.toBe(forgeLightTheme.color.backdrop)
+  })
 })

@@ -125,16 +125,16 @@ watch(() => props.open, async (open) => {
   display: grid;
   place-items: center;
   padding: var(--wf-space-lg);
-  background: rgb(0 0 0 / 0.45);
+  background: var(--wf-color-backdrop);
 }
 
 .wf-confirmation-dialog {
   width: min(440px, 100%);
-  border: 1px solid var(--wf-color-border);
+  border: 1px solid var(--wf-color-border-modal);
   border-radius: var(--wf-radius-md);
-  background: var(--wf-color-surface-raised);
+  background: var(--wf-color-surface-modal);
   color: var(--wf-color-text);
-  box-shadow: var(--wf-shadow-md);
+  box-shadow: var(--wf-shadow-lg);
 }
 
 .wf-confirmation-dialog__header {
@@ -142,7 +142,7 @@ watch(() => props.open, async (open) => {
   display: flex;
   align-items: center;
   padding: 0 var(--wf-space-md);
-  border-bottom: 1px solid var(--wf-color-border);
+  border-bottom: 1px solid var(--wf-color-border-modal);
   font-size: var(--wf-font-size-sm);
 }
 

@@ -9,7 +9,7 @@ import { colonyOptions, colonySelectionKey } from '../selection-demo'
 const navigation=useWidgetNavigation(),controls=useDemoControls(),colony=useSelection(colonySelectionKey),selectedColony=colony.value
 if(selectedColony.value===null)colony.select('ARC-01')
 const theme=computed(()=>controls.theme()),canUndo=computed(()=>controls.canUndo?.()??false),canRedo=computed(()=>controls.canRedo?.()??false),workspaceMode=computed(()=>controls.workspaceMode?.()??'normal'),layoutNames=computed(()=>controls.layoutNames?.()??[]),activeLayout=computed(()=>controls.activeLayout?.()??''),developerMode=computed(()=>controls.developerMode?.()??false),feedOnline=computed(()=>controls.feedOnline?.()??true)
-function openMarket():void{navigation.navigate({widgetId:'market.ticker',parameters:{commodity:'METALS',rows:10}})}function openColony():void{navigation.navigate({widgetId:'planet.summary',parameters:{planetId:selectedColony.value??'ARC-01',compact:false}})}function openProduction():void{navigation.navigate({widgetId:'economy.production'})}function openInventory():void{navigation.navigate({widgetId:'economy.inventory'})}function openOrders():void{navigation.navigate({widgetId:'economy.orders'})}function openAlerts():void{navigation.navigate({widgetId:'demo.alerts'})}function openModal():void{navigation.navigate({widgetId:'demo.modal-review'})}
+function openMarket():void{navigation.navigate({widgetId:'market.ticker',parameters:{commodity:'METALS',rows:10}})}function openColony():void{navigation.navigate({widgetId:'planet.summary',parameters:{planetId:selectedColony.value??'ARC-01',compact:false}})}function openProduction():void{navigation.navigate({widgetId:'economy.production'})}function openInventory():void{navigation.navigate({widgetId:'economy.inventory'})}function openOrders():void{navigation.navigate({widgetId:'economy.orders'})}function openAlerts():void{navigation.navigate({widgetId:'demo.alerts'})}function openOverlay():void{navigation.navigate({widgetId:'demo.overlay-command'})}function openModal():void{navigation.navigate({widgetId:'demo.modal-review'})}
 function changeTheme(event:Event):void{const select=event.target;if(select instanceof HTMLSelectElement)controls.setTheme(select.value as DemoThemeName)}
 function changeLayout(event:Event):void{const select=event.target;if(select instanceof HTMLSelectElement&&select.value)controls.loadLayout?.(select.value)}
 function changeColony(event:Event):void{const select=event.target;if(select instanceof HTMLSelectElement)colony.select(select.value)}
@@ -34,6 +34,7 @@ const paletteRegistry=markRaw(createCommandPaletteRegistry([
     {id:'widget:orders',label:'Open Orders',category:'Economy',keywords:['orders','trade'],execute:openOrders},
     {id:'widget:colony',label:'Open Colony Overview',category:'Widgets',keywords:['planet',selectedColony.value??'ARC-01'],execute:openColony},
     {id:'widget:alerts',label:'Open Operations Alerts',category:'Widgets',keywords:['alerts'],execute:openAlerts},
+    {id:'widget:overlay',label:'Open Quick Command Overlay',category:'Widgets',keywords:['overlay','quick','command'],execute:openOverlay},
     {id:'widget:modal',label:'Open Critical Operations Review',category:'Widgets',keywords:['modal','review'],execute:openModal},
   ]),
 ]))
@@ -46,6 +47,7 @@ const navigationActions=computed<readonly WidgetActionBinding[]>(()=>[
   actionBinding('market','Market','◈',openMarket,{priority:110,alwaysVisible:true,tone:'accent'}),
   actionBinding('orders','Orders','⇄',openOrders,{priority:80}),
   actionBinding('alerts','Alerts','!',openAlerts,{priority:70}),
+  actionBinding('overlay','Overlay','▱',openOverlay,{priority:65}),
   actionBinding('modal','Modal','◇',openModal,{priority:60}),
   actionBinding('palette','Palette','⌕',()=>{void palette.value?.open()},{priority:50,shortcut:'Ctrl+K'}),
 ])

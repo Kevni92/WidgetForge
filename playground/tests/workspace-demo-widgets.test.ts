@@ -26,6 +26,8 @@ describe('fullscreen workspace demo widgets', () => {
     expect(navigate).toHaveBeenCalledWith({ widgetId: 'market.ticker', parameters: { commodity: 'METALS', rows: 10 } })
     await wrapper.get('[data-widget-action="modal"]').trigger('click')
     expect(navigate).toHaveBeenCalledWith({ widgetId: 'demo.modal-review' })
+    await wrapper.get('[data-widget-action="overlay"]').trigger('click')
+    expect(navigate).toHaveBeenCalledWith({ widgetId: 'demo.overlay-command' })
     await wrapper.get('[data-widget-action="edit"]').trigger('click'); expect(setWorkspaceMode).toHaveBeenCalledWith('edit')
     await wrapper.get('[data-widget-action="lock"]').trigger('click'); expect(setWorkspaceMode).toHaveBeenCalledWith('locked')
     await wrapper.get('[data-widget-action="undo"]').trigger('click'); expect(undo).toHaveBeenCalledOnce()
