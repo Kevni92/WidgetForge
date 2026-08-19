@@ -115,6 +115,8 @@ function submit(): void {
   background: var(--wf-color-surface-raised);
 }
 
+.wf-command-input__field::placeholder { color: var(--wf-color-text-placeholder); opacity: 1; }
+
 .wf-command-input__submit {
   padding: 0 var(--wf-space-md);
   color: var(--wf-color-accent-contrast);

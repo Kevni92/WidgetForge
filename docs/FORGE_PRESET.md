@@ -13,5 +13,6 @@ Die Surface-Tokens beschreiben die visuelle Rolle einer Oberfläche, nicht ihre 
 - `surfaceOverlay` / `borderOverlay`: temporäre Overlay-Flächen wie Docking-UI und DevTools.
 - `surfaceModal` / `borderModal`: modale Dialogflächen.
 - `backdrop`: tokenisierter Hintergrund für modale Flächen.
+- `textPlaceholder`: lesbarer Placeholder-Text für generische Eingabefelder.
 
 `shadow.sm`, `shadow.md` und `shadow.lg` bilden die Elevationsstufen. `layer` bleibt davon getrennt und steuert ausschließlich technische Z-Positionen. Consumer können die semantischen Tokens in einem Custom Theme überschreiben; generische Komponenten benötigen dafür keine CSS-Overrides.
