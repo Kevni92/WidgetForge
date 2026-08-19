@@ -17,6 +17,10 @@ export interface DemoControls {
   readonly loadLayout?: (name: string) => void
   readonly developerMode?: () => boolean
   readonly setDeveloperMode?: (enabled: boolean) => void
+  readonly feedOnline?: () => boolean
+  readonly simulateFeedFailure?: () => void
+  readonly recoverFeed?: () => void
+  readonly notify?: (title: string, message: string, severity?: 'info' | 'success' | 'warning' | 'error') => void
 }
 const key:InjectionKey<DemoControls>=Symbol('WidgetForgePlaygroundDemoControls')
 export function provideDemoControls(controls:DemoControls):void{provide(key,controls)}
