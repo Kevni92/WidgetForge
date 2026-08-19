@@ -1,4 +1,4 @@
-import { inject, provide, type InjectionKey } from 'vue'
+import { inject, provide, type InjectionKey, type ShallowRef } from 'vue'
 import type { SelectionKey, SelectionStore } from '../core/selection'
 
 export const selectionStoreKey: InjectionKey<SelectionStore> = Symbol('WidgetForgeSelectionStore')
@@ -15,7 +15,7 @@ export function useSelectionStore(): SelectionStore {
 }
 
 export interface SelectionBinding<T> {
-  readonly value: ReturnType<SelectionStore['state<T>']>
+  readonly value: Readonly<ShallowRef<T | null>>
   select(value: T): void
   clear(): void
 }
