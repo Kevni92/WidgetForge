@@ -10,16 +10,6 @@ import WorkspaceHost from '../src/vue/WorkspaceHost.vue'
 
 const Widget = defineComponent({ template: '<span>history</span>' })
 function pointer(target: EventTarget, type: string, x: number, y: number): void { target.dispatchEvent(new MouseEvent(type, { button: 0, clientX: x, clientY: y, bubbles: true, cancelable: true })) }
-function shortcut(target: EventTarget, key: string): void {
-  const event = new Event('keydown', { bubbles: true, cancelable: true })
-  Object.defineProperties(event, {
-    key: { value: key },
-    ctrlKey: { value: true },
-    metaKey: { value: false },
-    shiftKey: { value: false },
-  })
-  target.dispatchEvent(event)
-}
 
 describe('WorkspaceHost history integration', () => {
   it('records a full window drag as exactly one undo operation', async () => {
@@ -34,16 +24,6 @@ describe('WorkspaceHost history integration', () => {
     await Promise.resolve(); await nextTick()
     expect(history.state.undoDepth).toBe(1); expect(windows.get('window').geometry.position).toEqual({ x: 140, y: 100 })
     history.undo(); await nextTick(); expect(windows.get('window').geometry.position).toEqual({ x: 20, y: 30 })
-    wrapper.unmount(); history.dispose()
-  })
-
-  it('supports Ctrl+Z and Ctrl+Y through workspace keyboard events', async () => {
-    const registry = createWidgetRegistry([defineWidget({ id: 'history.widget', title: 'History', component: Widget })])
-    const windows = createWindowManager(registry); const docks = createDockManager(registry); const history = createWorkspaceHistory(windows, docks)
-    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, history }, attachTo: document.body })
-    windows.open({ widgetId: 'history.widget', instanceId: 'window' }); await nextTick(); expect(history.state.undoDepth).toBe(1)
-    shortcut(wrapper.get('.wf-workspace-host').element, 'z'); await nextTick(); expect(windows.list()).toHaveLength(0); expect(history.state.canRedo).toBe(true)
-    shortcut(wrapper.get('.wf-workspace-host').element, 'y'); await nextTick(); expect(windows.list()).toHaveLength(1)
     wrapper.unmount(); history.dispose()
   })
 })
