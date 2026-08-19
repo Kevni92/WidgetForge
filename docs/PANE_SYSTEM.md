@@ -49,9 +49,27 @@ Split-Divider sind nur zwischen zwei nicht kollabierten, entsperrten, resizablen
 
 Stack-Layer werden im selben Host übereinander angeordnet. Es gibt dafür keine Window-/Dock-Sonderlogik.
 
+## Pane Context API
+
+Widgets können mit `usePaneContext()` ausschließlich ihren aktuellen Render-Kontext lesen. Die API liefert reaktive, readonly Refs für:
+
+- `paneId`
+- `hostType` (`window`, `dock` oder bei direkter PaneHost-Nutzung `standalone`)
+- `size` als aktuelle gemessene Pane-Größe
+- `active` für die aktuelle strukturelle Aktivität, insbesondere den aktiven Tab-Zweig
+- `visible` unter Einbeziehung von Host-Sichtbarkeit, Tab-Aktivität und Collapse-State
+- `focused`, nur wenn der Host fokussiert und das Pane sichtbar ist
+- `collapsed`
+
+`PaneContext` veröffentlicht keine Manager, Pane-Tree-Referenzen oder DOM-Elemente. Größenmessung bleibt eine interne Vue-Adapter-Aufgabe und verwendet dieselbe `observeElementSize`-/`ResizeObserver`-Infrastruktur wie andere responsive Hosts. Observer werden beim Unmount deterministisch entfernt.
+
+Ein Tab-Wechsel, Focus-/Minimize-Wechsel oder eine Host-Context-Änderung aktualisiert die Refs, ohne das Widget allein wegen der Context-Änderung neu zu mounten. Inaktive Tabs bleiben gemountet und melden eindeutig `active=false` sowie `visible=false`. Reparenting behält die Widget-Instanz-ID; der neue Host liefert anschließend den neuen Pane Context.
+
 ## Persistenz
 
 Workspace-Schema Version 3 persistiert `StackPane` sowie `sizeMode`, `size`, `collapsible`, `collapsed` und `locked`. Version-1- und Version-2-Snapshots bleiben restorebar; neue Snapshots werden als Version 3 geschrieben.
+
+`PaneContext` selbst ist Runtime-Zustand und wird nicht persistiert. Er wird aus dem kanonischen Pane-/Host-State und der aktuellen Rendergröße abgeleitet.
 
 ## Architekturgrenze
 
