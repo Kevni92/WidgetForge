@@ -162,7 +162,7 @@ watch(() => props.open, async (open) => {
 }
 
 .wf-confirmation-dialog__actions button {
-  min-height: var(--wf-size-control-height);
+  min-height: var(--wf-size-control-height-compact);
   padding: 0 var(--wf-space-md);
   border: 1px solid var(--wf-color-border);
   border-radius: var(--wf-radius-sm);

@@ -97,14 +97,16 @@ function displayValue(column: SimpleTableColumn<TRow>, row: TRow): string | numb
 
 .wf-simple-table__header,
 .wf-simple-table__cell {
-  padding: var(--wf-space-sm) var(--wf-space-md);
+  height: var(--wf-size-table-row-height);
+  padding: 0 var(--wf-space-md);
   border-bottom: 1px solid var(--wf-color-border);
   vertical-align: middle;
 }
 
 .wf-simple-table--compact .wf-simple-table__header,
 .wf-simple-table--compact .wf-simple-table__cell {
-  padding: var(--wf-space-xs) var(--wf-space-sm);
+  height: var(--wf-size-table-row-height-compact);
+  padding: 0 var(--wf-space-sm);
 }
 
 .wf-simple-table__header {

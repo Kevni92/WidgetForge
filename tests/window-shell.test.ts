@@ -42,6 +42,9 @@ describe('WindowShell', () => {
     await wrapper.setProps({ focused: true })
 
     expect(wrapper.get('.wf-window-shell').attributes('data-focused')).toBe('true')
+    expect(wrapper.get('.wf-window-shell__minimize .wf-window-shell__action-icon').text()).toBe('−')
+    expect(wrapper.get('.wf-window-shell__minimize').attributes('aria-label')).toBe('Minimize window')
+    expect(wrapper.get('.wf-window-shell__close').attributes('aria-label')).toBe('Close window')
     expect(mounts).toBe(1)
   })
 

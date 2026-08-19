@@ -16,3 +16,14 @@ Die Surface-Tokens beschreiben die visuelle Rolle einer Oberfläche, nicht ihre 
 - `textPlaceholder`: lesbarer Placeholder-Text für generische Eingabefelder.
 
 `shadow.sm`, `shadow.md` und `shadow.lg` bilden die Elevationsstufen. `layer` bleibt davon getrennt und steuert ausschließlich technische Z-Positionen. Consumer können die semantischen Tokens in einem Custom Theme überschreiben; generische Komponenten benötigen dafür keine CSS-Overrides.
+
+## Compact-Density-Tokens
+
+Die Größen-Tokens trennen sichtbare Glyphen von ihren interaktiven Flächen:
+
+- `controlHeight` und `controlHeightCompact`: reguläre bzw. kompakte Controls wie Inputs, Buttons und Menüeinträge.
+- `iconSize` / `iconButtonSize`: visuelle Glyphengröße bzw. minimale Hitbox für Icon-Actions.
+- `titlebarHeight` / `tabHeight`: Window-Chrome und Tabs.
+- `tableRowHeight` / `tableRowHeightCompact`: reguläre bzw. kompakte Tabellenzeilen.
+
+Damit bleiben Forge Dark, Forge Light und Consumer-Themes kompakt, verwenden aber eine nachvollziehbare gemeinsame Größenstruktur.

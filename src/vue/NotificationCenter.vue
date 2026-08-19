@@ -158,7 +158,7 @@ onUnmounted(() => unsubscribe?.())
 .wf-notification-center__clear,
 .wf-notification-center__action,
 .wf-notification-center__dismiss {
-  min-height: var(--wf-size-control-height);
+  min-height: var(--wf-size-control-height-compact);
   border: 1px solid var(--wf-color-border);
   border-radius: var(--wf-radius-sm);
   background: transparent;
@@ -170,7 +170,7 @@ onUnmounted(() => unsubscribe?.())
 .wf-notification-center__clear,
 .wf-notification-center__action { padding: 0 var(--wf-space-sm); }
 .wf-notification-center__action { color: var(--wf-color-info); }
-.wf-notification-center__dismiss { width: var(--wf-size-control-height); padding: 0; }
+.wf-notification-center__dismiss { width: var(--wf-size-icon-button-size); padding: 0; }
 
 .wf-notification-center button:hover { background: var(--wf-color-hover); }
 .wf-notification-center button:focus-visible {

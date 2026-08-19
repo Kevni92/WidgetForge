@@ -131,7 +131,7 @@ onUnmounted(() => {
 }
 
 .wf-context-menu__item {
-  min-height: var(--wf-size-control-height);
+  min-height: var(--wf-size-control-height-compact);
   padding: 0 var(--wf-space-md);
   border: 0;
   border-radius: var(--wf-radius-sm);

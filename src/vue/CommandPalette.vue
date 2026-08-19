@@ -243,10 +243,10 @@ defineExpose({ open: openPalette, close: closePalette, toggle: togglePalette })
 .wf-command-palette__input{width:100%;min-height:var(--wf-size-control-height);padding:0 var(--wf-space-md);border:1px solid var(--wf-color-border);border-radius:var(--wf-radius-sm);outline:none;background:var(--wf-color-surface-raised);color:var(--wf-color-text);font:inherit}.wf-command-palette__input::placeholder{color:var(--wf-color-text-placeholder);opacity:1}
 .wf-command-palette__input:focus{border-color:var(--wf-color-focus);box-shadow:0 0 0 1px var(--wf-color-focus)}
 .wf-command-palette__results{min-height:0;overflow:auto;display:grid;align-content:start;gap:2px}
-.wf-command-palette__result{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--wf-space-sm);padding:var(--wf-space-sm);border:1px solid transparent;border-radius:var(--wf-radius-sm);background:transparent;color:var(--wf-color-text);font:inherit;text-align:left;cursor:pointer}
+.wf-command-palette__result{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--wf-space-sm);min-height:var(--wf-size-control-height-compact);padding:var(--wf-space-sm);border:1px solid transparent;border-radius:var(--wf-radius-sm);background:transparent;color:var(--wf-color-text);font:inherit;text-align:left;cursor:pointer}
 .wf-command-palette__result:hover,.wf-command-palette__result--active{border-color:var(--wf-color-border);background:var(--wf-color-selected)}
 .wf-command-palette__result:disabled{opacity:.45;cursor:not-allowed}
-.wf-command-palette__icon{display:grid;place-items:center;width:24px;height:24px;color:var(--wf-color-accent)}
+.wf-command-palette__icon{display:grid;place-items:center;width:var(--wf-size-icon-button-size);height:var(--wf-size-icon-button-size);color:var(--wf-color-accent);font-size:var(--wf-size-icon-size);line-height:1}
 .wf-command-palette__copy{display:grid;min-width:0;gap:2px}.wf-command-palette__copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--wf-font-size-sm)}.wf-command-palette__copy small{color:var(--wf-color-text-muted);font-size:var(--wf-font-size-xs)}
 .wf-command-palette__empty{margin:0;padding:var(--wf-space-lg);text-align:center;color:var(--wf-color-text-muted);font-size:var(--wf-font-size-sm)}
 </style>

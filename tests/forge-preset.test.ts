@@ -46,6 +46,17 @@ describe('Forge preset', () => {
     expect(lightVariables['--wf-color-focus']).toBe(forgeLightTheme.color.focus)
     expect(lightVariables['--wf-color-hover']).toBe(forgeLightTheme.color.hover)
     expect(lightVariables['--wf-color-text-placeholder']).toBe(forgeLightTheme.color.textPlaceholder)
+    expect(lightVariables['--wf-size-icon-size']).toBe(forgeLightTheme.size.iconSize)
+    expect(lightVariables['--wf-size-icon-button-size']).toBe(forgeLightTheme.size.iconButtonSize)
+    expect(lightVariables['--wf-size-tab-height']).toBe(forgeLightTheme.size.tabHeight)
+  })
+
+  it('keeps glyphs visually smaller than their compact interaction surfaces', () => {
+    for (const theme of [forgeDarkTheme, forgeLightTheme]) {
+      expect(Number.parseFloat(theme.size.iconSize)).toBeLessThan(Number.parseFloat(theme.size.iconButtonSize))
+      expect(Number.parseFloat(theme.size.tableRowHeightCompact)).toBeLessThan(Number.parseFloat(theme.size.tableRowHeight))
+      expect(Number.parseFloat(theme.size.controlHeightCompact)).toBeLessThan(Number.parseFloat(theme.size.controlHeight))
+    }
   })
 
   it('provides distinct role surfaces, borders, shadows and backdrops for both modes', () => {
