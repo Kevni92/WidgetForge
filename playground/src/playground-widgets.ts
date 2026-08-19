@@ -16,7 +16,7 @@ export const planetSummaryWidget = defineWidget({
 export const marketTickerWidget = defineWidget({
   id: 'market.ticker', title: 'Commodity Exchange', component: MarketTickerWidget,
   parameters: { commodity: { type: 'string' }, rows: { type: 'number', default: 10 } },
-  capabilities: { multipleInstances: false, dockable: false, tabCompatible: true, preferredAspectRatio: 1.45, minimumUsefulSize: { width: 420, height: 260 }, supportsCompactMode: false },
+  capabilities: { multipleInstances: false, dockable: true, tabCompatible: true, preferredAspectRatio: 1.45, minimumUsefulSize: { width: 420, height: 260 }, supportsCompactMode: false },
   viewState: {
     version: 1,
     defaultState: { filter: '', sortColumn: 'volume', sortDirection: 'desc', selected: null },
