@@ -18,6 +18,11 @@ export interface WindowSizeConstraints {
   maxSize: WindowSize | null
 }
 
+export interface WindowGroupGeometry {
+  readonly id: string
+  readonly geometry: WindowGeometry
+}
+
 export type ResizeHandle =
   | 'top'
   | 'bottom'
@@ -98,6 +103,45 @@ export function moveWindow(
       minimumVisible,
     ),
   }
+}
+
+export function moveWindowGroup(
+  starts: readonly WindowGroupGeometry[],
+  delta: WindowPosition,
+  container: WindowSize,
+  minimumVisible: WindowSize = DEFAULT_MIN_VISIBLE,
+): readonly WindowGroupGeometry[] {
+  if (starts.length === 0 || container.width <= 0 || container.height <= 0) {
+    return starts.map((item) => ({ id: item.id, geometry: { position: { x: item.geometry.position.x + delta.x, y: item.geometry.position.y + delta.y }, size: { ...item.geometry.size } } }))
+  }
+
+  let minimumDeltaX = Number.NEGATIVE_INFINITY
+  let maximumDeltaX = Number.POSITIVE_INFINITY
+  let minimumDeltaY = Number.NEGATIVE_INFINITY
+  let maximumDeltaY = Number.POSITIVE_INFINITY
+
+  for (const item of starts) {
+    const { position, size } = item.geometry
+    const visibleWidth = Math.min(minimumVisible.width, size.width, container.width)
+    const visibleHeight = Math.min(minimumVisible.height, size.height, container.height)
+    minimumDeltaX = Math.max(minimumDeltaX, visibleWidth - size.width - position.x)
+    maximumDeltaX = Math.min(maximumDeltaX, container.width - visibleWidth - position.x)
+    minimumDeltaY = Math.max(minimumDeltaY, -position.y)
+    maximumDeltaY = Math.min(maximumDeltaY, container.height - visibleHeight - position.y)
+  }
+
+  const sharedDelta = {
+    x: clamp(finite(delta.x, 0), minimumDeltaX, maximumDeltaX),
+    y: clamp(finite(delta.y, 0), minimumDeltaY, maximumDeltaY),
+  }
+
+  return starts.map((item) => ({
+    id: item.id,
+    geometry: {
+      position: { x: item.geometry.position.x + sharedDelta.x, y: item.geometry.position.y + sharedDelta.y },
+      size: { ...item.geometry.size },
+    },
+  }))
 }
 
 export function resizeWindow(

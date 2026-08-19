@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, markRaw, nextTick, ref, shallowRef } from 'vue'
-import { DataClientProvider, ThemeProvider, WorkspaceHost, createDataClient, createDataKey, createDockManager, createMockDataProvider, createSplitPane, createTabPane, createWidgetNavigator, createWidgetPane, createWindowManager, createWorkspaceEditController, createWorkspaceHistory, forgeDarkTheme, forgeLightTheme, provideWidgetNavigation, restoreWorkspace, serializeWorkspace, type WidgetForgeTheme, type WorkspaceEditSnapshot } from 'widgetforge'
+import { DataClientProvider, ThemeProvider, WorkspaceHost, createDataClient, createDataKey, createDockManager, createMockDataProvider, createSplitPane, createTabPane, createWidgetNavigator, createWidgetPane, createWindowGroupManager, createWindowManager, createWorkspaceEditController, createWorkspaceHistory, forgeDarkTheme, forgeLightTheme, provideWidgetNavigation, restoreWorkspace, serializeWorkspace, type WidgetForgeTheme, type WindowGroupSnapshot, type WorkspaceEditSnapshot } from 'widgetforge'
 import { provideDemoControls, type DemoThemeName } from './demo-controls'
 import { playgroundWidgetRegistry } from './playground-widgets'
 interface DemoMetric{label:string;value:number;unit:string}
-const WORKSPACE_STORAGE_KEY='widgetforge.playground.fullscreen.v2',THEME_STORAGE_KEY='widgetforge.playground.theme',EDIT_STORAGE_KEY='widgetforge.playground.edit.v1'
+const WORKSPACE_STORAGE_KEY='widgetforge.playground.fullscreen.v2',THEME_STORAGE_KEY='widgetforge.playground.theme',EDIT_STORAGE_KEY='widgetforge.playground.edit.v1',GROUP_STORAGE_KEY='widgetforge.playground.groups.v1'
 function storedTheme():DemoThemeName{try{return window.localStorage.getItem(THEME_STORAGE_KEY)==='forge-light'?'forge-light':'forge-dark'}catch{return'forge-dark'}}
 const themeName=ref<DemoThemeName>(storedTheme()),themes:Record<DemoThemeName,WidgetForgeTheme>={'forge-dark':forgeDarkTheme,'forge-light':forgeLightTheme},activeTheme=computed(()=>themes[themeName.value])
 const mockProvider=markRaw(createMockDataProvider()),gridPowerKey=createDataKey<DemoMetric>('demo.metric','grid-power'),warehouseKey=createDataKey<DemoMetric>('demo.metric','warehouse-stock')
@@ -13,7 +13,7 @@ const dataClient=markRaw(createDataClient(mockProvider,{cacheTimeMs:5_000})),win
 provideWidgetNavigation(navigator)
 function persistWorkspace():void{try{window.localStorage.setItem(WORKSPACE_STORAGE_KEY,serializeWorkspace(windows,docks))}catch{/* best effort */}}
 function persistEdit():void{try{window.localStorage.setItem(EDIT_STORAGE_KEY,JSON.stringify(edit.snapshot()))}catch{/* best effort */}}
-function restoreEdit():void{try{const stored=window.localStorage.getItem(EDIT_STORAGE_KEY);if(stored)edit.restore(JSON.parse(stored) as WorkspaceEditSnapshot)}catch{/* invalid or unavailable storage falls back to normal */}}
+function restoreEdit():void{try{const stored=window.localStorage.getItem(EDIT_STORAGE_KEY);if(stored)edit.restore(JSON.parse(stored) as WorkspaceEditSnapshot)}catch{/* invalid storage falls back */}}
 function openReferenceLayout():void{
   docks.add({id:'workspace-top',position:'top',thickness:58,minThickness:50,maxThickness:86,resizable:true,pane:createSplitPane({id:'workspace-top-root',axis:'horizontal',weights:[4,1],settings:{resizable:true,background:'surface'},children:[createWidgetPane({id:'workspace-nav-pane',widgetId:'demo.workspace-topbar',instanceId:'workspace-nav-widget',settings:{minSize:520,background:'surface'}}),createWidgetPane({id:'workspace-top-metric-pane',widgetId:'demo.live-metric',instanceId:'workspace-top-metric-widget',parameters:{resourceId:'grid-power'},settings:{minSize:180,background:'surface-raised'}})]})})
   docks.add({id:'workspace-bottom',position:'bottom',thickness:54,minThickness:48,maxThickness:88,resizable:true,pane:createWidgetPane({id:'workspace-command-pane',widgetId:'demo.workspace-commandbar',instanceId:'workspace-command-widget',settings:{background:'surface'}})})
@@ -23,12 +23,17 @@ function openReferenceLayout():void{
 }
 function restoreReferenceLayout():void{let stored:string|null=null;try{stored=window.localStorage.getItem(WORKSPACE_STORAGE_KEY)}catch{/* unavailable */}const restored=stored?restoreWorkspace(windows,stored,docks):null;if(!restored?.valid||restored.restoredDocks.length===0)openReferenceLayout()}
 restoreReferenceLayout();restoreEdit()
+const groups=markRaw(createWindowGroupManager(windows))
+function defaultGroup():void{try{if(windows.get('colony-main').mode==='normal'&&windows.get('alerts-main').mode==='normal')groups.assign('operations-cluster',['colony-main','alerts-main'])}catch{/* demo windows may not exist in custom layouts */}}
+function restoreGroups():void{try{const stored=window.localStorage.getItem(GROUP_STORAGE_KEY);if(stored){groups.restore(JSON.parse(stored) as WindowGroupSnapshot);return}}catch{/* stale group data falls back */}defaultGroup()}
+function persistGroups():void{try{window.localStorage.setItem(GROUP_STORAGE_KEY,JSON.stringify(groups.snapshot()))}catch{/* best effort */}}
+restoreGroups()
 const history=markRaw(createWorkspaceHistory(windows,docks,{limit:50})),historyState=shallowRef(history.state),editState=shallowRef(edit.state)
-history.subscribe((state)=>{historyState.value=state});edit.subscribe((state)=>{editState.value=state;persistEdit()})
-async function resetWorkspace():Promise<void>{history.beginTransaction();for(const window of[...windows.list()])windows.close(window.instanceId,'user');for(const dock of[...docks.list()])docks.remove(dock.id);edit.restore({mode:'normal',selection:null,paneLocks:[]});try{window.localStorage.removeItem(WORKSPACE_STORAGE_KEY);window.localStorage.removeItem(EDIT_STORAGE_KEY)}catch{/* unavailable */}await nextTick();openReferenceLayout();history.commitTransaction();persistWorkspace();persistEdit()}
+history.subscribe((state)=>{historyState.value=state});edit.subscribe((state)=>{editState.value=state;persistEdit()});groups.subscribe(persistGroups)
+async function resetWorkspace():Promise<void>{history.beginTransaction();for(const window of[...windows.list()])windows.close(window.instanceId,'user');for(const dock of[...docks.list()])docks.remove(dock.id);edit.restore({mode:'normal',selection:null,paneLocks:[]});try{window.localStorage.removeItem(WORKSPACE_STORAGE_KEY);window.localStorage.removeItem(EDIT_STORAGE_KEY);window.localStorage.removeItem(GROUP_STORAGE_KEY)}catch{/* unavailable */}await nextTick();openReferenceLayout();defaultGroup();history.commitTransaction();persistWorkspace();persistEdit();persistGroups()}
 function setTheme(theme:DemoThemeName):void{themeName.value=theme;try{window.localStorage.setItem(THEME_STORAGE_KEY,theme)}catch{/* unavailable */}}
 function undo():void{history.undo();persistWorkspace()}function redo():void{history.redo();persistWorkspace()}
 provideDemoControls({theme:()=>themeName.value,setTheme,resetWorkspace,canUndo:()=>historyState.value.canUndo,canRedo:()=>historyState.value.canRedo,undo,redo,workspaceMode:()=>editState.value.mode,setWorkspaceMode:(mode)=>edit.setMode(mode)})
-persistWorkspace();persistEdit();windows.subscribe(persistWorkspace);docks.subscribe(persistWorkspace)
+persistWorkspace();persistEdit();persistGroups();windows.subscribe(persistWorkspace);docks.subscribe(persistWorkspace)
 </script>
 <template><ThemeProvider :theme="activeTheme"><DataClientProvider :client="dataClient"><main class="simulation-demo" data-fullscreen-workspace-demo><WorkspaceHost :windows="windows" :docks="docks" :registry="playgroundWidgetRegistry" :history="history" :edit="edit"/></main></DataClientProvider></ThemeProvider></template>
