@@ -27,7 +27,7 @@ describe('PaneHost advanced layouts', () => {
     const wrapper = mount(PaneHost, { props: { pane: root, registry } })
     const cells = wrapper.findAll('.wf-pane-host__cell')
     expect(cells[0]?.attributes('style')).toContain('120px')
-    expect(cells[1]?.attributes('style')).toContain('flex-grow: 2')
+    expect(cells[1]?.attributes('style')).toContain('flex: 2 1 0px')
     expect(cells[2]?.attributes('style')).toContain('display: none')
     expect(wrapper.findAll('[data-pane-divider-index]').every((divider) => divider.classes().includes('wf-pane-host__divider--disabled'))).toBe(true)
   })
