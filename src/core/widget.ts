@@ -12,37 +12,36 @@ export type WidgetParameterDefinition =
 
 export type WidgetParameterSchema = Record<string, WidgetParameterDefinition>
 
-type WidgetParameterValue<TDefinition extends WidgetParameterDefinition> =
-  TDefinition extends { type: 'string' }
-    ? string
-    : TDefinition extends { type: 'number' }
-      ? number
-      : boolean
+type WidgetParameterValue<TDefinition extends WidgetParameterDefinition> = TDefinition extends { type: 'string' } ? string : TDefinition extends { type: 'number' } ? number : boolean
+type RequiredWidgetParameterKeys<TSchema extends WidgetParameterSchema> = { [TKey in keyof TSchema]-?: TSchema[TKey] extends { required: true } ? TKey : never }[keyof TSchema]
+type OptionalWidgetParameterKeys<TSchema extends WidgetParameterSchema> = Exclude<keyof TSchema, RequiredWidgetParameterKeys<TSchema>>
+export type InferWidgetParameters<TSchema extends WidgetParameterSchema> = { [TKey in RequiredWidgetParameterKeys<TSchema>]: WidgetParameterValue<TSchema[TKey]> } & { [TKey in OptionalWidgetParameterKeys<TSchema>]?: WidgetParameterValue<TSchema[TKey]> }
 
-type RequiredWidgetParameterKeys<TSchema extends WidgetParameterSchema> = {
-  [TKey in keyof TSchema]-?: TSchema[TKey] extends { required: true } ? TKey : never
-}[keyof TSchema]
+export interface WidgetSize { width: number; height: number }
 
-type OptionalWidgetParameterKeys<TSchema extends WidgetParameterSchema> = Exclude<
-  keyof TSchema,
-  RequiredWidgetParameterKeys<TSchema>
->
-
-export type InferWidgetParameters<TSchema extends WidgetParameterSchema> = {
-  [TKey in RequiredWidgetParameterKeys<TSchema>]: WidgetParameterValue<TSchema[TKey]>
-} & {
-  [TKey in OptionalWidgetParameterKeys<TSchema>]?: WidgetParameterValue<TSchema[TKey]>
+export interface WidgetCapabilities {
+  readonly multipleInstances?: boolean
+  readonly dockable?: boolean
+  readonly tabCompatible?: boolean
+  readonly preferredAspectRatio?: number
+  readonly minimumUsefulSize?: WidgetSize
+  readonly supportsCompactMode?: boolean
 }
 
-export interface WidgetSize {
-  width: number
-  height: number
+export interface ResolvedWidgetCapabilities {
+  readonly multipleInstances: boolean
+  readonly dockable: boolean
+  readonly tabCompatible: boolean
+  readonly supportsCompactMode: boolean
+  readonly preferredAspectRatio?: number
+  readonly minimumUsefulSize?: WidgetSize
 }
 
 export interface WidgetWindowMetadata {
   defaultSize?: WidgetSize
   minSize?: WidgetSize
   maxSize?: WidgetSize
+  /** @deprecated Prefer capabilities.multipleInstances = false. */
   singleton?: boolean
   options?: WindowOptionsOverride
 }
@@ -53,39 +52,40 @@ export interface WidgetManifest<TSchema extends WidgetParameterSchema = WidgetPa
   component: Component
   parameters?: TSchema
   window?: WidgetWindowMetadata
+  capabilities?: WidgetCapabilities
   actions?: readonly WidgetAction[]
   viewState?: WidgetViewStateDefinition
 }
 
-export class WidgetDefinitionError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'WidgetDefinitionError'
-  }
-}
-
+export class WidgetDefinitionError extends Error { constructor(message: string) { super(message); this.name = 'WidgetDefinitionError' } }
 const widgetIdPattern = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/
 
 function validateSize(name: string, size?: WidgetSize): void {
   if (!size) return
-  if (!Number.isFinite(size.width) || !Number.isFinite(size.height) || size.width <= 0 || size.height <= 0) {
-    throw new WidgetDefinitionError(`${name} must contain finite positive width and height values`)
-  }
+  if (!Number.isFinite(size.width) || !Number.isFinite(size.height) || size.width <= 0 || size.height <= 0) throw new WidgetDefinitionError(`${name} must contain finite positive width and height values`)
 }
 
 function validateWindowMetadata(window?: WidgetWindowMetadata): void {
   if (!window) return
-  validateSize('window.defaultSize', window.defaultSize)
-  validateSize('window.minSize', window.minSize)
-  validateSize('window.maxSize', window.maxSize)
-  if (window.options) {
-    try { createWindowOptions(window.options) }
-    catch (error) { throw new WidgetDefinitionError(error instanceof Error ? error.message : 'invalid window options') }
-  }
+  validateSize('window.defaultSize', window.defaultSize); validateSize('window.minSize', window.minSize); validateSize('window.maxSize', window.maxSize)
+  if (window.options) { try { createWindowOptions(window.options) } catch (error) { throw new WidgetDefinitionError(error instanceof Error ? error.message : 'invalid window options') } }
   const { defaultSize, minSize, maxSize } = window
   if (minSize && maxSize && (minSize.width > maxSize.width || minSize.height > maxSize.height)) throw new WidgetDefinitionError('window.minSize must not exceed window.maxSize')
   if (defaultSize && minSize && (defaultSize.width < minSize.width || defaultSize.height < minSize.height)) throw new WidgetDefinitionError('window.defaultSize must not be smaller than window.minSize')
   if (defaultSize && maxSize && (defaultSize.width > maxSize.width || defaultSize.height > maxSize.height)) throw new WidgetDefinitionError('window.defaultSize must not exceed window.maxSize')
+}
+
+function validateCapabilities(manifest: WidgetManifest): void {
+  const capabilities = manifest.capabilities
+  if (!capabilities) return
+  if (capabilities.preferredAspectRatio !== undefined && (!Number.isFinite(capabilities.preferredAspectRatio) || capabilities.preferredAspectRatio <= 0)) throw new WidgetDefinitionError('capabilities.preferredAspectRatio must be a finite positive number')
+  validateSize('capabilities.minimumUsefulSize', capabilities.minimumUsefulSize)
+  if (capabilities.multipleInstances === true && manifest.window?.singleton === true) throw new WidgetDefinitionError('capabilities.multipleInstances=true conflicts with legacy window.singleton=true')
+  const minimum = capabilities.minimumUsefulSize
+  const defaultSize = manifest.window?.defaultSize
+  const maximum = manifest.window?.maxSize
+  if (minimum && defaultSize && (minimum.width > defaultSize.width || minimum.height > defaultSize.height)) throw new WidgetDefinitionError('capabilities.minimumUsefulSize must not exceed window.defaultSize')
+  if (minimum && maximum && (minimum.width > maximum.width || minimum.height > maximum.height)) throw new WidgetDefinitionError('capabilities.minimumUsefulSize must not exceed window.maxSize')
 }
 
 function validateParameterSchema(parameters?: WidgetParameterSchema): void {
@@ -96,18 +96,27 @@ function validateParameterSchema(parameters?: WidgetParameterSchema): void {
   }
 }
 
+export function resolveWidgetCapabilities(manifest: WidgetManifest): ResolvedWidgetCapabilities {
+  const capabilities = manifest.capabilities
+  const preferredAspectRatio = capabilities?.preferredAspectRatio
+  const minimumUsefulSize = capabilities?.minimumUsefulSize
+  return {
+    multipleInstances: capabilities?.multipleInstances ?? manifest.window?.singleton !== true,
+    dockable: capabilities?.dockable ?? true,
+    tabCompatible: capabilities?.tabCompatible ?? true,
+    supportsCompactMode: capabilities?.supportsCompactMode ?? true,
+    ...(preferredAspectRatio !== undefined ? { preferredAspectRatio } : {}),
+    ...(minimumUsefulSize ? { minimumUsefulSize: { ...minimumUsefulSize } } : {}),
+  }
+}
+
 export function defineWidget<const TSchema extends WidgetParameterSchema = WidgetParameterSchema>(manifest: WidgetManifest<TSchema>): WidgetManifest<TSchema> {
   if (!widgetIdPattern.test(manifest.id)) throw new WidgetDefinitionError('widget id must start with a lowercase letter and contain only lowercase letters, numbers, dots or hyphens')
   if (!manifest.title.trim()) throw new WidgetDefinitionError('widget title must not be empty')
   const componentType = typeof manifest.component
   if (componentType !== 'object' && componentType !== 'function') throw new WidgetDefinitionError('widget component must be a Vue component')
-  validateParameterSchema(manifest.parameters)
-  validateWindowMetadata(manifest.window)
-  try { validateWidgetActions(manifest.actions) }
-  catch (error) { throw new WidgetDefinitionError(error instanceof Error ? error.message : 'invalid widget actions') }
-  if (manifest.viewState) {
-    try { validateWidgetViewStateDefinition(manifest.viewState) }
-    catch (error) { throw new WidgetDefinitionError(error instanceof WidgetViewStateError ? error.message : 'invalid widget view state') }
-  }
+  validateParameterSchema(manifest.parameters); validateWindowMetadata(manifest.window); validateCapabilities(manifest)
+  try { validateWidgetActions(manifest.actions) } catch (error) { throw new WidgetDefinitionError(error instanceof Error ? error.message : 'invalid widget actions') }
+  if (manifest.viewState) { try { validateWidgetViewStateDefinition(manifest.viewState) } catch (error) { throw new WidgetDefinitionError(error instanceof WidgetViewStateError ? error.message : 'invalid widget view state') } }
   return manifest
 }
