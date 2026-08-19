@@ -13,7 +13,7 @@ import { useWidgetContext } from '../src/vue/widget-context'
 describe('WorkspaceCollectionHost', () => {
   it('mounts only the active workspace and suspends workspace-specific data resources while inactive', async () => {
     const mounted: string[] = [], unmounted: string[] = [], unsubscribed: string[] = []
-    const subscribe = vi.fn<DataProvider['subscribe']>((key, observer) => { observer.next(1); return () => { unsubscribed.push(key.id) } })
+    const subscribe = vi.fn<DataProvider['subscribe']>((key) => () => { unsubscribed.push(key.id) })
     const provider: DataProvider = { subscribe }
     const client = createDataClient(provider)
     const Probe = defineComponent({
