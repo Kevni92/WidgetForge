@@ -14,6 +14,10 @@ export interface WindowHeaderAction {
   readonly disabled?: boolean
 }
 
+export type WindowHeaderActionInput = Omit<WindowHeaderAction, 'side'> & {
+  readonly side?: WindowHeaderActionSide
+}
+
 export interface WindowOptions {
   readonly role: WindowRole
   readonly layer: WindowLayer
@@ -33,7 +37,7 @@ export interface WindowOptions {
 }
 
 export type WindowOptionsOverride = Partial<Omit<WindowOptions, 'headerActions'>> & {
-  readonly headerActions?: readonly (Omit<WindowHeaderAction, 'side'> & { readonly side?: WindowHeaderActionSide })[]
+  readonly headerActions?: readonly WindowHeaderActionInput[]
 }
 
 export const defaultWindowOptions: WindowOptions = {
