@@ -5,16 +5,16 @@ import type { PaneNode } from '../core/pane'
 import type { WidgetRegistry } from '../core/widget-registry'
 import PaneHost from './PaneHost.vue'
 
-interface Props { dock:DockState; rect:DockRect; manager:DockManager; registry:WidgetRegistry }
+interface Props { dock:DockState; rect:DockRect; manager:DockManager; registry:WidgetRegistry; layoutLocked?:boolean }
 const props=defineProps<Props>()
 const manager=toRaw(props.manager)
 let disposeResize:(()=>void)|null=null
 
 function style():Record<string,string>{return{left:`${props.rect.x}px`,top:`${props.rect.y}px`,width:`${props.rect.width}px`,height:`${props.rect.height}px`}}
-function updatePane(pane:PaneNode):void{manager.setRootPane(props.dock.id,pane)}
+function updatePane(pane:PaneNode):void{if(!props.layoutLocked)manager.setRootPane(props.dock.id,pane)}
 function finishResize():void{disposeResize?.()}
 function startResize(event:PointerEvent):void{
-  if(!props.dock.resizable||event.button!==0)return
+  if(props.layoutLocked||!props.dock.resizable||event.button!==0)return
   const target=event.currentTarget;if(!(target instanceof HTMLElement))return
   event.preventDefault();finishResize()
   const pointerId=typeof event.pointerId==='number'?event.pointerId:undefined
@@ -30,18 +30,5 @@ function startResize(event:PointerEvent):void{
 onBeforeUnmount(finishResize)
 </script>
 
-<template>
-  <section class="wf-dock-host" :class="`wf-dock-host--${dock.position}`" :data-dock-id="dock.id" :data-dock-position="dock.position" :style="style()">
-    <PaneHost :pane="dock.rootPane" :registry="registry" @update:pane="updatePane" />
-    <div v-if="dock.resizable" class="wf-dock-host__resize" :data-dock-resize="dock.position" aria-hidden="true" @pointerdown="startResize" />
-  </section>
-</template>
-
-<style scoped>
-.wf-dock-host{position:absolute;min-width:0;min-height:0;overflow:hidden;background:var(--wf-color-surface);z-index:calc(var(--wf-layer-window) - 1)}
-.wf-dock-host__resize{position:absolute;z-index:3;touch-action:none}
-.wf-dock-host--top .wf-dock-host__resize{right:0;bottom:-3px;left:0;height:6px;cursor:ns-resize}
-.wf-dock-host--bottom .wf-dock-host__resize{top:-3px;right:0;left:0;height:6px;cursor:ns-resize}
-.wf-dock-host--left .wf-dock-host__resize{top:0;right:-3px;bottom:0;width:6px;cursor:ew-resize}
-.wf-dock-host--right .wf-dock-host__resize{top:0;bottom:0;left:-3px;width:6px;cursor:ew-resize}
-</style>
+<template><section class="wf-dock-host" :class="`wf-dock-host--${dock.position}`" :data-dock-id="dock.id" :data-dock-position="dock.position" :data-layout-locked="layoutLocked || undefined" :style="style()"><PaneHost :pane="dock.rootPane" :registry="registry" @update:pane="updatePane"/><div v-if="dock.resizable && !layoutLocked" class="wf-dock-host__resize" :data-dock-resize="dock.position" aria-hidden="true" @pointerdown="startResize"/></section></template>
+<style scoped>.wf-dock-host{position:absolute;min-width:0;min-height:0;overflow:hidden;background:var(--wf-color-surface);z-index:calc(var(--wf-layer-window) - 1)}.wf-dock-host__resize{position:absolute;z-index:3;touch-action:none}.wf-dock-host--top .wf-dock-host__resize{right:0;bottom:-3px;left:0;height:6px;cursor:ns-resize}.wf-dock-host--bottom .wf-dock-host__resize{top:-3px;right:0;left:0;height:6px;cursor:ns-resize}.wf-dock-host--left .wf-dock-host__resize{top:0;right:-3px;bottom:0;width:6px;cursor:ew-resize}.wf-dock-host--right .wf-dock-host__resize{top:0;bottom:0;left:-3px;width:6px;cursor:ew-resize}</style>
