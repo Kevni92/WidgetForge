@@ -1,6 +1,6 @@
 import { defineComponent } from 'vue'
 import { describe, expect, it } from 'vitest'
-import { createSplitPane, createWidgetPane } from '../src/core/pane'
+import { createSplitPane, createStackPane, createWidgetPane } from '../src/core/pane'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
@@ -17,9 +17,20 @@ describe('workspace persistence', () => {
     const registry=createRegistry(),source=createWindowManager(registry)
     source.openPane({instanceId:'operations',title:'Operations',pane:createSplitPane({id:'operations-root',axis:'horizontal',weights:[2,1],children:[createWidgetPane({id:'alpha-pane',widgetId:'test.alpha',instanceId:'alpha-leaf',parameters:{name:'ARC',count:4}}),createWidgetPane({id:'beta-pane',widgetId:'test.beta',instanceId:'beta-leaf'})]}),position:{x:80,y:90},size:{width:510,height:300},minSize:{width:300,height:180}})
     source.open({widgetId:'test.beta',instanceId:'beta-main'});source.minimize('operations');source.focus('beta-main')
-    const snapshot=captureWorkspace(source);expect(snapshot.version).toBe(2);expect(snapshot.windows.map((window)=>window.instanceId)).toEqual(['operations','beta-main']);expect(snapshot.windows[0]?.rootPane).toMatchObject({kind:'split',id:'operations-root',weights:[2,1]})
+    const snapshot=captureWorkspace(source);expect(snapshot.version).toBe(3);expect(snapshot.windows.map((window)=>window.instanceId)).toEqual(['operations','beta-main']);expect(snapshot.windows[0]?.rootPane).toMatchObject({kind:'split',id:'operations-root',weights:[2,1]})
     const serialized=serializeWorkspace(source);expect(serialized).toContain('"constraints"');expect(serialized).toContain('"rootPane"');expect(serialized).not.toContain('lifecycle')
     const target=createWindowManager(registry),result=restoreWorkspace(target,serialized);expect(result.valid).toBe(true);expect(result.issues).toEqual([]);expect(target.get('operations')).toMatchObject({title:'Operations',mode:'minimized',focused:false,geometry:{position:{x:80,y:90},size:{width:510,height:300}},constraints:{minSize:{width:300,height:180}}});expect(target.get('operations').rootPane).toEqual(snapshot.windows[0]?.rootPane);expect(target.get('beta-main')).toMatchObject({mode:'normal',focused:true})
+  })
+
+  it('persists StackPane and advanced pane constraints', () => {
+    const registry=createRegistry(),source=createWindowManager(registry)
+    source.openPane({instanceId:'layers',title:'Layers',pane:createStackPane({id:'layers-root',children:[
+      createWidgetPane({id:'base',widgetId:'test.alpha',instanceId:'base',parameters:{name:'base'},settings:{sizeMode:'fixed',size:160,minSize:120,collapsible:true}}),
+      createWidgetPane({id:'overlay',widgetId:'test.beta',instanceId:'overlay',settings:{locked:true}}),
+    ]})})
+    const serialized=serializeWorkspace(source),target=createWindowManager(registry),result=restoreWorkspace(target,serialized)
+    expect(result.valid).toBe(true);expect(result.issues).toEqual([])
+    expect(target.get('layers').rootPane).toMatchObject({kind:'stack',children:[{id:'base',settings:{sizeMode:'fixed',size:160,minSize:120,collapsible:true}},{id:'overlay',settings:{locked:true}}]})
   })
 
   it('persists maximized state with its original floating restore geometry', () => {
@@ -37,7 +48,14 @@ describe('workspace persistence', () => {
     expect(result.valid).toBe(true);expect(result.issues).toEqual([]);expect(manager.get('legacy-alpha').rootPane).toMatchObject({kind:'widget',widgetId:'test.alpha',instanceId:'legacy-alpha',parameters:{name:'legacy',count:2}})
   })
 
-  it('skips stale or invalid v2 entries without discarding valid entries', () => {
+  it('restores version 2 snapshots after the pane schema upgrade', () => {
+    const source=createWindowManager(createRegistry());source.open({widgetId:'test.alpha',instanceId:'v2-alpha',parameters:{name:'v2'}})
+    const snapshot=captureWorkspace(source)
+    const manager=createWindowManager(createRegistry());const result=restoreWorkspace(manager,{...snapshot,version:2})
+    expect(result.valid).toBe(true);expect(result.issues).toEqual([]);expect(manager.get('v2-alpha')).toBeDefined()
+  })
+
+  it('skips stale or invalid current entries without discarding valid entries', () => {
     const source=createWindowManager(createRegistry());source.open({widgetId:'test.alpha',instanceId:'valid-alpha',parameters:{name:'valid',count:2}});const valid=captureWorkspace(source).windows[0];expect(valid).toBeDefined()
     const manager=createWindowManager(createRegistry());const result=restoreWorkspace(manager,{version:WORKSPACE_VERSION,windows:[valid,valid?{...valid,instanceId:'removed-widget',rootPane:{...valid.rootPane,widgetId:'removed.widget'}}:null,valid?{...valid,instanceId:'invalid-parameters',rootPane:{...valid.rootPane,parameters:{count:2}}}:null,{broken:true}]})
     expect(result.valid).toBe(true);expect(manager.list()).toHaveLength(1);expect(manager.get('valid-alpha').rootPane).toMatchObject({parameters:{name:'valid',count:2}});expect(result.issues.map((issue)=>issue.code)).toEqual(['invalid-window','unknown-widget','invalid-parameters'])

@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../src/App.vue'
 
-const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.fullscreen.v2'
+const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.fullscreen.v3'
 const GROUP_STORAGE_KEY = 'widgetforge.playground.groups.v1'
 
 describe('Fullscreen Playground App', () => {
@@ -37,6 +37,7 @@ describe('Fullscreen Playground App', () => {
     expect(wrapper.get('[data-window-instance-id="colony-main"]').attributes('data-window-group')).toBe('operations-cluster')
     expect(wrapper.get('[data-window-instance-id="alerts-main"]').attributes('data-window-group')).toBe('operations-cluster')
     expect(wrapper.get('[data-window-instance-id="operations-main"] [data-pane-id="operations-root"]').attributes('data-pane-kind')).toBe('split')
+    expect(wrapper.get('[data-pane-id="operations-stack"]').attributes('data-pane-kind')).toBe('stack')
     expect(wrapper.get('[data-pane-id="operations-metrics"]').attributes('data-pane-kind')).toBe('tabs')
     expect(wrapper.findAll('[data-pane-id="operations-metrics"] [role="tab"]')).toHaveLength(2)
     expect(wrapper.findAll('[data-window-instance-id="market-main"] .wf-data-table__row')).toHaveLength(14)

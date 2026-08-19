@@ -4,36 +4,55 @@
 
 ## Verantwortung
 
-Ein Pane ist DOM-unabhängig und serialisierbar. Es enthält entweder ein Widget (`kind: widget`) oder weitere Panes als Split (`kind: split`). Windows, Docks und andere Workspace-Hosts sollen Pane-Bäume verwenden, statt Widget-Inhalte selbst zu modellieren.
+Ein Pane ist DOM-unabhängig und serialisierbar. Es enthält entweder ein Widget (`kind: widget`) oder weitere Panes als Split (`kind: split`), Tabs (`kind: tabs`) oder Layer-Stack (`kind: stack`). Windows und Docks verwenden dieselben Pane-Bäume; es existiert keine host-spezifische Pane-Variante.
 
-Widgets kennen das Pane-System nicht. Reparenting, Splitten und Resize sind Workspace-Verantwortung.
+Widgets kennen das Pane-System nicht. Reparenting, Splitten, Collapse und Resize sind Workspace-Verantwortung.
 
-## Widget Pane
+## Pane-Typen
 
-Ein Widget-Pane besitzt eine stabile Pane-ID, Widget-ID, Widget-Instanz-ID, serialisierbare Parameter und optionale Pane-Einstellungen.
+- `WidgetPane` besitzt stabile Pane-/Widget-Instanz-IDs, Parameter und optionale Pane-Einstellungen.
+- `SplitPane` besitzt eine Achse, mindestens zwei Kinder und positive Gewichte.
+- `TabPane` besitzt mindestens zwei Kinder und eine aktive direkte Child-ID.
+- `StackPane` besitzt mindestens ein Kind. Alle Kinder werden in Reihenfolge als übereinanderliegende Layer gerendert; der letzte Layer liegt oben.
 
-## Split Pane
+Alle Pane-Typen sind rekursiv kombinierbar und bleiben vollständig serialisierbar.
 
-Ein Split-Pane besitzt eine stabile Pane-ID, die Achse `horizontal` oder `vertical`, mindestens zwei Kinder und positive Gewichte. Gewichte beschreiben die relative Platzverteilung; konkrete Pixelberechnung ist Aufgabe des Renderers.
+## Größenmodi und Constraints
 
-## Pane-Einstellungen
+`PaneSettings.sizeMode` unterstützt:
 
-Generische Einstellungen umfassen insbesondere Resizability, Min-/Max-Größe, Grow, Overflow sowie einen semantischen Hintergrund. `backgroundColor` ist ein expliziter Consumer-Override; Framework-Defaults bleiben tokenbasiert.
+- `flex` (Default): verbleibender Platz wird anhand von Split-Gewicht und `grow` verteilt.
+- `fixed`: `size` definiert die bevorzugte feste Pixelgröße.
+- `content`: die bevorzugte Größe stammt aus einer intrinsischen Content-Größe des Renderers.
+
+`minSize` und `maxSize` gelten unabhängig vom Größenmodus. `calculatePaneSplitLayout()` berechnet die eindimensionale Split-Verteilung als pure Core-Funktion. Die übergebene verfügbare Größe enthält keine Divider-Breite.
+
+Die Fallback-Regel bei zu kleinen Containern ist deterministisch: Content-Panes und danach Fixed-Panes werden bis zu ihrem Minimum verkleinert. Reicht selbst die Summe aller Mindestgrößen nicht in den Container, werden Mindestgrößen **nicht** unterschritten; `overflow` meldet den nicht auflösbaren Überhang. Damit werden Min-/Max-Constraints nicht still verletzt.
+
+## Collapse und Lock
+
+`collapsible` erlaubt den expliziten Collapse-State `collapsed`. Ein kollabiertes Pane belegt im Split null Pixel. `setPaneCollapsed()` ändert diesen Zustand immutable.
+
+`locked` betrifft ausschließlich Layout-Operationen. Gesperrte Panes können nicht entfernt, verschoben, gesplittet, kollabiert oder über Split-Divider resized werden. Widget-/Domain-State ist davon unberührt.
 
 ## Tree-Operationen
 
-Tree-Operationen sind pure Funktionen und erzeugen neue Bäume. Unterstützt werden Finden, Ersetzen, Entfernen mit automatischem Split-Collapse, Splitten an einer Kante, Verschieben eines Subtrees und Aktualisieren von Split-Gewichten.
+Tree-Operationen sind pure Funktionen und erzeugen neue Bäume. Unterstützt werden Finden, Ersetzen, Entfernen mit automatischem Parent-Collapse, Splitten an einer Kante, Tab-Docking, Verschieben eines Subtrees, Tab-Reihenfolge, Collapse und Split-Gewichte.
 
 Pane-IDs müssen innerhalb eines Baums eindeutig sein. Ein Pane darf nicht in einen eigenen Descendant verschoben werden. Der Root-Pane darf nicht in sich selbst reparented werden.
 
 ## PaneHost
 
-`PaneHost` ist der generische Vue-Renderer des Pane-Baums. Widget-Panes werden über den bestehenden `WidgetHost` gerendert; Split-Panes rekursiv über weitere `PaneHost`-Instanzen. Der Host kennt weder WindowManager noch Docks.
+`PaneHost` ist der generische Vue-Renderer des Pane-Baums. Widget-Panes werden über `WidgetHost` gerendert; Split-, Tab- und Stack-Panes rekursiv über weitere `PaneHost`-Instanzen. Der Host kennt weder `WindowManager` noch `DockManager`.
 
-Split-Divider verändern ausschließlich die Gewichte des betroffenen Split-Panes und emittieren einen neuen Pane-Baum. Die Resize-Mathematik liegt in einer puren Core-Funktion und berücksichtigt Min-/Max-Größen der beiden benachbarten Panes. Pointer-Listener werden bei Ende, Abbruch und Unmount deterministisch entfernt.
+Split-Divider sind nur zwischen zwei nicht kollabierten, entsperrten, resizablen `flex`-Panes aktiv. Fixed- und Content-Panes bleiben über ihre deklarativen Constraints bestimmt. Pointer-Listener werden bei Ende, Abbruch und Unmount deterministisch entfernt.
 
-Stabile Pane- und Widget-Instanz-IDs sorgen dafür, dass reine Layoutänderungen keine Widget-Remounts verursachen.
+Stack-Layer werden im selben Host übereinander angeordnet. Es gibt dafür keine Window-/Dock-Sonderlogik.
+
+## Persistenz
+
+Workspace-Schema Version 3 persistiert `StackPane` sowie `sizeMode`, `size`, `collapsible`, `collapsed` und `locked`. Version-1- und Version-2-Snapshots bleiben restorebar; neue Snapshots werden als Version 3 geschrieben.
 
 ## Architekturgrenze
 
-Pane-Modell und Resize-Mathematik bleiben DOM-freier Core. `PaneHost` ist ausschließlich Renderer und Input-Adapter. Window-/Dock-Hosts sollen ausschließlich den Root-Pane kennen und Rendering an `PaneHost` delegieren. Pane-Reparenting und Edit-Mode folgen in separaten Workspace-Issues.
+Pane-Modell und Constraint-Mathematik bleiben DOM-freier Core. `PaneHost` ist ausschließlich Renderer und Input-Adapter. Window-/Dock-Hosts kennen nur den jeweiligen Root-Pane und delegieren dessen Rendering an `PaneHost`.
