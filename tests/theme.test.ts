@@ -19,6 +19,7 @@ describe('theme', () => {
     expect(variables['--wf-color-surface-floating']).toBe(defaultTheme.color.surfaceFloating)
     expect(variables['--wf-color-surface-overlay']).toBe(defaultTheme.color.surfaceOverlay)
     expect(variables['--wf-color-surface-modal']).toBe(defaultTheme.color.surfaceModal)
+    expect(variables['--wf-color-text-placeholder']).toBe(defaultTheme.color.textPlaceholder)
     expect(variables['--wf-color-border-modal']).toBe(defaultTheme.color.borderModal)
     expect(variables['--wf-color-backdrop']).toBe(defaultTheme.color.backdrop)
     expect(variables['--wf-shadow-lg']).toBe(defaultTheme.shadow.lg)

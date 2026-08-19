@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { forgeLightTheme } from 'widgetforge'
 import App from '../src/App.vue'
 
 const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.fullscreen.v3'
@@ -80,7 +81,7 @@ describe('Fullscreen Playground App', () => {
     expect(wrapper.findAll('[data-resource-id="grid-power"]').every((widget) => widget.text().includes('118.5 MW'))).toBe(true)
 
     await wrapper.get('select[aria-label="Theme"]').setValue('forge-light')
-    expect(wrapper.get('.wf-theme').attributes('style')).toContain('--wf-color-canvas: #e9eef3')
+    expect(wrapper.get('.wf-theme').attributes('style')).toContain(`--wf-color-canvas: ${forgeLightTheme.color.canvas}`)
     wrapper.unmount()
   })
 

@@ -193,6 +193,8 @@ function ariaSort(column: DataTableColumn<TRow>): 'ascending' | 'descending' | '
   font: inherit;
 }
 
+.wf-data-table__filter::placeholder { color: var(--wf-color-text-placeholder); opacity: 1; }
+
 .wf-data-table__filter:focus-visible,
 .wf-data-table__sort:focus-visible,
 .wf-data-table__row:focus-visible {

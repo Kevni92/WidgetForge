@@ -9,6 +9,7 @@ export interface WidgetForgeTheme {
     surfaceModal: string
     text: string
     textMuted: string
+    textPlaceholder: string
     border: string
     borderSubtle: string
     borderStrong: string
@@ -82,6 +83,7 @@ export const defaultTheme: WidgetForgeTheme = {
     surfaceModal: '#354a61',
     text: '#e8edf2',
     textMuted: '#aeb9c5',
+    textPlaceholder: '#aeb9c5',
     border: '#2b3541',
     borderSubtle: '#222c37',
     borderStrong: '#3a4959',

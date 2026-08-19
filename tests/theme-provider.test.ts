@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import ThemeProvider from '../src/vue/ThemeProvider.vue'
 import { useTheme } from '../src/vue/theme-context'
+import { defaultTheme } from '../src/vue/theme'
 import { forgeDarkTheme, forgeLightTheme } from '../src/presets/forge'
 
 const Probe = defineComponent({
@@ -71,6 +72,7 @@ describe('ThemeProvider', () => {
     expect(style).toContain('--wf-color-surface-floating: floating-surface')
     expect(style).toContain('--wf-color-surface-overlay: overlay-surface')
     expect(style).toContain('--wf-color-surface-modal: modal-surface')
+    expect(style).toContain(`--wf-color-text-placeholder: ${defaultTheme.color.textPlaceholder}`)
     expect(style).toContain('--wf-color-border-modal: modal-border')
     expect(style).toContain('--wf-color-backdrop: modal-backdrop')
     expect(style).toContain('--wf-shadow-lg: modal-shadow')
