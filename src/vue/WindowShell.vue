@@ -37,20 +37,9 @@ interface WindowShellProps {
 }
 
 const props = withDefaults(defineProps<WindowShellProps>(), {
-  parameters: () => ({}),
-  focused: false,
-  closable: true,
-  minimizable: true,
-  maximizable: true,
-  minimized: false,
-  maximized: false,
-  movable: true,
-  header: 'always',
-  chrome: 'default',
-  glass: false,
-  headerActions: () => [],
-  windowRole: 'normal',
-  layoutLocked: false,
+  parameters: () => ({}), focused: false, closable: true, minimizable: true, maximizable: true,
+  minimized: false, maximized: false, movable: true, header: 'always', chrome: 'default', glass: false,
+  headerActions: () => [], windowRole: 'normal', layoutLocked: false,
 })
 const emit = defineEmits<{
   focus: [event: WindowShellEvent]
@@ -123,36 +112,14 @@ function setHovered(value: boolean): void { hovered.value = value; if (!value &&
   >
     <header v-if="showHeader" class="wf-window-shell__titlebar" :data-window-drag-handle="movable && !maximized ? '' : undefined">
       <div class="wf-window-shell__leading">
-        <button
-          v-for="action in leftHeaderActions"
-          :key="action.id"
-          class="wf-window-shell__header-action"
-          type="button"
-          :data-window-header-action="action.id"
-          :aria-label="action.label"
-          :title="action.tooltip ?? action.label"
-          :disabled="action.disabled"
-          @pointerdown.stop
-          @click.stop="requestHeaderAction(action)"
-        >{{ action.icon ?? action.label }}</button>
+        <button v-for="action in leftHeaderActions" :key="action.id" class="wf-window-shell__header-action" type="button" :data-window-header-action="action.id" :aria-label="action.label" :title="action.tooltip ?? action.label" :disabled="action.disabled" @pointerdown.stop @click.stop="requestHeaderAction(action)">{{ action.icon ?? action.label }}</button>
         <span v-if="icon" class="wf-window-shell__icon" aria-hidden="true">{{ icon }}</span>
         <div class="wf-window-shell__title"><slot name="title" :title="resolvedTitle">{{ resolvedTitle }}</slot></div>
         <span v-if="badge" class="wf-window-shell__badge">{{ badge }}</span>
       </div>
       <div class="wf-window-shell__actions">
         <span v-if="status" class="wf-window-shell__status">{{ status }}</span>
-        <button
-          v-for="action in rightHeaderActions"
-          :key="action.id"
-          class="wf-window-shell__header-action"
-          type="button"
-          :data-window-header-action="action.id"
-          :aria-label="action.label"
-          :title="action.tooltip ?? action.label"
-          :disabled="action.disabled"
-          @pointerdown.stop
-          @click.stop="requestHeaderAction(action)"
-        >{{ action.icon ?? action.label }}</button>
+        <button v-for="action in rightHeaderActions" :key="action.id" class="wf-window-shell__header-action" type="button" :data-window-header-action="action.id" :aria-label="action.label" :title="action.tooltip ?? action.label" :disabled="action.disabled" @pointerdown.stop @click.stop="requestHeaderAction(action)">{{ action.icon ?? action.label }}</button>
         <slot name="actions" />
         <button v-if="minimizable" class="wf-window-shell__minimize" type="button" :aria-label="minimized ? 'Restore window' : 'Minimize window'" @pointerdown.stop @click.stop="toggleMinimized">{{ minimized ? '□' : '−' }}</button>
         <div v-if="maximizable && !minimized" class="wf-window-shell__layout-action" @mouseenter="openLayoutPicker">
@@ -163,7 +130,7 @@ function setHovered(value: boolean): void { hovered.value = value; if (!value &&
       </div>
     </header>
     <div v-show="!minimized" class="wf-window-shell__content" :aria-hidden="minimized ? 'true' : undefined">
-      <slot><PaneHost v-if="contentPane" :pane="contentPane" :registry="registry" :lifecycle="lifecycle" :layout-locked="layoutLocked" @update:pane="emit('update:pane', $event)" /></slot>
+      <slot><PaneHost v-if="contentPane" :pane="contentPane" :registry="registry" :lifecycle="lifecycle" :layout-locked="layoutLocked" host-type="window" :host-visible="!minimized" :host-focused="focused" @update:pane="emit('update:pane', $event)" /></slot>
     </div>
   </section>
 </template>

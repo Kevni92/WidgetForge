@@ -4,6 +4,8 @@ export type { DeepPartial, WidgetForgeTheme, WidgetForgeThemeOverride } from './
 export { useTheme } from './vue/theme-context'
 export { default as WidgetHost } from './vue/WidgetHost.vue'
 export { default as PaneHost } from './vue/PaneHost.vue'
+export { PaneContextUnavailableError, usePaneContext } from './vue/pane-context'
+export type { PaneContext, PaneHostType } from './vue/pane-context'
 export { default as DockHost } from './vue/DockHost.vue'
 export { default as WorkspaceHost } from './vue/WorkspaceHost.vue'
 export { default as DockingOverlay } from './vue/DockingOverlay.vue'
