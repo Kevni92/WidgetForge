@@ -11,6 +11,7 @@ import {
   type PaneSplitEdge,
 } from './pane'
 import type { WindowManager, WindowState } from './window-manager'
+import { commitWorkspacePaneMutations } from './workspace'
 
 export type WorkspaceDropZone = 'center' | PaneSplitEdge
 
@@ -117,7 +118,9 @@ export function dockWindowIntoWindow(
   const source = manager.get(sourceInstanceId)
   const target = manager.get(targetInstanceId)
   const rootPane = dropPaneAt(target.rootPane, targetPaneId, source.rootPane, zone, containerId)
-  manager.setRootPane(targetInstanceId, rootPane, 'user')
-  manager.close(sourceInstanceId, 'user')
+  commitWorkspacePaneMutations(manager, undefined, [
+    { owner: { kind: 'window', id: sourceInstanceId }, rootPane: null },
+    { owner: { kind: 'window', id: targetInstanceId }, rootPane },
+  ])
   return manager.get(targetInstanceId)
 }

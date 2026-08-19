@@ -1,7 +1,7 @@
 import { createDockManager, type DockManager, type DockState } from './dock-manager'
 import type { WidgetRegistry } from './widget-registry'
 import { createWindowManager, type WindowManager, type WindowState } from './window-manager'
-import { captureWorkspace, restoreWorkspace, type WorkspaceDockSnapshot, type WorkspaceSnapshot, type WorkspaceWindowSnapshot } from './workspace'
+import { captureWorkspace, restoreWorkspace, validateWorkspaceSnapshot, type WorkspaceDockSnapshot, type WorkspaceSnapshot, type WorkspaceWindowSnapshot } from './workspace'
 
 export const WORKSPACE_LAYOUT_PRESET_VERSION = 1 as const
 export const WORKSPACE_LAYOUT_COLLECTION_VERSION = 1 as const
@@ -325,8 +325,23 @@ export class WorkspaceLayoutManager {
     const normalized = normalizeName(name)
     const preset = this.layouts.get(normalized)
     if (!preset) throw new WorkspaceLayoutError('not-found', `unknown workspace layout "${normalized}"`)
-    const result = applyWorkspace(this.options.windows, this.options.docks, preset.workspace)
-    return { ...result, name: normalized }
+    const before = captureWorkspace(this.options.windows, this.options.docks)
+    try {
+      const result = applyWorkspace(this.options.windows, this.options.docks, preset.workspace)
+      validateWorkspaceSnapshot(captureWorkspace(this.options.windows, this.options.docks))
+      return { ...result, name: normalized }
+    } catch (error) {
+      try {
+        for (const window of [...this.options.windows.list()]) this.options.windows.close(window.instanceId, 'api')
+        if (this.options.docks) for (const dock of [...this.options.docks.list()]) this.options.docks.remove(dock.id)
+        const restored = restoreWorkspace(this.options.windows, before, this.options.docks, undefined, { atomic: true })
+        if (!restored.valid || restored.issues.length > 0) throw new WorkspaceLayoutError('restore-failed', 'workspace layout rollback reported issues')
+      } catch (rollbackError) {
+        throw new WorkspaceLayoutError('restore-failed', `workspace layout load failed and rollback also failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`)
+      }
+      if (error instanceof WorkspaceLayoutError) throw error
+      throw new WorkspaceLayoutError('restore-failed', error instanceof Error ? error.message : 'workspace layout restore failed')
+    }
   }
 
   loadDefaultLayout(): WorkspaceLayoutLoadResult {

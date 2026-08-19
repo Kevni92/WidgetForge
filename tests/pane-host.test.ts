@@ -63,6 +63,10 @@ describe('PaneHost', () => {
     const resized = emitted?.at(-1)?.[0] as SplitPane | undefined
     expect(resized?.weights[0]).toBeGreaterThan(resized?.weights[1] ?? 0)
 
+    const emittedCount = emitted?.length ?? 0
+    wrapper.get('[data-pane-divider-index="0"]').element.dispatchEvent(new Event('lostpointercapture'))
+    dispatchPointer(globalThis.window, 'pointermove', 350, 0)
+    expect(wrapper.emitted('update:pane')?.length ?? 0).toBe(emittedCount)
     wrapper.unmount()
     expect(() => dispatchPointer(globalThis.window, 'pointermove', 350, 0)).not.toThrow()
   })

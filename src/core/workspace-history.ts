@@ -165,15 +165,27 @@ export class WorkspaceHistory {
   }
 
   private apply(snapshot: string): void {
+    const previous = this.current
     this.applying = true
     try {
       for (const window of [...this.windows.list()]) this.windows.close(window.instanceId, 'api')
       if (this.docks) for (const dock of [...this.docks.list()]) this.docks.remove(dock.id)
-      const restored = restoreWorkspace(this.windows, snapshot, this.docks)
+      const restored = restoreWorkspace(this.windows, snapshot, this.docks, undefined, { atomic: true })
       if (!restored.valid || restored.issues.length > 0) {
         throw new WorkspaceHistoryError(`history snapshot restore failed: ${restored.issues.map((issue) => issue.message).join('; ')}`)
       }
       this.current = this.capture()
+    } catch (error) {
+      try {
+        for (const window of [...this.windows.list()]) this.windows.close(window.instanceId, 'api')
+        if (this.docks) for (const dock of [...this.docks.list()]) this.docks.remove(dock.id)
+        const restored = restoreWorkspace(this.windows, previous, this.docks, undefined, { atomic: true })
+        if (!restored.valid || restored.issues.length > 0) throw new WorkspaceHistoryError('history rollback restore reported issues')
+        this.current = this.capture()
+      } catch (rollbackError) {
+        throw new WorkspaceHistoryError(`history apply failed and rollback also failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`)
+      }
+      throw error
     } finally {
       this.applying = false
     }

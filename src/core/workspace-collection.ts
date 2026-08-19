@@ -97,6 +97,7 @@ function cloneSnapshot(snapshot: WorkspaceCollectionSnapshot): WorkspaceCollecti
 export class WorkspaceCollectionManager {
   private readonly records = new Map<WorkspaceId, RuntimeRecord>()
   private readonly listeners = new Set<WorkspaceCollectionListener>()
+  private readonly workspacePersistQueued = new Set<WorkspaceId>()
   private activeId: WorkspaceId | null = null
   private restoring = false
 
@@ -209,7 +210,10 @@ export class WorkspaceCollectionManager {
     }
     const onWorkspaceChange = () => {
       if (this.restoring) return
-      this.persist()
+      if (!this.workspacePersistQueued.has(id)) {
+        this.workspacePersistQueued.add(id)
+        queueMicrotask(() => { this.workspacePersistQueued.delete(id); if (!this.restoring) this.persist() })
+      }
       this.emit('workspace', id)
     }
     return { name, windows, docks, unsubscribeWindows: windows.subscribe(onWorkspaceChange), unsubscribeDocks: docks.subscribe(onWorkspaceChange) }

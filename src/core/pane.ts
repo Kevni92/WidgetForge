@@ -165,6 +165,10 @@ function validateWeights(children: readonly PaneNode[], weights: readonly number
   }
 }
 
+function validateAxis(axis: PaneAxis): void {
+  if (axis !== 'horizontal' && axis !== 'vertical') throw new PaneDefinitionError(`invalid split pane axis "${String(axis)}"`)
+}
+
 function validateTabChildren(children: readonly PaneNode[], activeId: PaneId): void {
   if (children.length < 2) throw new PaneDefinitionError('tab pane requires at least two children')
   if (!children.some((child) => child.id === activeId)) {
@@ -192,6 +196,7 @@ export function createWidgetPane(options: CreateWidgetPaneOptions): WidgetPane {
 
 export function createSplitPane(options: CreateSplitPaneOptions): SplitPane {
   validateId(options.id, 'pane id')
+  validateAxis(options.axis)
   if (options.children.length < 2) throw new PaneDefinitionError('split pane requires at least two children')
   const weights = [...(options.weights ?? options.children.map(() => 1))]
   validateWeights(options.children, weights)
@@ -243,6 +248,7 @@ export function clonePaneTree<T extends PaneNode>(pane: T): T {
 
 export function validatePaneTree(root: PaneNode): void {
   const seen = new Set<PaneId>()
+  const seenWidgetInstances = new Set<string>()
   function visit(pane: PaneNode): void {
     validateId(pane.id, 'pane id')
     if (seen.has(pane.id)) throw new PaneDefinitionError(`duplicate pane id "${pane.id}"`)
@@ -251,10 +257,13 @@ export function validatePaneTree(root: PaneNode): void {
     if (pane.kind === 'widget') {
       validateId(pane.widgetId, 'widget id')
       validateId(pane.instanceId, 'widget instance id')
+      if (seenWidgetInstances.has(pane.instanceId)) throw new PaneDefinitionError(`duplicate widget instance id "${pane.instanceId}"`)
+      seenWidgetInstances.add(pane.instanceId)
       validateParameters(pane.parameters)
       return
     }
     if (pane.kind === 'split') {
+      validateAxis(pane.axis)
       if (pane.children.length < 2) throw new PaneDefinitionError('split pane requires at least two children')
       validateWeights(pane.children, pane.weights)
     } else if (pane.kind === 'tabs') {
