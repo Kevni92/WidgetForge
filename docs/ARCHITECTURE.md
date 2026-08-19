@@ -93,7 +93,7 @@ Strukturelle Änderungen werden als immutable Pane-Operationen vorbereitet. Ein 
 
 ## Navigation
 
-Navigation wird als Intent formuliert und zentral aufgelöst. Fachliche Widgets sollen nicht wissen müssen, wie Fenster erzeugt oder fokussiert werden.
+Navigation wird als Intent formuliert und zentral aufgelöst. Fachliche Widgets sollen nicht wissen müssen, wie Fenster erzeugt oder fokussiert werden. Eine globale Navigation kann über `createActiveWorkspaceNavigator()` gegen eine `WorkspaceCollectionManager` gebunden werden; der aktive `WindowManager` wird erst beim Aufruf des Intents aufgelöst und deshalb nicht beim Workspace-Wechsel veraltet. Ein im `WindowManagerHost` bereitgestellter Navigator bleibt dagegen an den aufrufenden Workspace gebunden. Dadurch öffnen globale Workspace-Chrome-Aktionen im aktiven Workspace, während interne Widget-Navigation ihren Caller-Kontext behält.
 
 ## Datenmodell
 

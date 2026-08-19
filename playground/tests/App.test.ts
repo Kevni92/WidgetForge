@@ -107,6 +107,36 @@ describe('Fullscreen Playground App', () => {
     wrapper.unmount()
   })
 
+  it('routes global widget navigation to the active virtual workspace', async () => {
+    const wrapper = mount(App)
+
+    await wrapper.get('[data-workspace-tab="trading"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-active-workspace="trading"]').exists()).toBe(true)
+    await wrapper.get('[data-demo-nav="modal"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-window-role="modal"]').exists()).toBe(true)
+
+    await wrapper.get('[data-workspace-tab="command"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-active-workspace="command"]').exists()).toBe(true)
+    expect(wrapper.find('[data-window-role="modal"]').exists()).toBe(false)
+
+    await wrapper.get('[data-workspace-tab="operations"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-demo-nav="modal"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-window-role="modal"]').exists()).toBe(true)
+
+    await wrapper.get('[data-workspace-tab="command"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-window-role="modal"]').exists()).toBe(false)
+    await wrapper.get('[data-demo-nav="modal"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-window-role="modal"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('restores changed window and dock layout after remounting', async () => {
     const first = mount(App)
     await first.get('[data-window-instance-id="alerts-main"] .wf-window-shell__close').trigger('click')

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, markRaw, nextTick, ref, shallowRef } from 'vue'
-import { DataClientProvider, DevToolsOverlay, ThemeProvider, WorkspaceHost, captureWorkspace, createDataClient, createDataKey, createLocalStorageWorkspaceCollectionStorage, createLocalStorageWorkspaceLayoutStorage, createMockDataProvider, createSplitPane, createStackPane, createTabPane, createWidgetNavigator, createWidgetPane, createWindowGroupManager, createWorkspaceCollection, createWorkspaceEditController, createWorkspaceHistory, createWorkspaceLayoutManager, forgeDarkTheme, forgeLightTheme, provideWidgetNavigation, restoreWorkspace, serializeWorkspace, type WidgetForgeTheme, type WindowGroupSnapshot, type WorkspaceEditSnapshot, type WorkspaceRuntime, type WindowSize } from 'widgetforge'
+import { DataClientProvider, DevToolsOverlay, ThemeProvider, WorkspaceHost, captureWorkspace, createActiveWorkspaceNavigator, createDataClient, createDataKey, createLocalStorageWorkspaceCollectionStorage, createLocalStorageWorkspaceLayoutStorage, createMockDataProvider, createSplitPane, createStackPane, createTabPane, createWidgetPane, createWindowGroupManager, createWorkspaceCollection, createWorkspaceEditController, createWorkspaceHistory, createWorkspaceLayoutManager, forgeDarkTheme, forgeLightTheme, provideWidgetNavigation, restoreWorkspace, serializeWorkspace, type WidgetForgeTheme, type WindowGroupSnapshot, type WorkspaceEditSnapshot, type WorkspaceRuntime, type WindowSize } from 'widgetforge'
 import { provideDemoControls, type DemoThemeName } from './demo-controls'
 import { economyKey, registerEconomyResources } from './economic-domain'
 import { playgroundWidgetRegistry } from './playground-widgets'
@@ -15,7 +15,7 @@ const dataClient=markRaw(createDataClient(mockProvider,{cacheTimeMs:5_000}))
 function createDemoWorkspaceCollection(){const create=(persist:boolean)=>createWorkspaceCollection({registry:playgroundWidgetRegistry,...(persist?{storage:createLocalStorageWorkspaceCollectionStorage(window.localStorage,COLLECTION_STORAGE_KEY)}:{})});try{return create(true)}catch{try{window.localStorage.removeItem(COLLECTION_STORAGE_KEY);return create(true)}catch{return create(false)}}}
 const workspaces=markRaw(createDemoWorkspaceCollection()),restoredWorkspaceCollection=workspaces.list().length>0
 const commandWorkspace=workspaces.list().find((workspace)=>workspace.id==='command')??workspaces.createWorkspace({id:'command',name:'Command',activate:true})
-const windows=markRaw(commandWorkspace.windows),docks=markRaw(commandWorkspace.docks),navigator=markRaw(createWidgetNavigator(playgroundWidgetRegistry,windows)),edit=markRaw(createWorkspaceEditController())
+const windows=markRaw(commandWorkspace.windows),docks=markRaw(commandWorkspace.docks),navigator=markRaw(createActiveWorkspaceNavigator(playgroundWidgetRegistry,workspaces)),edit=markRaw(createWorkspaceEditController())
 provideWidgetNavigation(navigator)
 let workspacePersistQueued=false
 function persistWorkspace():void{if(workspacePersistQueued)return;workspacePersistQueued=true;queueMicrotask(()=>{workspacePersistQueued=false;try{window.localStorage.setItem(WORKSPACE_STORAGE_KEY,serializeWorkspace(windows,docks))}catch{/* best effort */}})}
