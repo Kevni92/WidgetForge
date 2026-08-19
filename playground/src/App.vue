@@ -1,88 +1,34 @@
 <script setup lang="ts">
 import { computed, markRaw, nextTick, ref, shallowRef } from 'vue'
-import {
-  DataClientProvider,
-  ThemeProvider,
-  WorkspaceHost,
-  createDataClient,
-  createDataKey,
-  createDockManager,
-  createMockDataProvider,
-  createSplitPane,
-  createTabPane,
-  createWidgetNavigator,
-  createWidgetPane,
-  createWindowManager,
-  createWorkspaceHistory,
-  forgeDarkTheme,
-  forgeLightTheme,
-  provideWidgetNavigation,
-  restoreWorkspace,
-  serializeWorkspace,
-  type WidgetForgeTheme,
-} from 'widgetforge'
+import { DataClientProvider, ThemeProvider, WorkspaceHost, createDataClient, createDataKey, createDockManager, createMockDataProvider, createSplitPane, createTabPane, createWidgetNavigator, createWidgetPane, createWindowManager, createWorkspaceEditController, createWorkspaceHistory, forgeDarkTheme, forgeLightTheme, provideWidgetNavigation, restoreWorkspace, serializeWorkspace, type WidgetForgeTheme, type WorkspaceEditSnapshot } from 'widgetforge'
 import { provideDemoControls, type DemoThemeName } from './demo-controls'
 import { playgroundWidgetRegistry } from './playground-widgets'
-
-interface DemoMetric { label: string; value: number; unit: string }
-const WORKSPACE_STORAGE_KEY = 'widgetforge.playground.fullscreen.v2'
-const THEME_STORAGE_KEY = 'widgetforge.playground.theme'
-function storedTheme(): DemoThemeName { try { return window.localStorage.getItem(THEME_STORAGE_KEY) === 'forge-light' ? 'forge-light' : 'forge-dark' } catch { return 'forge-dark' } }
-const themeName = ref<DemoThemeName>(storedTheme())
-const themes: Record<DemoThemeName, WidgetForgeTheme> = { 'forge-dark': forgeDarkTheme, 'forge-light': forgeLightTheme }
-const activeTheme = computed(() => themes[themeName.value])
-const mockProvider = markRaw(createMockDataProvider())
-const gridPowerKey = createDataKey<DemoMetric>('demo.metric', 'grid-power')
-const warehouseKey = createDataKey<DemoMetric>('demo.metric', 'warehouse-stock')
-mockProvider.register({ key: gridPowerKey, initial: { label: 'Grid Power', value: 118.0, unit: 'MW' }, intervalMs: 1_200, update: (current) => ({ ...current, value: current.value + 0.5 }) })
-mockProvider.register({ key: warehouseKey, initial: { label: 'Warehouse Stock', value: 640, unit: 't' }, intervalMs: 1_800, update: (current, tick) => ({ ...current, value: current.value + (tick % 2 === 0 ? 4 : -2) }) })
-const dataClient = markRaw(createDataClient(mockProvider, { cacheTimeMs: 5_000 }))
-const windows = markRaw(createWindowManager(playgroundWidgetRegistry))
-const docks = markRaw(createDockManager(playgroundWidgetRegistry))
-const navigator = markRaw(createWidgetNavigator(playgroundWidgetRegistry, windows))
+interface DemoMetric{label:string;value:number;unit:string}
+const WORKSPACE_STORAGE_KEY='widgetforge.playground.fullscreen.v2',THEME_STORAGE_KEY='widgetforge.playground.theme',EDIT_STORAGE_KEY='widgetforge.playground.edit.v1'
+function storedTheme():DemoThemeName{try{return window.localStorage.getItem(THEME_STORAGE_KEY)==='forge-light'?'forge-light':'forge-dark'}catch{return'forge-dark'}}
+const themeName=ref<DemoThemeName>(storedTheme()),themes:Record<DemoThemeName,WidgetForgeTheme>={'forge-dark':forgeDarkTheme,'forge-light':forgeLightTheme},activeTheme=computed(()=>themes[themeName.value])
+const mockProvider=markRaw(createMockDataProvider()),gridPowerKey=createDataKey<DemoMetric>('demo.metric','grid-power'),warehouseKey=createDataKey<DemoMetric>('demo.metric','warehouse-stock')
+mockProvider.register({key:gridPowerKey,initial:{label:'Grid Power',value:118.0,unit:'MW'},intervalMs:1_200,update:(current)=>({...current,value:current.value+0.5})});mockProvider.register({key:warehouseKey,initial:{label:'Warehouse Stock',value:640,unit:'t'},intervalMs:1_800,update:(current,tick)=>({...current,value:current.value+(tick%2===0?4:-2)})})
+const dataClient=markRaw(createDataClient(mockProvider,{cacheTimeMs:5_000})),windows=markRaw(createWindowManager(playgroundWidgetRegistry)),docks=markRaw(createDockManager(playgroundWidgetRegistry)),navigator=markRaw(createWidgetNavigator(playgroundWidgetRegistry,windows)),edit=markRaw(createWorkspaceEditController())
 provideWidgetNavigation(navigator)
-function persistWorkspace(): void {
-  try { window.localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(windows, docks)) }
-  catch { /* Demo persistence is best-effort. */ }
+function persistWorkspace():void{try{window.localStorage.setItem(WORKSPACE_STORAGE_KEY,serializeWorkspace(windows,docks))}catch{/* best effort */}}
+function persistEdit():void{try{window.localStorage.setItem(EDIT_STORAGE_KEY,JSON.stringify(edit.snapshot()))}catch{/* best effort */}}
+function restoreEdit():void{try{const stored=window.localStorage.getItem(EDIT_STORAGE_KEY);if(stored)edit.restore(JSON.parse(stored) as WorkspaceEditSnapshot)}catch{/* invalid or unavailable storage falls back to normal */}}
+function openReferenceLayout():void{
+  docks.add({id:'workspace-top',position:'top',thickness:58,minThickness:50,maxThickness:86,resizable:true,pane:createSplitPane({id:'workspace-top-root',axis:'horizontal',weights:[4,1],settings:{resizable:true,background:'surface'},children:[createWidgetPane({id:'workspace-nav-pane',widgetId:'demo.workspace-topbar',instanceId:'workspace-nav-widget',settings:{minSize:520,background:'surface'}}),createWidgetPane({id:'workspace-top-metric-pane',widgetId:'demo.live-metric',instanceId:'workspace-top-metric-widget',parameters:{resourceId:'grid-power'},settings:{minSize:180,background:'surface-raised'}})]})})
+  docks.add({id:'workspace-bottom',position:'bottom',thickness:54,minThickness:48,maxThickness:88,resizable:true,pane:createWidgetPane({id:'workspace-command-pane',widgetId:'demo.workspace-commandbar',instanceId:'workspace-command-widget',settings:{background:'surface'}})})
+  windows.open({widgetId:'market.ticker',instanceId:'market-main',title:'Helios Commodity Exchange',parameters:{commodity:'METALS',rows:14},position:{x:20,y:20},size:{width:620,height:430}});windows.snapWindow('market-main','left',{width:1200,height:720})
+  windows.open({widgetId:'planet.summary',instanceId:'colony-main',title:'ARC-01 Colony Administration',parameters:{planetId:'ARC-01',compact:false},position:{x:640,y:32},size:{width:440,height:340}});windows.open({widgetId:'demo.alerts',instanceId:'alerts-main',position:{x:720,y:390},size:{width:430,height:300}});windows.open({widgetId:'demo.live-metric',instanceId:'telemetry-power',title:'Grid Telemetry',parameters:{resourceId:'grid-power'},position:{x:890,y:210},size:{width:250,height:155}})
+  windows.openPane({instanceId:'operations-main',title:'Operations Matrix',position:{x:470,y:400},size:{width:590,height:270},minSize:{width:420,height:220},pane:createSplitPane({id:'operations-root',axis:'horizontal',weights:[1.3,1],children:[createWidgetPane({id:'operations-colony',widgetId:'planet.summary',instanceId:'operations-colony-widget',parameters:{planetId:'ARC-02',compact:true},settings:{minSize:250,background:'surface'}}),createTabPane({id:'operations-metrics',activeId:'operations-power',settings:{background:'surface-raised'},children:[createWidgetPane({id:'operations-power',widgetId:'demo.live-metric',instanceId:'operations-power-widget',parameters:{resourceId:'grid-power'},settings:{minSize:90,background:'surface-raised'}}),createWidgetPane({id:'operations-stock',widgetId:'demo.live-metric',instanceId:'operations-stock-widget',parameters:{resourceId:'warehouse-stock'},settings:{minSize:90,background:'canvas'}})]})]})})
 }
-function openReferenceLayout(): void {
-  docks.add({ id: 'workspace-top', position: 'top', thickness: 58, minThickness: 50, maxThickness: 86, resizable: true, pane: createSplitPane({ id: 'workspace-top-root', axis: 'horizontal', weights: [4, 1], settings: { resizable: true, background: 'surface' }, children: [createWidgetPane({ id: 'workspace-nav-pane', widgetId: 'demo.workspace-topbar', instanceId: 'workspace-nav-widget', settings: { minSize: 520, background: 'surface' } }), createWidgetPane({ id: 'workspace-top-metric-pane', widgetId: 'demo.live-metric', instanceId: 'workspace-top-metric-widget', parameters: { resourceId: 'grid-power' }, settings: { minSize: 180, background: 'surface-raised' } })] }) })
-  docks.add({ id: 'workspace-bottom', position: 'bottom', thickness: 54, minThickness: 48, maxThickness: 88, resizable: true, pane: createWidgetPane({ id: 'workspace-command-pane', widgetId: 'demo.workspace-commandbar', instanceId: 'workspace-command-widget', settings: { background: 'surface' } }) })
-  windows.open({ widgetId: 'market.ticker', instanceId: 'market-main', title: 'Helios Commodity Exchange', parameters: { commodity: 'METALS', rows: 14 }, position: { x: 20, y: 20 }, size: { width: 620, height: 430 } })
-  windows.snapWindow('market-main', 'left', { width: 1200, height: 720 })
-  windows.open({ widgetId: 'planet.summary', instanceId: 'colony-main', title: 'ARC-01 Colony Administration', parameters: { planetId: 'ARC-01', compact: false }, position: { x: 640, y: 32 }, size: { width: 440, height: 340 } })
-  windows.open({ widgetId: 'demo.alerts', instanceId: 'alerts-main', position: { x: 720, y: 390 }, size: { width: 430, height: 300 } })
-  windows.open({ widgetId: 'demo.live-metric', instanceId: 'telemetry-power', title: 'Grid Telemetry', parameters: { resourceId: 'grid-power' }, position: { x: 890, y: 210 }, size: { width: 250, height: 155 } })
-  windows.openPane({ instanceId: 'operations-main', title: 'Operations Matrix', position: { x: 470, y: 400 }, size: { width: 590, height: 270 }, minSize: { width: 420, height: 220 }, pane: createSplitPane({ id: 'operations-root', axis: 'horizontal', weights: [1.3, 1], children: [createWidgetPane({ id: 'operations-colony', widgetId: 'planet.summary', instanceId: 'operations-colony-widget', parameters: { planetId: 'ARC-02', compact: true }, settings: { minSize: 250, background: 'surface' } }), createTabPane({ id: 'operations-metrics', activeId: 'operations-power', settings: { background: 'surface-raised' }, children: [createWidgetPane({ id: 'operations-power', widgetId: 'demo.live-metric', instanceId: 'operations-power-widget', parameters: { resourceId: 'grid-power' }, settings: { minSize: 90, background: 'surface-raised' } }), createWidgetPane({ id: 'operations-stock', widgetId: 'demo.live-metric', instanceId: 'operations-stock-widget', parameters: { resourceId: 'warehouse-stock' }, settings: { minSize: 90, background: 'canvas' } })] })] }) })
-}
-function restoreReferenceLayout(): void {
-  let stored: string | null = null
-  try { stored = window.localStorage.getItem(WORKSPACE_STORAGE_KEY) } catch { /* Storage may be unavailable. */ }
-  const restored = stored ? restoreWorkspace(windows, stored, docks) : null
-  if (!restored?.valid || restored.restoredDocks.length === 0) openReferenceLayout()
-}
-restoreReferenceLayout()
-const history = markRaw(createWorkspaceHistory(windows, docks, { limit: 50 }))
-const historyState = shallowRef(history.state)
-history.subscribe((state) => { historyState.value = state })
-
-async function resetWorkspace(): Promise<void> {
-  history.beginTransaction()
-  for (const window of [...windows.list()]) windows.close(window.instanceId, 'user')
-  for (const dock of [...docks.list()]) docks.remove(dock.id)
-  try { window.localStorage.removeItem(WORKSPACE_STORAGE_KEY) } catch { /* Reset remains functional without storage. */ }
-  await nextTick(); openReferenceLayout(); history.commitTransaction(); persistWorkspace()
-}
-function setTheme(theme: DemoThemeName): void {
-  themeName.value = theme
-  try { window.localStorage.setItem(THEME_STORAGE_KEY, theme) } catch { /* Theme switching remains functional without storage. */ }
-}
-function undo(): void { history.undo(); persistWorkspace() }
-function redo(): void { history.redo(); persistWorkspace() }
-provideDemoControls({ theme: () => themeName.value, setTheme, resetWorkspace, canUndo: () => historyState.value.canUndo, canRedo: () => historyState.value.canRedo, undo, redo })
-persistWorkspace(); windows.subscribe(persistWorkspace); docks.subscribe(persistWorkspace)
+function restoreReferenceLayout():void{let stored:string|null=null;try{stored=window.localStorage.getItem(WORKSPACE_STORAGE_KEY)}catch{/* unavailable */}const restored=stored?restoreWorkspace(windows,stored,docks):null;if(!restored?.valid||restored.restoredDocks.length===0)openReferenceLayout()}
+restoreReferenceLayout();restoreEdit()
+const history=markRaw(createWorkspaceHistory(windows,docks,{limit:50})),historyState=shallowRef(history.state),editState=shallowRef(edit.state)
+history.subscribe((state)=>{historyState.value=state});edit.subscribe((state)=>{editState.value=state;persistEdit()})
+async function resetWorkspace():Promise<void>{history.beginTransaction();for(const window of[...windows.list()])windows.close(window.instanceId,'user');for(const dock of[...docks.list()])docks.remove(dock.id);edit.restore({mode:'normal',selection:null,paneLocks:[]});try{window.localStorage.removeItem(WORKSPACE_STORAGE_KEY);window.localStorage.removeItem(EDIT_STORAGE_KEY)}catch{/* unavailable */}await nextTick();openReferenceLayout();history.commitTransaction();persistWorkspace();persistEdit()}
+function setTheme(theme:DemoThemeName):void{themeName.value=theme;try{window.localStorage.setItem(THEME_STORAGE_KEY,theme)}catch{/* unavailable */}}
+function undo():void{history.undo();persistWorkspace()}function redo():void{history.redo();persistWorkspace()}
+provideDemoControls({theme:()=>themeName.value,setTheme,resetWorkspace,canUndo:()=>historyState.value.canUndo,canRedo:()=>historyState.value.canRedo,undo,redo,workspaceMode:()=>editState.value.mode,setWorkspaceMode:(mode)=>edit.setMode(mode)})
+persistWorkspace();persistEdit();windows.subscribe(persistWorkspace);docks.subscribe(persistWorkspace)
 </script>
-
-<template>
-  <ThemeProvider :theme="activeTheme"><DataClientProvider :client="dataClient"><main class="simulation-demo" data-fullscreen-workspace-demo><WorkspaceHost :windows="windows" :docks="docks" :registry="playgroundWidgetRegistry" :history="history" /></main></DataClientProvider></ThemeProvider>
-</template>
+<template><ThemeProvider :theme="activeTheme"><DataClientProvider :client="dataClient"><main class="simulation-demo" data-fullscreen-workspace-demo><WorkspaceHost :windows="windows" :docks="docks" :registry="playgroundWidgetRegistry" :history="history" :edit="edit"/></main></DataClientProvider></ThemeProvider></template>
