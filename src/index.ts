@@ -10,6 +10,7 @@ export { createLocalStorageWorkspaceLayoutStorage, DEFAULT_WORKSPACE_LAYOUT_STOR
 export { createLocalStorageWorkspaceCollectionStorage, DEFAULT_WORKSPACE_COLLECTION_STORAGE_KEY } from './vue/workspace-collection-storage'
 export { default as DockHost } from './vue/DockHost.vue'
 export { default as WorkspaceHost } from './vue/WorkspaceHost.vue'
+export { default as WorkspaceCollectionHost } from './vue/WorkspaceCollectionHost.vue'
 export { default as DockingOverlay } from './vue/DockingOverlay.vue'
 export { default as WindowSnapLayoutPicker } from './vue/WindowSnapLayoutPicker.vue'
 export { useWidgetContext } from './vue/widget-context'
