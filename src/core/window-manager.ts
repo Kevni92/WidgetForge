@@ -4,7 +4,7 @@ import { createWidgetLifecycle, type WidgetLifecycleController } from './widget-
 import type { WidgetRegistry } from './widget-registry'
 import { createWindowOptions, type WindowOptions, type WindowOptionsOverride } from './window-options'
 import { maximizeWindowGeometry, restoreFloatingWindowGeometry, snapWindowGeometry, type WindowSnapState, type WindowSnapZone } from './window-snap'
-import { DEFAULT_MIN_WINDOW_SIZE, DEFAULT_WINDOW_SIZE, constrainGeometry, constrainSize, sameGeometry, type WindowGeometry, type WindowPosition, type WindowSize, type WindowSizeConstraints } from './window-geometry'
+import { DEFAULT_MIN_WINDOW_SIZE, DEFAULT_WINDOW_SIZE, normalizeWindowGeometry, constrainSize, sameGeometry, type WindowGeometry, type WindowPosition, type WindowSize, type WindowSizeConstraints } from './window-geometry'
 
 export type WindowInstanceId = string
 export type WindowOperationOrigin = 'api' | 'user'
@@ -82,7 +82,8 @@ export class WindowManager {
 
   maximizeWindow(instanceId: WindowInstanceId, container: WindowSize, origin: WindowOperationOrigin = 'user'): WindowState {
     const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (!current.options.maximizable) return cloneWindow(current)
-    const floatingGeometry = current.mode === 'maximized' ? current.restoreGeometry ?? current.geometry : current.snap?.floatingGeometry ?? current.restoreGeometry ?? current.geometry
+    const floating = current.mode === 'maximized' ? current.restoreGeometry ?? current.geometry : current.snap?.floatingGeometry ?? current.restoreGeometry ?? current.geometry
+    const floatingGeometry = normalizeWindowGeometry(floating, current.constraints, container)
     const updated: WindowState = { ...current, mode: 'maximized', geometry: maximizeWindowGeometry(container), snap: null, restoreGeometry: cloneGeometry(floatingGeometry) }
     this.windows = focusWithinLayer(this.windows, updated); this.setActiveLifecycle(instanceId); this.emit('maximize', origin, instanceId); return this.get(instanceId)
   }
@@ -93,13 +94,37 @@ export class WindowManager {
 
   snapWindow(instanceId: WindowInstanceId, zone: WindowSnapZone, container: WindowSize, origin: WindowOperationOrigin = 'user'): WindowState {
     const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId)
-    const floatingGeometry = current.mode === 'maximized' ? current.restoreGeometry ?? current.geometry : current.snap?.floatingGeometry ?? current.restoreGeometry ?? current.geometry
+    const floating = current.mode === 'maximized' ? current.restoreGeometry ?? current.geometry : current.snap?.floatingGeometry ?? current.restoreGeometry ?? current.geometry
+    const floatingGeometry = normalizeWindowGeometry(floating, current.constraints, container)
     const updated: WindowState = { ...current, mode: 'normal', geometry: snapWindowGeometry(zone, container), snap: { zone, floatingGeometry: cloneGeometry(floatingGeometry) }, restoreGeometry: null }
     this.windows = focusWithinLayer(this.windows, updated); this.setActiveLifecycle(instanceId); this.emit('snap', origin, instanceId); return this.get(instanceId)
   }
-  unsnapWindow(instanceId: WindowInstanceId, pointer?: WindowPosition, container?: WindowSize, origin: WindowOperationOrigin = 'user'): WindowState { const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (!current.snap) return cloneWindow(current); const geometry = pointer && container ? restoreFloatingWindowGeometry(current.snap.floatingGeometry, pointer, container) : cloneGeometry(current.snap.floatingGeometry); const updated: WindowState = { ...current, geometry, snap: null, restoreGeometry: null, mode: 'normal' }; this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window); this.emit('snap', origin, instanceId); return cloneWindow(updated) }
+  unsnapWindow(instanceId: WindowInstanceId, pointer?: WindowPosition, container?: WindowSize, origin: WindowOperationOrigin = 'user'): WindowState {
+    const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (!current.snap) return cloneWindow(current)
+    const restored = pointer && container ? restoreFloatingWindowGeometry(current.snap.floatingGeometry, pointer, container) : cloneGeometry(current.snap.floatingGeometry)
+    const geometry = container ? normalizeWindowGeometry(restored, current.constraints, container) : restored
+    const updated: WindowState = { ...current, geometry, snap: null, restoreGeometry: null, mode: 'normal' }
+    this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window); this.emit('snap', origin, instanceId); return cloneWindow(updated)
+  }
   setGeometry(instanceId: WindowInstanceId, geometry: WindowGeometry, origin: WindowOperationOrigin = 'api'): WindowState { const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); const normalized: WindowGeometry = { position: { x: Number.isFinite(geometry.position.x) ? geometry.position.x : current.geometry.position.x, y: Number.isFinite(geometry.position.y) ? geometry.position.y : current.geometry.position.y }, size: constrainSize(geometry.size, current.constraints) }; if (sameGeometry(current.geometry, normalized)) return cloneWindow(current); const updated: WindowState = { ...current, geometry: normalized }; this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window); this.emit('geometry', origin, instanceId); return cloneWindow(updated) }
-  constrainToContainer(instanceId: WindowInstanceId, container: WindowSize, origin: WindowOperationOrigin = 'api'): WindowState { const current = this.get(instanceId); if (current.mode === 'maximized') { const geometry = maximizeWindowGeometry(container); if (sameGeometry(current.geometry, geometry)) return current; const updated: WindowState = { ...current, geometry }; this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window); this.emit('geometry', origin, instanceId); return cloneWindow(updated) } if (current.snap) { const geometry = snapWindowGeometry(current.snap.zone, container); if (sameGeometry(current.geometry, geometry)) return current; const updated: WindowState = { ...current, geometry }; this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window); this.emit('geometry', origin, instanceId); return cloneWindow(updated) } return this.setGeometry(instanceId, constrainGeometry(current.geometry, current.constraints, container), origin) }
+  constrainToContainer(instanceId: WindowInstanceId, container: WindowSize, origin: WindowOperationOrigin = 'api'): WindowState {
+    const current = this.get(instanceId)
+    const geometry = current.mode === 'maximized'
+      ? maximizeWindowGeometry(container)
+      : current.snap
+        ? snapWindowGeometry(current.snap.zone, container)
+        : normalizeWindowGeometry(current.geometry, current.constraints, container)
+    const restoreGeometry = current.restoreGeometry ? normalizeWindowGeometry(current.restoreGeometry, current.constraints, container) : null
+    const snap = current.snap ? { zone: current.snap.zone, floatingGeometry: normalizeWindowGeometry(current.snap.floatingGeometry, current.constraints, container) } : null
+    const unchanged = sameGeometry(current.geometry, geometry)
+      && (current.restoreGeometry === null ? restoreGeometry === null : restoreGeometry !== null && sameGeometry(current.restoreGeometry, restoreGeometry))
+      && (current.snap === null ? snap === null : snap !== null && sameGeometry(current.snap.floatingGeometry, snap.floatingGeometry))
+    if (unchanged) return current
+    const updated: WindowState = { ...current, geometry, restoreGeometry, snap }
+    this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window)
+    this.emit('geometry', origin, instanceId)
+    return cloneWindow(updated)
+  }
   subscribe(listener: WindowManagerListener): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
   snapshot(): { windows: readonly WindowState[] } { return { windows: this.list() } }
 

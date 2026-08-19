@@ -22,8 +22,8 @@ Beim ersten Snap wird die vorherige Floating-Geometrie in `WindowState.snap.floa
 
 ## Resize
 
-Bei einer Änderung der Floating-Fläche – etwa durch Viewport- oder Dock-Resize – berechnet `WindowManager.constrainToContainer()` die Geometrie gesnappter Windows deterministisch aus ihrer Zone neu. Manuelles Resize eines gesnappten Windows führt zuerst zurück in den Floating-Zustand.
+Bei einer Änderung der Floating-Fläche – etwa durch Viewport- oder Dock-Resize – berechnet `WindowManager.constrainToContainer()` die Geometrie gesnappter Windows deterministisch aus ihrer Zone neu. Gleichzeitig werden die gespeicherte Floating-Geometrie und maximierte Restore-Geometrien gegen die neue Fläche normalisiert. Manuelles Resize eines gesnappten Windows führt zuerst zurück in den Floating-Zustand.
 
 ## Persistenz
 
-Workspace v2 speichert Snap-Zone und Floating-Geometrie. Ältere v2-Snapshots ohne `snap` werden als unsnapped interpretiert. Beim Restore bleibt die gespeicherte aktuelle Geometrie erhalten; sobald ein Host seine reale Größe meldet, wird ein gesnapptes Window auf die aktuelle Floating-Fläche angepasst.
+Workspace-Snapshots speichern Snap-Zone und Floating-Geometrie. Ältere Snapshots ohne `snap` werden als unsnapped interpretiert. `restoreWorkspace(..., { container })` kann die gespeicherte Geometrie direkt gegen die aktuelle Floating-Fläche wiederherstellen; zusätzlich passt der Host beim ersten realen Größenwert gesnappte und freie Windows deterministisch an.

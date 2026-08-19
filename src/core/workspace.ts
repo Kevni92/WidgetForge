@@ -2,7 +2,7 @@ import { DuplicateDockError, type DockManager, type DockPosition, type DockState
 import { clonePaneTree, validatePaneTree, type PaneNode, type PaneSettings } from './pane'
 import type { WidgetId } from './widget'
 import { DuplicateWindowInstanceError, type WindowManager, type WindowMode, type WindowState } from './window-manager'
-import type { WindowGeometry, WindowSizeConstraints } from './window-geometry'
+import type { WindowGeometry, WindowSize, WindowSizeConstraints } from './window-geometry'
 import { createWindowOptions, type WindowOptions } from './window-options'
 import { isWindowSnapZone, type WindowSnapState } from './window-snap'
 import { UnknownWidgetError, WidgetParameterValidationError } from './widget-registry'
@@ -78,6 +78,8 @@ export class WorkspaceMutationError extends Error {
 
 export interface WorkspaceRestoreOptions {
   readonly atomic?: boolean
+  /** Current floating workspace rectangle used to recover persisted geometry. */
+  readonly container?: WindowSize
 }
 
 export interface WorkspaceMutationOwner {
@@ -382,7 +384,8 @@ export function restoreWorkspace(
       index, instanceId: entry.instanceId, widgetId: entry.rootPane.kind === 'widget' ? entry.rootPane.widgetId : undefined, focused: entry.focused, mode: entry.mode, zIndex: entry.zIndex,
       open: (target) => {
         target.openPane({ pane: entry.rootPane, instanceId: entry.instanceId, title: entry.title, position: entry.geometry.position, size: entry.geometry.size, minSize: entry.constraints.minSize, ...(entry.constraints.maxSize ? { maxSize: entry.constraints.maxSize } : {}), options: entry.options, snap: entry.snap, restoreGeometry: entry.restoreGeometry })
-        if (entry.mode === 'maximized') target.maximizeWindow(entry.instanceId, entry.geometry.size, 'api')
+        if (entry.mode === 'maximized') target.maximizeWindow(entry.instanceId, options.container ?? entry.geometry.size, 'api')
+        else if (options.container) target.constrainToContainer(entry.instanceId, options.container, 'api')
         return target.get(entry.instanceId)
       },
     })
