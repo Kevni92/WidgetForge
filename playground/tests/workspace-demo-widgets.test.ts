@@ -17,13 +17,15 @@ function mountWithProviders(component: Component, navigator: WidgetNavigator, co
 }
 
 describe('fullscreen workspace demo widgets', () => {
-  it('topbar navigates, switches theme, exposes history/edit/lock and resets the reference layout', async () => {
+  it('topbar navigates including modal role demo, switches theme, exposes history/edit/lock and resets', async () => {
     const { navigator, navigate } = navigatorSpy()
     const setTheme = vi.fn(); const resetWorkspace = vi.fn(); const undo = vi.fn(); const redo = vi.fn(); const setWorkspaceMode = vi.fn()
     const controls: DemoControls = { theme: () => 'forge-dark', setTheme, resetWorkspace, canUndo: () => true, canRedo: () => true, undo, redo, workspaceMode: () => 'normal', setWorkspaceMode }
     const wrapper = mountWithProviders(WorkspaceTopbarWidget, navigator, controls)
     await wrapper.get('[data-demo-nav="market"]').trigger('click')
     expect(navigate).toHaveBeenCalledWith({ widgetId: 'market.ticker', parameters: { commodity: 'METALS', rows: 10 } })
+    await wrapper.get('[data-demo-nav="modal"]').trigger('click')
+    expect(navigate).toHaveBeenCalledWith({ widgetId: 'demo.modal-review' })
     await wrapper.get('[data-demo-action="edit"]').trigger('click'); expect(setWorkspaceMode).toHaveBeenCalledWith('edit')
     await wrapper.get('[data-demo-action="lock"]').trigger('click'); expect(setWorkspaceMode).toHaveBeenCalledWith('locked')
     await wrapper.get('[data-demo-action="undo"]').trigger('click'); expect(undo).toHaveBeenCalledOnce()
