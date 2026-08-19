@@ -20,6 +20,8 @@ const linked = useLinkedSelection<string, MarketViewState>(colonySelectionKey, {
   read: (state) => state.selection,
   write: (state, selection) => ({ ...state, selection }),
 })
+const currentSelection = linked.selection
+const followingSelection = linked.following
 const sort = computed<DataTableSort>({
   get: () => ({ columnId: viewState.state.value.sortColumn, direction: viewState.state.value.sortDirection }),
   set: (next) => viewState.update((state) => ({ ...state, sortColumn: next.columnId, sortDirection: next.direction })),
@@ -38,7 +40,7 @@ const rows = computed<readonly MarketRow[]>(() => {
   const count = Math.max(4, Math.min(24, Math.round(context.parameters.value.rows ?? 8)))
   const names = ['Ferrite', 'Titanium', 'Cobalt', 'Silicates', 'Polymer', 'Electronics', 'Fuel Cells', 'Machinery', 'Food', 'Medical']
   return Array.from({ length: count }, (_, index) => {
-    const seed = index + commodity.value.length * 3 + (linked.selection.value?.length ?? 0)
+    const seed = index + commodity.value.length * 3 + (currentSelection.value?.length ?? 0)
     const bid = 82 + seed * 3.71 + (seed % 4) * 1.17
     return {
       symbol: `${commodity.value.slice(0, 2).toUpperCase()}-${String(index + 1).padStart(2, '0')}`,
@@ -67,14 +69,14 @@ const columns: readonly DataTableColumn<MarketRow>[] = [
 </script>
 
 <template>
-  <article class="market-widget" :data-selection="linked.selection ?? undefined" :data-following="String(linked.following)">
+  <article class="market-widget" :data-selection="currentSelection ?? undefined" :data-following="String(followingSelection)">
     <header class="market-widget__header">
       <div>
         <span class="market-widget__eyebrow">Helios Commodity Exchange</span>
-        <strong>{{ commodity }} Market · {{ linked.selection ?? 'No colony' }}</strong>
+        <strong>{{ commodity }} Market · {{ currentSelection ?? 'No colony' }}</strong>
       </div>
       <div class="market-widget__summary">
-        <button v-if="linked.following" type="button" data-market-pin @click="linked.pin()">Pin {{ linked.selection ?? 'selection' }}</button>
+        <button v-if="followingSelection" type="button" data-market-pin @click="linked.pin()">Pin {{ currentSelection ?? 'selection' }}</button>
         <button v-else type="button" data-market-follow @click="linked.follow()">Follow selection</button>
         <label class="market-widget__filter">Filter <input v-model="filter" aria-label="Market filter" type="search" placeholder="Code or commodity" /></label>
         <span><i class="market-widget__dot" /> LIVE</span>
