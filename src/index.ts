@@ -60,6 +60,8 @@ export { CommandDefinitionError, CommandParseError, CommandRegistry, createComma
 export type { CommandArgumentDefinition, CommandArgumentType, CommandDefinition, CommandParseErrorCode } from './core/commands'
 export { captureWorkspace, restoreWorkspace, serializeWorkspace, WORKSPACE_VERSION, WorkspaceSerializationError } from './core/workspace'
 export type { WorkspaceParameters, WorkspaceParameterValue, WorkspaceRestoreIssue, WorkspaceRestoreIssueCode, WorkspaceRestoreResult, WorkspaceSnapshot, WorkspaceWindowSnapshot, WorkspaceDockSnapshot } from './core/workspace'
+export { createWorkspaceHistory, WorkspaceHistory, WorkspaceHistoryError } from './core/workspace-history'
+export type { WorkspaceHistoryOptions, WorkspaceHistoryState, WorkspaceHistoryListener } from './core/workspace-history'
 export { createWindowManager, DuplicateWindowInstanceError, UnknownWindowInstanceError, WindowManager } from './core/window-manager'
 export type { OpenPaneWindowRequest, OpenWindowRequest, WindowInstanceId, WindowManagerChange, WindowManagerChangeKind, WindowManagerListener, WindowMode, WindowOperationOrigin, WindowState } from './core/window-manager'
 export { createWindowOptions, defaultWindowOptions, WindowOptionsError } from './core/window-options'

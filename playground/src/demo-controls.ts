@@ -6,6 +6,10 @@ export interface DemoControls {
   readonly theme: () => DemoThemeName
   readonly setTheme: (theme: DemoThemeName) => void
   readonly resetWorkspace: () => void
+  readonly canUndo?: () => boolean
+  readonly canRedo?: () => boolean
+  readonly undo?: () => void
+  readonly redo?: () => void
 }
 
 const key: InjectionKey<DemoControls> = Symbol('WidgetForgePlaygroundDemoControls')
