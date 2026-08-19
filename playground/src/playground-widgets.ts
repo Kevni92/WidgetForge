@@ -21,7 +21,14 @@ export const marketTickerWidget = defineWidget({
 export const liveMetricWidget = defineWidget({
   id: 'demo.live-metric', title: 'Live Telemetry', component: LiveMetricWidget,
   parameters: { resourceId: { type: 'string', required: true } },
-  window: { defaultSize: { width: 260, height: 170 }, minSize: { width: 220, height: 140 }, maxSize: { width: 460, height: 320 }, options: { role: 'utility', layer: 'always-on-top', opacity: 0.94, header: 'focused' } },
+  window: {
+    defaultSize: { width: 260, height: 170 }, minSize: { width: 220, height: 140 }, maxSize: { width: 460, height: 320 },
+    options: {
+      role: 'utility', layer: 'always-on-top', opacity: 0.94, header: 'hover', chrome: 'borderless', glass: true,
+      icon: '◇', badge: 'LIVE', status: 'SYNC',
+      headerActions: [{ id: 'refresh', label: 'Refresh telemetry', icon: '↻', tooltip: 'Refresh telemetry', actionRef: 'demo.refresh-telemetry' }],
+    },
+  },
 })
 
 export const alertsWidget = defineWidget({
@@ -31,7 +38,7 @@ export const alertsWidget = defineWidget({
 
 export const modalReviewWidget = defineWidget({
   id: 'demo.modal-review', title: 'Critical Operations Review', component: AlertsWidget,
-  window: { defaultSize: { width: 520, height: 360 }, minSize: { width: 380, height: 260 }, singleton: true, options: { role: 'modal', resizable: false } },
+  window: { defaultSize: { width: 520, height: 360 }, minSize: { width: 380, height: 260 }, singleton: true, options: { role: 'modal', chrome: 'borderless', resizable: false } },
 })
 
 export const workspaceTopbarWidget = defineWidget({ id: 'demo.workspace-topbar', title: 'Workspace Navigation', component: WorkspaceTopbarWidget })
