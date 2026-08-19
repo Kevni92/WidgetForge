@@ -51,8 +51,10 @@ const actionItems = computed<readonly WidgetAction[]>(() => {
   return combined.map((action) => cloneWidgetAction({ ...action, ...(actionState.value[action.id] ?? {}) } as WidgetAction))
 })
 
-let viewStateDefinition: WidgetViewStateDefinition | null = null
-try { viewStateDefinition = markRaw(toRaw(props.registry)).get(props.widgetId).viewState ?? null } catch { viewStateDefinition = null }
+const viewStateDefinition: WidgetViewStateDefinition | null = (() => {
+  try { return markRaw(toRaw(props.registry)).get(props.widgetId).viewState ?? null }
+  catch { return null }
+})()
 if (viewStateDefinition) {
   const store = viewStateHost?.store ?? createWidgetViewStateStore()
   const scopeId = viewStateHost?.scopeId.value ?? 'default'
