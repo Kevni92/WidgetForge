@@ -1,25 +1,28 @@
+import { defineComponent, h } from 'vue'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDockManager } from '../src/core/dock-manager'
+import { createWidgetPane } from '../src/core/pane'
+import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
 import DevToolsOverlay from '../src/vue/DevToolsOverlay.vue'
 
 const wrappers: ReturnType<typeof mount>[] = []
+const testWidget = defineComponent(() => () => h('div'))
 afterEach(() => {
   for (const wrapper of wrappers.splice(0)) wrapper.unmount()
   document.body.innerHTML = ''
   vi.restoreAllMocks()
 })
 
-function managers() {
-  const registry = createWidgetRegistry([])
+function managers(registry = createWidgetRegistry([])) {
   return { windows: createWindowManager(registry), docks: createDockManager(registry) }
 }
 
-function mountOverlay(enabled: boolean, target?: HTMLElement) {
-  const { windows, docks } = managers()
+function mountOverlay(enabled: boolean, target?: HTMLElement, registry = createWidgetRegistry([])) {
+  const { windows, docks } = managers(registry)
   const host = document.createElement('div')
   document.body.append(host)
   const wrapper = mount(DevToolsOverlay, {
@@ -82,6 +85,7 @@ describe('DevToolsOverlay', () => {
     const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
     const remove = vi.spyOn(window, 'removeEventListener')
+    const removeDocument = vi.spyOn(document, 'removeEventListener')
     const { wrapper } = mountOverlay(true)
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'D', ctrlKey: true, shiftKey: true, bubbles: true }))
     await nextTick()
@@ -94,5 +98,54 @@ describe('DevToolsOverlay', () => {
     wrappers.splice(wrappers.indexOf(wrapper), 1)
     expect(remove.mock.calls.some(([type]) => type === 'keydown')).toBe(true)
     expect(remove.mock.calls.some(([type]) => type === 'resize')).toBe(true)
+    expect(removeDocument.mock.calls.some(([type]) => type === 'pointermove')).toBe(true)
+  })
+
+  it('supports selective modes, type filters and explicit inspect selection', async () => {
+    const target = document.createElement('div')
+    const windowElement = document.createElement('div')
+    windowElement.className = 'wf-window-frame'
+    windowElement.dataset.windowInstanceId = 'window-a'
+    windowElement.dataset.windowZIndex = '2'
+    const pane = document.createElement('div')
+    pane.className = 'wf-pane-host'
+    pane.dataset.paneId = 'pane-a'
+    pane.dataset.paneKind = 'widget'
+    pane.dataset.paneFocused = 'true'
+    const widget = document.createElement('div')
+    widget.dataset.widgetInstanceId = 'widget-a'
+    widget.dataset.widgetId = 'test.widget'
+    const rect = ({ x: 10, y: 20, left: 10, top: 20, right: 210, bottom: 120, width: 200, height: 100, toJSON: () => ({}) }) as DOMRect
+    windowElement.getBoundingClientRect = () => rect
+    pane.getBoundingClientRect = () => rect
+    widget.getBoundingClientRect = () => rect
+    pane.append(widget)
+    windowElement.append(pane)
+    target.append(windowElement)
+    document.body.append(target)
+
+    const registry = createWidgetRegistry([defineWidget({ id: 'test.widget', title: 'Test widget', component: testWidget })])
+    const { wrapper, windows } = mountOverlay(true, target, registry)
+    windows.openPane({ instanceId: 'window-a', pane: createWidgetPane({ id: 'pane-a', widgetId: 'test.widget', instanceId: 'widget-a' }) })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'D', ctrlKey: true, shiftKey: true, bubbles: true }))
+    await nextTick()
+
+    await wrapper.get('[data-devtools-select="pane:window:window-a:pane-a"]').trigger('click')
+    expect((wrapper.get('[data-devtools-mode]').element as HTMLSelectElement).value).toBe('selected')
+    expect(wrapper.get('[data-devtools-node="pane:window:window-a:pane-a"]').attributes('data-devtools-selected')).toBe('true')
+    expect(wrapper.get('[data-devtools-node="window:window-a"]').attributes('data-devtools-selected')).toBeUndefined()
+
+    await wrapper.get('[data-devtools-filter="window"]').setValue(false)
+    expect((wrapper.get('[data-devtools-node="window:window-a"]').element as HTMLElement).style.display).toBe('none')
+
+    await wrapper.get('[data-devtools-mode]').setValue('hovered')
+    widget.dispatchEvent(new Event('pointermove', { bubbles: true }))
+    await nextTick()
+    expect(wrapper.get('[data-devtools-node="widget:pane:window:window-a:pane-a"]').attributes('data-devtools-selected')).toBe('true')
+
+    await wrapper.get('[data-devtools-inspect-mode]').setValue(true)
+    await wrapper.get('[data-devtools-node="widget:pane:window:window-a:pane-a"]').trigger('click')
+    expect((wrapper.get('[data-devtools-mode]').element as HTMLSelectElement).value).toBe('selected')
+    expect(wrapper.get('[data-devtools-node="widget:pane:window:window-a:pane-a"]').attributes('data-devtools-selected')).toBe('true')
   })
 })

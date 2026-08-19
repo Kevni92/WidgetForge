@@ -26,6 +26,10 @@ describe('playground developer mode', () => {
     expect(panel.text()).toContain('market-main')
     expect(panel.text()).toContain('workspace-top')
     expect(panel.text()).toContain('data consumers')
+    expect(panel.find('[data-devtools-mode]').exists()).toBe(true)
+    expect(panel.find('[data-devtools-filter="widget"]').exists()).toBe(true)
+    await panel.get('[data-devtools-mode]').setValue('selected')
+    expect((panel.get('[data-devtools-mode]').element as HTMLSelectElement).value).toBe('selected')
 
     await toggle.trigger('click')
     expect(wrapper.find('[data-widgetforge-devtools]').exists()).toBe(false)
