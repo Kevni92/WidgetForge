@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, toRaw } from 'vue'
+import { ref, toRaw, watch } from 'vue'
 import { CommandParseError, type CommandRegistry } from '../core/commands'
 import { WidgetNavigationError, type NavigationResult, type WidgetNavigator } from '../core/navigation'
 
@@ -11,6 +11,11 @@ interface CommandInputProps {
 }
 
 let nextCommandInputId = 0
+
+function createInputId(): string {
+  nextCommandInputId += 1
+  return `wf-command-input-${nextCommandInputId}`
+}
 
 function createFeedbackId(): string {
   nextCommandInputId += 1
@@ -27,10 +32,19 @@ const emit = defineEmits<{
   error: [error: Error]
 }>()
 
+const inputId = createInputId()
 const feedbackId = createFeedbackId()
 const input = ref('')
 const status = ref<'idle' | 'success' | 'error'>('idle')
 const feedback = ref('')
+const liveAnnouncement = ref('')
+
+watch(input, () => {
+  if (status.value !== 'error') return
+  status.value = 'idle'
+  feedback.value = ''
+  liveAnnouncement.value = ''
+})
 
 function submit(): void {
   try {
@@ -38,14 +52,17 @@ function submit(): void {
     const result = toRaw(props.navigator).navigate(intent)
     status.value = 'success'
     feedback.value = `Opened ${result.widgetId}`
+    liveAnnouncement.value = ''
     input.value = ''
     emit('executed', result)
   } catch (error) {
     const normalized = error instanceof Error ? error : new Error('Command execution failed')
-    status.value = 'error'
-    feedback.value = normalized instanceof CommandParseError || normalized instanceof WidgetNavigationError
+    const message = normalized instanceof CommandParseError || normalized instanceof WidgetNavigationError
       ? normalized.message
       : 'Command execution failed'
+    status.value = 'error'
+    feedback.value = message
+    if (liveAnnouncement.value !== message) liveAnnouncement.value = message
     emit('error', normalized)
   }
 }
@@ -53,33 +70,40 @@ function submit(): void {
 
 <template>
   <form class="wf-command-input" @submit.prevent="submit">
-    <label class="wf-command-input__label">
+    <label class="wf-command-input__label" :for="inputId">
       <span class="wf-command-input__label-text">Command</span>
       <input
+        :id="inputId"
         v-model="input"
         class="wf-command-input__field"
+        :class="{ 'wf-command-input__field--error': status === 'error' }"
         type="text"
         :placeholder="placeholder"
         autocomplete="off"
         spellcheck="false"
         :aria-describedby="status === 'idle' ? undefined : feedbackId"
+        :aria-errormessage="status === 'error' ? feedbackId : undefined"
+        :aria-invalid="status === 'error' ? 'true' : undefined"
       />
     </label>
     <button class="wf-command-input__submit" type="submit">{{ submitLabel }}</button>
     <p
       v-if="status !== 'idle'"
       :id="feedbackId"
+      data-command-input-feedback
       class="wf-command-input__feedback"
       :class="`wf-command-input__feedback--${status}`"
-      :role="status === 'error' ? 'alert' : 'status'"
+      :role="status === 'success' ? 'status' : undefined"
     >
       {{ feedback }}
     </p>
+    <span v-if="liveAnnouncement" class="wf-command-input__live" data-command-input-live aria-live="assertive" aria-atomic="true">{{ liveAnnouncement }}</span>
   </form>
 </template>
 
 <style scoped>
 .wf-command-input {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--wf-space-sm);
@@ -115,6 +139,11 @@ function submit(): void {
   background: var(--wf-color-surface-raised);
 }
 
+.wf-command-input__field--error {
+  border-color: var(--wf-color-danger);
+  box-shadow: 0 0 0 1px var(--wf-color-danger);
+}
+
 .wf-command-input__field::placeholder { color: var(--wf-color-text-placeholder); opacity: 1; }
 
 .wf-command-input__submit {
@@ -132,11 +161,33 @@ function submit(): void {
 }
 
 .wf-command-input__feedback {
-  grid-column: 1 / -1;
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--wf-space-xs));
+  left: 0;
   margin: 0;
+  padding: var(--wf-space-xs) var(--wf-space-sm);
+  border: 1px solid var(--wf-color-border-floating);
+  border-left: 3px solid var(--wf-color-accent);
+  border-radius: var(--wf-radius-sm);
+  background: var(--wf-color-surface-floating);
+  box-shadow: var(--wf-shadow-sm);
   font-size: var(--wf-font-size-sm);
+  pointer-events: none;
 }
 
-.wf-command-input__feedback--success { color: var(--wf-color-success); }
-.wf-command-input__feedback--error { color: var(--wf-color-danger); }
+.wf-command-input__feedback--success { border-left-color: var(--wf-color-success); color: var(--wf-color-success); }
+.wf-command-input__feedback--error { border-color: var(--wf-color-danger); border-left-color: var(--wf-color-danger); color: var(--wf-color-danger); }
+
+.wf-command-input__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 </style>

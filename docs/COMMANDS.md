@@ -29,6 +29,8 @@ Die Framework-Komponente `CommandInput` verbindet ausschließlich zwei öffentli
 
 Die Komponente kennt weder `WindowManager` noch `WidgetRegistry` und enthält keine fachlichen Commands. Consumer übergeben ihre eigene Command Registry und einen Navigator. Erfolgreiche Ausführung leert die Eingabe und zeigt neutrales Feedback; Parser- und Navigationsfehler werden als zugänglicher Fehlerzustand dargestellt und die Eingabe bleibt zur Korrektur erhalten.
 
+Der Fehlerzustand ist direkt mit dem Eingabefeld verknüpft: Das Feld erhält `aria-invalid`, `aria-describedby` und `aria-errormessage`; die Fehlermeldung wird tokenbasiert hervorgehoben und absolut positioniert, damit die umgebende kompakte Zeile nicht springt. Eine separate assertive Live-Region kündigt nur neue Fehlermeldungen an. Wird die Eingabe verändert, wird der alte Fehler entfernt und kann nach einem erneuten Submit wieder angekündigt werden. Ein erfolgreicher Submit setzt den Fehlerzustand zurück.
+
 ## Fehler
 
 Parserfehler sind als `CommandParseError` mit strukturiertem Code verfügbar:
