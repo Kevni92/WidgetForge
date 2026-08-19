@@ -4,7 +4,7 @@ import { createWidgetPane, type PaneNode } from '../core/pane'
 import type { WidgetId } from '../core/widget'
 import type { WidgetLifecycleController } from '../core/widget-lifecycle'
 import type { WidgetRegistry } from '../core/widget-registry'
-import type { WindowChromeMode, WindowHeaderAction, WindowHeaderMode, WindowRole } from '../core/window-options'
+import type { WindowChromeMode, WindowHeaderAction, WindowHeaderActionInput, WindowHeaderMode, WindowRole } from '../core/window-options'
 import type { WindowSnapZone } from '../core/window-snap'
 import PaneHost from './PaneHost.vue'
 import WindowSnapLayoutPicker from './WindowSnapLayoutPicker.vue'
@@ -30,7 +30,7 @@ interface WindowShellProps {
   icon?: string
   badge?: string
   status?: string
-  headerActions?: readonly WindowHeaderAction[]
+  headerActions?: readonly WindowHeaderActionInput[]
   windowRole?: WindowRole
   lifecycle?: WidgetLifecycleController | undefined
   layoutLocked?: boolean
@@ -70,8 +70,9 @@ const contentPane = computed<PaneNode | null>(() => {
   return createWidgetPane({ id: `${props.instanceId}.root`, widgetId: props.widgetId, instanceId: props.instanceId, parameters: props.parameters })
 })
 const showHeader = computed(() => props.header === 'always' || (props.header === 'focused' && props.focused) || (props.header === 'hover' && hovered.value))
-const leftHeaderActions = computed(() => props.headerActions.filter((action) => action.side === 'left'))
-const rightHeaderActions = computed(() => props.headerActions.filter((action) => action.side === 'right'))
+const normalizedHeaderActions = computed<readonly WindowHeaderAction[]>(() => props.headerActions.map((action) => ({ ...action, side: action.side ?? 'right' })))
+const leftHeaderActions = computed(() => normalizedHeaderActions.value.filter((action) => action.side === 'left'))
+const rightHeaderActions = computed(() => normalizedHeaderActions.value.filter((action) => action.side === 'right'))
 const resolvedTitle = computed(() => {
   if (props.title) return props.title
   const pane = contentPane.value
