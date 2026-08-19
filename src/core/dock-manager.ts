@@ -1,4 +1,5 @@
 import { clonePaneTree, validatePaneTree, type PaneNode, type PaneParameters } from './pane'
+import { assertPaneCapabilities } from './widget-capabilities'
 import type { WidgetRegistry } from './widget-registry'
 import type { WindowSize } from './window-geometry'
 
@@ -26,12 +27,7 @@ export interface AddDockRequest {
   resizable?: boolean
 }
 
-export interface DockChange {
-  readonly kind: DockChangeKind
-  readonly dockId: DockId
-  readonly docks: readonly DockState[]
-}
-
+export interface DockChange { readonly kind: DockChangeKind; readonly dockId: DockId; readonly docks: readonly DockState[] }
 export interface DockRect { readonly x:number; readonly y:number; readonly width:number; readonly height:number }
 export interface WorkspaceDockLayout { readonly floating:DockRect; readonly docks:Readonly<Record<DockId,DockRect>> }
 export type DockListener = (change:DockChange)=>void
@@ -53,6 +49,7 @@ function normalizePane(registry:WidgetRegistry,pane:PaneNode):PaneNode{
   }
   return{...clonePaneTree(pane),children:pane.children.map((child)=>normalizePane(registry,child))}
 }
+function normalizeDockPane(registry:WidgetRegistry,pane:PaneNode):PaneNode{assertPaneCapabilities(registry,pane,{dockHost:true});return normalizePane(registry,pane)}
 function normalizeThickness(value:number,min:number,max:number|null):number{
   if(!Number.isFinite(value)||value<0)throw new DockDefinitionError('dock thickness must be a finite non-negative number')
   return Math.max(min,max===null?value:Math.min(max,value))
@@ -70,11 +67,11 @@ export class DockManager{
     if(this.docks.some((dock)=>dock.id===request.id))throw new DuplicateDockError(request.id)
     const min=request.minThickness??0;const max=request.maxThickness??null
     if(!Number.isFinite(min)||min<0||max!==null&&(!Number.isFinite(max)||max<min))throw new DockDefinitionError('invalid dock thickness constraints')
-    const dock:DockState={id:request.id,position:request.position,rootPane:normalizePane(this.registry,request.pane),thickness:normalizeThickness(request.thickness,min,max),minThickness:min,maxThickness:max,resizable:request.resizable??true}
+    const dock:DockState={id:request.id,position:request.position,rootPane:normalizeDockPane(this.registry,request.pane),thickness:normalizeThickness(request.thickness,min,max),minThickness:min,maxThickness:max,resizable:request.resizable??true}
     this.docks=[...this.docks,dock];this.emit('add',dock.id);return cloneDock(dock)
   }
   remove(id:DockId):void{if(!this.docks.some((dock)=>dock.id===id))throw new UnknownDockError(id);this.docks=this.docks.filter((dock)=>dock.id!==id);this.emit('remove',id)}
-  setRootPane(id:DockId,pane:PaneNode):DockState{const current=this.get(id);const updated:{readonly [K in keyof DockState]:DockState[K]}={...current,rootPane:normalizePane(this.registry,pane)};this.docks=this.docks.map((dock)=>dock.id===id?updated:dock);this.emit('pane',id);return cloneDock(updated)}
+  setRootPane(id:DockId,pane:PaneNode):DockState{const current=this.get(id);const updated:{readonly [K in keyof DockState]:DockState[K]}={...current,rootPane:normalizeDockPane(this.registry,pane)};this.docks=this.docks.map((dock)=>dock.id===id?updated:dock);this.emit('pane',id);return cloneDock(updated)}
   setThickness(id:DockId,thickness:number):DockState{const current=this.get(id);const next=normalizeThickness(thickness,current.minThickness,current.maxThickness);if(next===current.thickness)return current;const updated={...current,thickness:next};this.docks=this.docks.map((dock)=>dock.id===id?updated:dock);this.emit('thickness',id);return cloneDock(updated)}
   subscribe(listener:DockListener):()=>void{this.listeners.add(listener);return()=>this.listeners.delete(listener)}
   private emit(kind:DockChangeKind,dockId:DockId):void{const change={kind,dockId,docks:this.list()};for(const listener of [...this.listeners])listener(change)}
