@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { computed, markRaw, nextTick, ref, shallowRef } from 'vue'
-import { DataClientProvider, ThemeProvider, WorkspaceHost, captureWorkspace, createDataClient, createDataKey, createDockManager, createLocalStorageWorkspaceLayoutStorage, createMockDataProvider, createSplitPane, createStackPane, createTabPane, createWidgetNavigator, createWidgetPane, createWindowGroupManager, createWindowManager, createWorkspaceEditController, createWorkspaceHistory, createWorkspaceLayoutManager, forgeDarkTheme, forgeLightTheme, provideWidgetNavigation, restoreWorkspace, serializeWorkspace, type WidgetForgeTheme, type WindowGroupSnapshot, type WorkspaceEditSnapshot } from 'widgetforge'
+import { DataClientProvider, ThemeProvider, WorkspaceHost, captureWorkspace, createDataClient, createDataKey, createLocalStorageWorkspaceCollectionStorage, createLocalStorageWorkspaceLayoutStorage, createMockDataProvider, createSplitPane, createStackPane, createTabPane, createWidgetNavigator, createWidgetPane, createWindowGroupManager, createWorkspaceCollection, createWorkspaceEditController, createWorkspaceHistory, createWorkspaceLayoutManager, forgeDarkTheme, forgeLightTheme, provideWidgetNavigation, restoreWorkspace, serializeWorkspace, type WidgetForgeTheme, type WindowGroupSnapshot, type WorkspaceEditSnapshot, type WorkspaceRuntime } from 'widgetforge'
 import { provideDemoControls, type DemoThemeName } from './demo-controls'
 import { playgroundWidgetRegistry } from './playground-widgets'
 interface DemoMetric{label:string;value:number;unit:string}
-const WORKSPACE_STORAGE_KEY='widgetforge.playground.fullscreen.v3',THEME_STORAGE_KEY='widgetforge.playground.theme',EDIT_STORAGE_KEY='widgetforge.playground.edit.v1',GROUP_STORAGE_KEY='widgetforge.playground.groups.v1',LAYOUT_STORAGE_KEY='widgetforge.playground.layouts.v1'
+const WORKSPACE_STORAGE_KEY='widgetforge.playground.fullscreen.v3',THEME_STORAGE_KEY='widgetforge.playground.theme',EDIT_STORAGE_KEY='widgetforge.playground.edit.v1',GROUP_STORAGE_KEY='widgetforge.playground.groups.v1',LAYOUT_STORAGE_KEY='widgetforge.playground.layouts.v1',COLLECTION_STORAGE_KEY='widgetforge.playground.workspaces.v1'
 function storedTheme():DemoThemeName{try{return window.localStorage.getItem(THEME_STORAGE_KEY)==='forge-light'?'forge-light':'forge-dark'}catch{return'forge-dark'}}
 const themeName=ref<DemoThemeName>(storedTheme()),themes:Record<DemoThemeName,WidgetForgeTheme>={'forge-dark':forgeDarkTheme,'forge-light':forgeLightTheme},activeTheme=computed(()=>themes[themeName.value])
 const mockProvider=markRaw(createMockDataProvider()),gridPowerKey=createDataKey<DemoMetric>('demo.metric','grid-power'),warehouseKey=createDataKey<DemoMetric>('demo.metric','warehouse-stock')
 mockProvider.register({key:gridPowerKey,initial:{label:'Grid Power',value:118.0,unit:'MW'},intervalMs:1_200,update:(current)=>({...current,value:current.value+0.5})});mockProvider.register({key:warehouseKey,initial:{label:'Warehouse Stock',value:640,unit:'t'},intervalMs:1_800,update:(current,tick)=>({...current,value:current.value+(tick%2===0?4:-2)})})
-const dataClient=markRaw(createDataClient(mockProvider,{cacheTimeMs:5_000})),windows=markRaw(createWindowManager(playgroundWidgetRegistry)),docks=markRaw(createDockManager(playgroundWidgetRegistry)),navigator=markRaw(createWidgetNavigator(playgroundWidgetRegistry,windows)),edit=markRaw(createWorkspaceEditController())
+const dataClient=markRaw(createDataClient(mockProvider,{cacheTimeMs:5_000}))
+function createDemoWorkspaceCollection(){const create=(persist:boolean)=>createWorkspaceCollection({registry:playgroundWidgetRegistry,...(persist?{storage:createLocalStorageWorkspaceCollectionStorage(window.localStorage,COLLECTION_STORAGE_KEY)}:{})});try{return create(true)}catch{try{window.localStorage.removeItem(COLLECTION_STORAGE_KEY);return create(true)}catch{return create(false)}}}
+const workspaces=markRaw(createDemoWorkspaceCollection()),restoredWorkspaceCollection=workspaces.list().length>0
+const commandWorkspace=workspaces.list().find((workspace)=>workspace.id==='command')??workspaces.createWorkspace({id:'command',name:'Command',activate:true})
+const windows=markRaw(commandWorkspace.windows),docks=markRaw(commandWorkspace.docks),navigator=markRaw(createWidgetNavigator(playgroundWidgetRegistry,windows)),edit=markRaw(createWorkspaceEditController())
 provideWidgetNavigation(navigator)
 function persistWorkspace():void{try{window.localStorage.setItem(WORKSPACE_STORAGE_KEY,serializeWorkspace(windows,docks))}catch{/* best effort */}}
 function persistEdit():void{try{window.localStorage.setItem(EDIT_STORAGE_KEY,JSON.stringify(edit.snapshot()))}catch{/* best effort */}}
@@ -22,28 +26,18 @@ function openReferenceLayout():void{
   windows.openPane({instanceId:'operations-main',title:'Operations Matrix · fixed/flex/stack',position:{x:470,y:400},size:{width:590,height:270},minSize:{width:420,height:220},pane:createSplitPane({id:'operations-root',axis:'horizontal',weights:[1,1],children:[createWidgetPane({id:'operations-colony',widgetId:'planet.summary',instanceId:'operations-colony-widget',parameters:{planetId:'ARC-02',compact:true},settings:{sizeMode:'fixed',size:260,minSize:230,maxSize:300,background:'surface'}}),createStackPane({id:'operations-stack',settings:{sizeMode:'flex',background:'surface-raised'},children:[createTabPane({id:'operations-metrics',activeId:'operations-power',children:[createWidgetPane({id:'operations-power',widgetId:'demo.live-metric',instanceId:'operations-power-widget',parameters:{resourceId:'grid-power'},settings:{minSize:90,background:'surface-raised'}}),createWidgetPane({id:'operations-stock',widgetId:'demo.live-metric',instanceId:'operations-stock-widget',parameters:{resourceId:'warehouse-stock'},settings:{minSize:90,background:'canvas'}})]})]})]})})
 }
 function clearWorkspace():void{for(const window of[...windows.list()])windows.close(window.instanceId,'api');for(const dock of[...docks.list()])docks.remove(dock.id)}
-let restoredPersistedWorkspace=false
-function restoreReferenceLayout():void{let stored:string|null=null;try{stored=window.localStorage.getItem(WORKSPACE_STORAGE_KEY)}catch{/* unavailable */}const restored=stored?restoreWorkspace(windows,stored,docks):null;if(restored?.valid&&restored.issues.length===0&&restored.restoredDocks.length>0){restoredPersistedWorkspace=true;return}clearWorkspace();openReferenceLayout()}
+let restoredPersistedWorkspace=restoredWorkspaceCollection
+function restoreReferenceLayout():void{if(restoredWorkspaceCollection)return;let stored:string|null=null;try{stored=window.localStorage.getItem(WORKSPACE_STORAGE_KEY)}catch{/* unavailable */}const restored=stored?restoreWorkspace(windows,stored,docks):null;if(restored?.valid&&restored.issues.length===0&&restored.restoredDocks.length>0){restoredPersistedWorkspace=true;return}clearWorkspace();openReferenceLayout()}
 restoreReferenceLayout();restoreEdit()
-function createDemoLayoutManager(){
-  const create=(persist:boolean)=>createWorkspaceLayoutManager({registry:playgroundWidgetRegistry,windows,docks,...(persist?{storage:createLocalStorageWorkspaceLayoutStorage(window.localStorage,LAYOUT_STORAGE_KEY)}:{})})
-  try{return create(true)}catch{try{window.localStorage.removeItem(LAYOUT_STORAGE_KEY);return create(true)}catch{return create(false)}}
-}
+function createDemoLayoutManager(){const create=(persist:boolean)=>createWorkspaceLayoutManager({registry:playgroundWidgetRegistry,windows,docks,...(persist?{storage:createLocalStorageWorkspaceLayoutStorage(window.localStorage,LAYOUT_STORAGE_KEY)}:{})});try{return create(true)}catch{try{window.localStorage.removeItem(LAYOUT_STORAGE_KEY);return create(true)}catch{return create(false)}}}
 const layouts=markRaw(createDemoLayoutManager())
 function hasLayout(name:string):boolean{return layouts.listLayouts().some((layout)=>layout.name===name)}
-function buildReferencePreset(name:'Default'|'Trading'|'Operations'):void{
-  clearWorkspace();openReferenceLayout()
-  if(name==='Trading'){for(const id of['colony-main','alerts-main','operations-main'])windows.close(id,'api')}
-  else if(name==='Operations')windows.close('market-main','api')
-  layouts.saveLayout(name,{setDefault:name==='Default'})
-}
-function seedDemoLayouts():void{
-  const startup=serializeWorkspace(windows,docks),missing=(['Default','Trading','Operations'] as const).filter((name)=>!hasLayout(name))
-  for(const name of missing)buildReferencePreset(name)
-  if(!layouts.getDefaultLayout()&&hasLayout('Default'))layouts.setDefaultLayout('Default')
-  if(missing.length>0){clearWorkspace();const restored=restoreWorkspace(windows,startup,docks);if(!restored.valid||restored.issues.length>0){clearWorkspace();openReferenceLayout();restoredPersistedWorkspace=false}}
-}
+function buildReferencePreset(name:'Default'|'Trading'|'Operations'):void{clearWorkspace();openReferenceLayout();if(name==='Trading'){for(const id of['colony-main','alerts-main','operations-main'])windows.close(id,'api')}else if(name==='Operations')windows.close('market-main','api');layouts.saveLayout(name,{setDefault:name==='Default'})}
+function seedDemoLayouts():void{const startup=serializeWorkspace(windows,docks),missing=(['Default','Trading','Operations'] as const).filter((name)=>!hasLayout(name));for(const name of missing)buildReferencePreset(name);if(!layouts.getDefaultLayout()&&hasLayout('Default'))layouts.setDefaultLayout('Default');if(missing.length>0){clearWorkspace();const restored=restoreWorkspace(windows,startup,docks);if(!restored.valid||restored.issues.length>0){clearWorkspace();openReferenceLayout();restoredPersistedWorkspace=false}}}
 seedDemoLayouts()
+function presetSnapshot(name:string){const preset=layouts.listLayouts().find((layout)=>layout.name===name);if(!preset)throw new Error(`missing demo layout ${name}`);return preset.workspace}
+function ensureVirtualDesktops():void{if(!workspaces.list().some((workspace)=>workspace.id==='trading'))workspaces.createWorkspace({id:'trading',name:'Trading',workspace:presetSnapshot('Trading')});if(!workspaces.list().some((workspace)=>workspace.id==='operations'))workspaces.createWorkspace({id:'operations',name:'Operations',workspace:presetSnapshot('Operations')})}
+ensureVirtualDesktops()
 function detectActiveLayout():string|null{const current=JSON.stringify(captureWorkspace(windows,docks));return layouts.listLayouts().find((layout)=>JSON.stringify(layout.workspace)===current)?.name??null}
 const activeLayout=ref<string|null>(restoredPersistedWorkspace?detectActiveLayout():'Default')
 const groups=markRaw(createWindowGroupManager(windows))
@@ -58,6 +52,10 @@ async function resetWorkspace():Promise<void>{history.beginTransaction();clearWo
 function setTheme(theme:DemoThemeName):void{themeName.value=theme;try{window.localStorage.setItem(THEME_STORAGE_KEY,theme)}catch{/* unavailable */}}
 function undo():void{history.undo();activeLayout.value=detectActiveLayout();persistWorkspace()}function redo():void{history.redo();activeLayout.value=detectActiveLayout();persistWorkspace()}
 provideDemoControls({theme:()=>themeName.value,setTheme,resetWorkspace,canUndo:()=>historyState.value.canUndo,canRedo:()=>historyState.value.canRedo,undo,redo,workspaceMode:()=>editState.value.mode,setWorkspaceMode:(mode)=>edit.setMode(mode),layoutNames:()=>layouts.listLayouts().map((layout)=>layout.name),activeLayout:()=>activeLayout.value,loadLayout:loadDemoLayout})
+const workspaceList=shallowRef<readonly WorkspaceRuntime[]>(workspaces.list()),activeWorkspace=shallowRef<WorkspaceRuntime>(workspaces.getActive())
+workspaces.subscribe((change)=>{workspaceList.value=change.workspaces;activeWorkspace.value=workspaces.getActive()})
+function activateWorkspace(id:string):void{workspaces.activateWorkspace(id)}
 persistWorkspace();persistEdit();persistGroups();windows.subscribe(()=>{activeLayout.value=null;persistWorkspace()});docks.subscribe(()=>{activeLayout.value=null;persistWorkspace()})
 </script>
-<template><ThemeProvider :theme="activeTheme"><DataClientProvider :client="dataClient"><main class="simulation-demo" data-fullscreen-workspace-demo><WorkspaceHost :windows="windows" :docks="docks" :registry="playgroundWidgetRegistry" :history="history" :edit="edit"/></main></DataClientProvider></ThemeProvider></template>
+<template><ThemeProvider :theme="activeTheme"><DataClientProvider :client="dataClient"><main class="simulation-demo" data-fullscreen-workspace-demo><nav class="workspace-desktops" aria-label="Virtual desktops"><button v-for="workspace in workspaceList" :key="workspace.id" type="button" :data-workspace-tab="workspace.id" :aria-pressed="workspace.id===activeWorkspace.id" @click="activateWorkspace(workspace.id)">{{workspace.name}}</button></nav><div class="workspace-desktop-surface" :data-active-workspace="activeWorkspace.id"><WorkspaceHost :key="activeWorkspace.id" :windows="activeWorkspace.windows" :docks="activeWorkspace.docks" :registry="playgroundWidgetRegistry" :history="activeWorkspace.id==='command'?history:undefined" :edit="activeWorkspace.id==='command'?edit:undefined"/></div></main></DataClientProvider></ThemeProvider></template>
+<style scoped>.simulation-demo{display:flex;width:100%;height:100%;min-width:0;min-height:0;flex-direction:column;background:var(--wf-color-canvas)}.workspace-desktops{display:flex;flex:0 0 32px;align-items:center;gap:2px;padding:0 var(--wf-space-sm);border-bottom:1px solid var(--wf-color-border);background:var(--wf-color-surface-raised)}.workspace-desktops button{height:24px;padding:0 var(--wf-space-md);border:1px solid transparent;border-radius:var(--wf-radius-sm);background:transparent;color:var(--wf-color-text-muted);font:inherit;font-size:var(--wf-font-size-xs);cursor:pointer}.workspace-desktops button:hover{background:var(--wf-color-hover);color:var(--wf-color-text)}.workspace-desktops button[aria-pressed="true"]{border-color:var(--wf-color-focus);background:var(--wf-color-selected);color:var(--wf-color-text)}.workspace-desktops button:focus-visible{outline:2px solid var(--wf-color-focus);outline-offset:1px}.workspace-desktop-surface{position:relative;flex:1 1 auto;min-width:0;min-height:0;overflow:hidden}</style>
