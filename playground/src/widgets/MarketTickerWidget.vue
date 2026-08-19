@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { DataTable, useWidgetContext, type DataTableColumn, type DataTableRowId, type DataTableSort } from 'widgetforge'
+import { computed } from 'vue'
+import { DataTable, useWidgetContext, useWidgetViewState, type DataTableColumn, type DataTableRowId, type DataTableSort } from 'widgetforge'
 
 interface MarketRow {
   symbol: string
@@ -10,10 +10,22 @@ interface MarketRow {
   volume: number
   change: number
 }
+type MarketViewState = { filter: string; sortColumn: string; sortDirection: 'asc' | 'desc'; selected: string | null }
 
 const context = useWidgetContext<{ commodity?: string; rows?: number }>()
-const sort = ref<DataTableSort>({ columnId: 'volume', direction: 'desc' })
-const selected = ref<DataTableRowId | null>(null)
+const viewState = useWidgetViewState<MarketViewState>()
+const sort = computed<DataTableSort>({
+  get: () => ({ columnId: viewState.state.value.sortColumn, direction: viewState.state.value.sortDirection }),
+  set: (next) => viewState.update((state) => ({ ...state, sortColumn: next.columnId, sortDirection: next.direction })),
+})
+const selected = computed<DataTableRowId | null>({
+  get: () => viewState.state.value.selected,
+  set: (next) => viewState.update((state) => ({ ...state, selected: next === null ? null : String(next) })),
+})
+const filter = computed({
+  get: () => viewState.state.value.filter,
+  set: (next: string) => viewState.update((state) => ({ ...state, filter: next })),
+})
 
 const commodity = computed(() => context.parameters.value.commodity ?? 'ALL')
 const rows = computed<readonly MarketRow[]>(() => {
@@ -31,6 +43,11 @@ const rows = computed<readonly MarketRow[]>(() => {
       change: ((seed % 9) - 4) * 0.37,
     }
   })
+})
+const filteredRows = computed(() => {
+  const query = filter.value.trim().toLowerCase()
+  if (!query) return rows.value
+  return rows.value.filter((row) => row.symbol.toLowerCase().includes(query) || row.name.toLowerCase().includes(query))
 })
 
 const columns: readonly DataTableColumn<MarketRow>[] = [
@@ -51,14 +68,15 @@ const columns: readonly DataTableColumn<MarketRow>[] = [
         <strong>{{ commodity }} Market</strong>
       </div>
       <div class="market-widget__summary">
+        <label class="market-widget__filter">Filter <input v-model="filter" aria-label="Market filter" type="search" placeholder="Code or commodity" /></label>
         <span><i class="market-widget__dot" /> LIVE</span>
-        <span>{{ rows.length }} contracts</span>
+        <span>{{ filteredRows.length }} contracts</span>
       </div>
     </header>
     <DataTable
       v-model:sort="sort"
       v-model:selected-row-id="selected"
-      :rows="rows"
+      :rows="filteredRows"
       :columns="columns"
       :row-id="(row: MarketRow) => row.symbol"
       aria-label="Commodity market quotes"
@@ -70,5 +88,5 @@ const columns: readonly DataTableColumn<MarketRow>[] = [
 </template>
 
 <style scoped>
-.market-widget{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr);gap:var(--wf-space-sm);padding:var(--wf-space-sm);overflow:hidden;background:var(--wf-color-canvas)}.market-widget__header{display:flex;align-items:center;justify-content:space-between;gap:var(--wf-space-md);padding:var(--wf-space-xs) var(--wf-space-sm)}.market-widget__header>div:first-child{display:grid;gap:2px}.market-widget__eyebrow{color:var(--wf-color-text-muted);font-size:var(--wf-font-size-xs);text-transform:uppercase;letter-spacing:.08em}.market-widget__summary{display:flex;gap:var(--wf-space-md);color:var(--wf-color-text-muted);font-size:var(--wf-font-size-xs)}.market-widget__summary span{display:flex;align-items:center;gap:5px}.market-widget__dot{width:6px;height:6px;border-radius:50%;background:var(--wf-color-success);box-shadow:0 0 6px var(--wf-color-success)}.market-widget :deep(.wf-data-table){height:100%;min-height:0}.market-widget :deep(.wf-data-table__scroller){height:100%;border-radius:var(--wf-radius-sm)}
+.market-widget{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr);gap:var(--wf-space-sm);padding:var(--wf-space-sm);overflow:hidden;background:var(--wf-color-canvas)}.market-widget__header{display:flex;align-items:center;justify-content:space-between;gap:var(--wf-space-md);padding:var(--wf-space-xs) var(--wf-space-sm)}.market-widget__header>div:first-child{display:grid;gap:2px}.market-widget__eyebrow{color:var(--wf-color-text-muted);font-size:var(--wf-font-size-xs);text-transform:uppercase;letter-spacing:.08em}.market-widget__summary{display:flex;align-items:center;gap:var(--wf-space-md);color:var(--wf-color-text-muted);font-size:var(--wf-font-size-xs)}.market-widget__summary span{display:flex;align-items:center;gap:5px}.market-widget__filter{display:flex;align-items:center;gap:4px}.market-widget__filter input{width:120px;height:24px;padding:0 6px;border:1px solid var(--wf-color-border);border-radius:var(--wf-radius-sm);background:var(--wf-color-surface);color:var(--wf-color-text);font:inherit}.market-widget__dot{width:6px;height:6px;border-radius:50%;background:var(--wf-color-success);box-shadow:0 0 6px var(--wf-color-success)}.market-widget :deep(.wf-data-table){height:100%;min-height:0}.market-widget :deep(.wf-data-table__scroller){height:100%;border-radius:var(--wf-radius-sm)}
 </style>
