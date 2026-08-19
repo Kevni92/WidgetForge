@@ -44,6 +44,20 @@ describe('fullscreen workspace demo widgets', () => {
     expect(navigate).toHaveBeenCalledWith({ widgetId: 'demo.alerts', parameters: {} }); wrapper.unmount()
   })
 
+  it('command bar exposes and clears an accessible command error state', async () => {
+    const { navigator } = navigatorSpy(); const wrapper = mountWithProviders(WorkspaceCommandBarWidget, navigator); const field = wrapper.get('.wf-command-input__field')
+    await field.setValue('not-a-command'); await wrapper.get('.wf-command-input').trigger('submit')
+    expect(field.attributes('aria-invalid')).toBe('true')
+    expect(wrapper.get('[data-command-input-feedback]').text()).toContain('unknown command')
+    expect(wrapper.get('[data-command-input-live]').text()).toContain('unknown command')
+
+    await field.setValue('alerts'); await wrapper.get('.wf-command-input').trigger('submit')
+    expect(field.attributes('aria-invalid')).toBeUndefined()
+    expect(wrapper.get('[data-command-input-feedback]').classes()).toContain('wf-command-input__feedback--success')
+    expect(wrapper.find('[data-command-input-live]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('alerts widget renders persistent operational notifications and navigates from actions', async () => {
     const { navigator, navigate } = navigatorSpy(); const wrapper = mountWithProviders(AlertsWidget, navigator)
     expect(wrapper.findAll('.wf-notification-center__item')).toHaveLength(3)
