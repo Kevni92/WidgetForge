@@ -67,6 +67,8 @@ export { CommandDefinitionError, CommandParseError, CommandRegistry, createComma
 export type { CommandArgumentDefinition, CommandArgumentType, CommandDefinition, CommandParseErrorCode } from './core/commands'
 export { captureWorkspace, restoreWorkspace, serializeWorkspace, WORKSPACE_VERSION, WorkspaceSerializationError } from './core/workspace'
 export type { WorkspaceParameters, WorkspaceParameterValue, WorkspaceRestoreIssue, WorkspaceRestoreIssueCode, WorkspaceRestoreResult, WorkspaceSnapshot, WorkspaceWindowSnapshot, WorkspaceDockSnapshot } from './core/workspace'
+export { createWorkspaceMigrationRegistry, createDefaultWorkspaceMigrationRegistry, defaultWorkspaceMigrationRegistry, migrateWorkspaceV1ToV2, migrateWorkspaceV2ToV3, WorkspaceMigrationRegistry, WorkspaceMigrationError } from './core/workspace-migrations'
+export type { WorkspaceMigrationDocument, WorkspaceMigrationStep, WorkspaceMigrationDefinition, WorkspaceMigrationResult, WorkspaceMigrationErrorCode } from './core/workspace-migrations'
 export { createWorkspaceLayoutManager, WorkspaceLayoutManager, WorkspaceLayoutError, WORKSPACE_LAYOUT_PRESET_VERSION, WORKSPACE_LAYOUT_COLLECTION_VERSION } from './core/workspace-layouts'
 export type { WorkspaceLayoutErrorCode, WorkspaceLayoutPreset, WorkspaceLayoutCollectionSnapshot, WorkspaceLayoutStorage, WorkspaceLayoutManagerOptions, SaveWorkspaceLayoutOptions, WorkspaceLayoutLoadResult } from './core/workspace-layouts'
 export { createWorkspaceCollection, WorkspaceCollectionManager, WorkspaceCollectionError, WORKSPACE_COLLECTION_VERSION } from './core/workspace-collection'
