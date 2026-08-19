@@ -1,12 +1,20 @@
+import { defineComponent, h, markRaw } from 'vue'
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { SelectionProvider, createSelectionStore } from 'widgetforge'
 import App from '../src/App.vue'
+
+function mountApp() {
+  const store = markRaw(createSelectionStore())
+  const Root = defineComponent({ setup: () => () => h(SelectionProvider, { store }, () => h(App)) })
+  return mount(Root)
+}
 
 describe('playground selection context', () => {
   beforeEach(() => window.localStorage.clear())
 
   it('updates multiple widgets, keeps pinned Market fixed and never opens new widget instances', async () => {
-    const wrapper = mount(App)
+    const wrapper = mountApp()
     const colony = wrapper.get('select[aria-label="Colony selection"]')
     const market = () => wrapper.get('[data-window-instance-id="market-main"] .market-widget')
     const telemetry = () => wrapper.get('[data-window-instance-id="telemetry-power"] [data-resource-id="grid-power"]')
