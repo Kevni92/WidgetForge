@@ -11,6 +11,8 @@ WidgetForge trennt semantische Window-Rollen vom konkreten `zIndex`. Anwendungen
 
 `windowRoleRank()` definiert ausschließlich die interne Rollenreihenfolge. Consumer sollen keine eigenen zIndex-Werte setzen oder Widget-Code mit Stacking-Regeln versehen.
 
+Die Darstellung der Rollen wird über semantische Theme-Tokens abgebildet: `normal` verwendet `surfaceWindow`, `utility` `surfaceFloating`, `overlay` `surfaceOverlay` und `modal` `surfaceModal`. Die jeweils passenden Border- und Shadow-Tokens sorgen für eine erkennbare Elevation. Diese Zuordnung verändert weder `windowRoleRank()` noch die technische Layer-Berechnung.
+
 ## Modal-Semantik
 
 Solange mindestens ein sichtbares Modal existiert, wird das oberste Modal fokussiert gehalten. Hintergrundfenster sind für Pointer-Interaktion gesperrt und `aria-hidden`. Ein token-basierter Backdrop trennt den modalen Bereich visuell. `Escape` schließt ausschließlich das oberste schließbare Modal; danach erhält das nächste Modal oder das oberste verbleibende Fenster den Fokus.

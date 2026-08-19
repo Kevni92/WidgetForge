@@ -37,8 +37,8 @@ const previewStyle = computed(() => {
 <style scoped>
 .wf-docking-overlay{position:absolute;z-index:var(--wf-layer-overlay);pointer-events:none}
 .wf-docking-overlay__preview{position:absolute;border:1px solid var(--wf-color-focus);border-radius:var(--wf-radius-sm);background:var(--wf-color-selected);box-shadow:inset 0 0 0 1px var(--wf-color-border)}
-.wf-docking-overlay__targets{position:absolute;left:50%;top:50%;display:grid;grid-template-columns:repeat(3,clamp(28px,5vw,40px));grid-template-rows:repeat(3,clamp(28px,5vw,40px));gap:3px;transform:translate(-50%,-50%);padding:4px;border:1px solid var(--wf-color-border);border-radius:var(--wf-radius-md);background:var(--wf-color-surface-raised);box-shadow:var(--wf-shadow-lg)}
-.wf-docking-overlay__target{display:grid;place-items:center;border:1px solid var(--wf-color-border);border-radius:var(--wf-radius-sm);background:var(--wf-color-surface);opacity:.82}
+.wf-docking-overlay__targets{position:absolute;left:50%;top:50%;display:grid;grid-template-columns:repeat(3,clamp(28px,5vw,40px));grid-template-rows:repeat(3,clamp(28px,5vw,40px));gap:3px;transform:translate(-50%,-50%);padding:4px;border:1px solid var(--wf-color-border-overlay);border-radius:var(--wf-radius-md);background:var(--wf-color-surface-overlay);box-shadow:var(--wf-shadow-lg)}
+.wf-docking-overlay__target{display:grid;place-items:center;border:1px solid var(--wf-color-border-overlay);border-radius:var(--wf-radius-sm);background:var(--wf-color-surface-window);opacity:.82}
 .wf-docking-overlay__target--active{border-color:var(--wf-color-focus);background:var(--wf-color-selected);opacity:1}
 .wf-docking-overlay__target--top{grid-column:2;grid-row:1}.wf-docking-overlay__target--left{grid-column:1;grid-row:2}.wf-docking-overlay__target--center{grid-column:2;grid-row:2}.wf-docking-overlay__target--right{grid-column:3;grid-row:2}.wf-docking-overlay__target--bottom{grid-column:2;grid-row:3}
 .wf-docking-overlay__glyph{width:13px;height:10px;border:1px solid currentColor;border-radius:1px;color:var(--wf-color-text-muted)}

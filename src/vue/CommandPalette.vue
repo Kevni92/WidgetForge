@@ -235,8 +235,8 @@ defineExpose({ open: openPalette, close: closePalette, toggle: togglePalette })
 </template>
 
 <style scoped>
-.wf-command-palette{position:fixed;inset:0;z-index:var(--wf-z-modal);display:grid;place-items:start center;padding:12vh var(--wf-space-md) var(--wf-space-md);background:color-mix(in srgb,var(--wf-color-canvas) 58%,transparent);backdrop-filter:blur(3px)}
-.wf-command-palette__dialog{width:min(680px,100%);max-height:min(72vh,620px);display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:var(--wf-space-sm);padding:var(--wf-space-md);border:1px solid var(--wf-color-border);border-radius:var(--wf-radius-md);background:var(--wf-color-surface);box-shadow:var(--wf-shadow-lg);color:var(--wf-color-text);font-family:var(--wf-font-family)}
+.wf-command-palette{position:fixed;inset:0;z-index:var(--wf-layer-overlay);display:grid;place-items:start center;padding:12vh var(--wf-space-md) var(--wf-space-md);background:var(--wf-color-backdrop);backdrop-filter:blur(3px)}
+.wf-command-palette__dialog{width:min(680px,100%);max-height:min(72vh,620px);display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:var(--wf-space-sm);padding:var(--wf-space-md);border:1px solid var(--wf-color-border-modal);border-radius:var(--wf-radius-md);background:var(--wf-color-surface-modal);box-shadow:var(--wf-shadow-lg);color:var(--wf-color-text);font-family:var(--wf-font-family)}
 .wf-command-palette__header{display:flex;align-items:center;justify-content:space-between;gap:var(--wf-space-md)}
 .wf-command-palette__header h2{margin:0;font-size:var(--wf-font-size-md);font-weight:var(--wf-font-weight-semibold)}
 .wf-command-palette kbd{padding:2px 6px;border:1px solid var(--wf-color-border);border-radius:var(--wf-radius-sm);background:var(--wf-color-surface-raised);color:var(--wf-color-text-muted);font:inherit;font-size:var(--wf-font-size-xs)}

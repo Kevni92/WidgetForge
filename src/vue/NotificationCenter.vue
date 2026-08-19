@@ -94,9 +94,9 @@ onUnmounted(() => unsubscribe?.())
 
 <style scoped>
 .wf-notification-center {
-  border: 1px solid var(--wf-color-border);
+  border: 1px solid var(--wf-color-border-floating);
   border-radius: var(--wf-radius-md);
-  background: var(--wf-color-surface);
+  background: var(--wf-color-surface-floating);
   color: var(--wf-color-text);
   overflow: hidden;
 }
@@ -108,8 +108,8 @@ onUnmounted(() => unsubscribe?.())
   gap: var(--wf-space-md);
   min-height: var(--wf-size-titlebar-height);
   padding: 0 var(--wf-space-md);
-  border-bottom: 1px solid var(--wf-color-border);
-  background: var(--wf-color-surface-raised);
+  border-bottom: 1px solid var(--wf-color-border-floating);
+  background: var(--wf-color-surface-floating);
   font-size: var(--wf-font-size-sm);
 }
 

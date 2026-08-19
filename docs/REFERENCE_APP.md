@@ -19,6 +19,7 @@ Production, Inventory, Market and Orders all acquire the same `demo.economy/netw
 - Inventory persists filter/sort UI state independently from Workspace persistence.
 - The default workspace combines a snapped Market window with a split economy window and Inventory/Orders tabs.
 - Commands and the global Command Palette can open Production, Inventory, Market and Orders.
+- The topbar also exposes a utility/always-on-top telemetry window, a chrome-less Quick Command overlay and a modal review dialog so the semantic surface/elevation states can be inspected in both Forge themes.
 - Staging an order emits a WidgetForge notification.
 - `Fail feed` calls `MockDataProvider.fail()` for the shared economy resource. Every active consumer transitions to the public error state. `Reconnect` calls `recover()` and restores the live snapshot without remounting widgets.
 - Developer Mode exposes the WidgetForge DevTools overlay against the same Workspace and DataClient.

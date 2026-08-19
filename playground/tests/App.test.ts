@@ -50,6 +50,11 @@ describe('Fullscreen Playground App', () => {
     expect(layoutCollection.defaultLayout).toBe('Default')
     expect(layoutCollection.layouts?.map((layout) => layout.name)).toEqual(['Default', 'Trading', 'Operations'])
 
+    await wrapper.get('[data-demo-nav="overlay"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    const overlay = wrapper.get('[data-window-role="overlay"]')
+    expect(overlay.get('.wf-window-shell').attributes('data-window-chrome')).toBe('borderless')
+
     await wrapper.get('[data-demo-nav="modal"]').trigger('click')
     await wrapper.vm.$nextTick()
     const modal = wrapper.get('[data-window-role="modal"]')

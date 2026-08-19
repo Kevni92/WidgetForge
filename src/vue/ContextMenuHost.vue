@@ -124,10 +124,10 @@ onUnmounted(() => {
   max-height: calc(100vh - 16px);
   overflow: auto;
   padding: var(--wf-space-xs);
-  border: 1px solid var(--wf-color-border);
+  border: 1px solid var(--wf-color-border-floating);
   border-radius: var(--wf-radius-md);
-  background: var(--wf-color-surface-raised);
-  box-shadow: var(--wf-shadow-md);
+  background: var(--wf-color-surface-floating);
+  box-shadow: var(--wf-shadow-lg);
 }
 
 .wf-context-menu__item {

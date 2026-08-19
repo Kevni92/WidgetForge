@@ -54,9 +54,10 @@ export const liveMetricWidget = defineWidget({
 })
 
 export const alertsWidget = defineWidget({ id: 'demo.alerts', title: 'Operations Alerts', component: AlertsWidget, capabilities: { multipleInstances: false, dockable: false, tabCompatible: false, preferredAspectRatio: 1.4, minimumUsefulSize: { width: 330, height: 220 }, supportsCompactMode: false }, window: { defaultSize: { width: 430, height: 310 }, minSize: { width: 330, height: 220 } } })
+export const overlayCommandWidget = defineWidget({ id: 'demo.overlay-command', title: 'Quick Command Overlay', component: WorkspaceCommandBarWidget, capabilities: { multipleInstances: false, dockable: false, tabCompatible: false, supportsCompactMode: false }, window: { defaultSize: { width: 420, height: 190 }, minSize: { width: 320, height: 150 }, options: { role: 'overlay' } } })
 export const modalReviewWidget = defineWidget({ id: 'demo.modal-review', title: 'Critical Operations Review', component: AlertsWidget, capabilities: { multipleInstances: false, dockable: false, tabCompatible: false, supportsCompactMode: false }, window: { defaultSize: { width: 520, height: 360 }, minSize: { width: 380, height: 260 }, options: { role: 'modal', chrome: 'borderless', resizable: false } } })
 export const workspaceTopbarWidget = defineWidget({ id: 'demo.workspace-topbar', title: 'Workspace Navigation', component: WorkspaceTopbarWidget, capabilities: { multipleInstances: false, dockable: true, tabCompatible: false, supportsCompactMode: true } })
 export const workspaceCommandBarWidget = defineWidget({ id: 'demo.workspace-commandbar', title: 'Command Console', component: WorkspaceCommandBarWidget, capabilities: { multipleInstances: false, dockable: true, tabCompatible: false, supportsCompactMode: true } })
 
-export const playgroundWidgets = [planetSummaryWidget,marketTickerWidget,productionWidget,inventoryWidget,ordersWidget,liveMetricWidget,alertsWidget,modalReviewWidget,workspaceTopbarWidget,workspaceCommandBarWidget]
+export const playgroundWidgets = [planetSummaryWidget,marketTickerWidget,productionWidget,inventoryWidget,ordersWidget,liveMetricWidget,alertsWidget,overlayCommandWidget,modalReviewWidget,workspaceTopbarWidget,workspaceCommandBarWidget]
 export const playgroundWidgetRegistry = createWidgetRegistry(playgroundWidgets)

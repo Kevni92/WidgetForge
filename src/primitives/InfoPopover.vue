@@ -119,11 +119,11 @@ function handleEscape(event: KeyboardEvent): void {
   width: max-content;
   max-width: min(360px, 80vw);
   padding: var(--wf-space-md);
-  border: 1px solid var(--wf-color-border);
+  border: 1px solid var(--wf-color-border-floating);
   border-radius: var(--wf-radius-md);
-  background: var(--wf-color-surface-raised);
+  background: var(--wf-color-surface-floating);
   color: var(--wf-color-text);
-  box-shadow: var(--wf-shadow-md);
+  box-shadow: var(--wf-shadow-lg);
   font-size: var(--wf-font-size-sm);
   line-height: 1.45;
 }

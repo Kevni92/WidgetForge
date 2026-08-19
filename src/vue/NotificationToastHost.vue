@@ -114,12 +114,12 @@ onUnmounted(() => {
   gap: var(--wf-space-md);
   align-items: flex-start;
   padding: var(--wf-space-md);
-  border: 1px solid var(--wf-color-border);
+  border: 1px solid var(--wf-color-border-floating);
   border-left-width: 3px;
   border-radius: var(--wf-radius-md);
-  background: var(--wf-color-surface-raised);
+  background: var(--wf-color-surface-floating);
   color: var(--wf-color-text);
-  box-shadow: var(--wf-shadow-md);
+  box-shadow: var(--wf-shadow-lg);
   pointer-events: auto;
 }
 

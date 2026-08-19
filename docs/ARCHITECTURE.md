@@ -55,7 +55,7 @@ Eine eigenständige Demo-Anwendung, die ausschließlich die öffentliche WidgetF
 - Widgets öffnen andere Inhalte über Navigation/Framework-Services.
 - Widgets verwalten keine WebSocket-Verbindungen selbst.
 - Fensterzustand und Spieldaten bleiben getrennt.
-- Visuelle Komponenten verwenden Design Tokens statt Produkt-Hardcodes.
+- Visuelle Komponenten verwenden Design Tokens statt Produkt-Hardcodes. Surface- und Elevation-Tokens (`surfaceWindow`, `surfaceFloating`, `surfaceOverlay`, `surfaceModal`, semantische Border/Shadow-Tokens und `backdrop`) beschreiben die Darstellung; `layer` und `zIndex` bleiben technische Stacking-Werte.
 
 ## Komponentenregeln
 

@@ -3,9 +3,19 @@ export interface WidgetForgeTheme {
     canvas: string
     surface: string
     surfaceRaised: string
+    surfaceWindow: string
+    surfaceFloating: string
+    surfaceOverlay: string
+    surfaceModal: string
     text: string
     textMuted: string
     border: string
+    borderSubtle: string
+    borderStrong: string
+    borderFloating: string
+    borderOverlay: string
+    borderModal: string
+    backdrop: string
     accent: string
     accentContrast: string
     danger: string
@@ -41,6 +51,7 @@ export interface WidgetForgeTheme {
   shadow: {
     sm: string
     md: string
+    lg: string
   }
   size: {
     controlHeight: string
@@ -65,9 +76,19 @@ export const defaultTheme: WidgetForgeTheme = {
     canvas: '#11161d',
     surface: '#18202a',
     surfaceRaised: '#202a36',
+    surfaceWindow: '#202a36',
+    surfaceFloating: '#273545',
+    surfaceOverlay: '#2e4053',
+    surfaceModal: '#354a61',
     text: '#e8edf2',
     textMuted: '#aeb9c5',
     border: '#2b3541',
+    borderSubtle: '#222c37',
+    borderStrong: '#3a4959',
+    borderFloating: '#4a6074',
+    borderOverlay: '#58738a',
+    borderModal: '#6c8ca7',
+    backdrop: 'rgb(0 0 0 / 0.48)',
     accent: '#62a8ff',
     accentContrast: '#07111d',
     danger: '#ff6b6b',
@@ -93,6 +114,7 @@ export const defaultTheme: WidgetForgeTheme = {
   shadow: {
     sm: '0 2px 8px rgb(0 0 0 / 0.18)',
     md: '0 8px 24px rgb(0 0 0 / 0.28)',
+    lg: '0 16px 48px rgb(0 0 0 / 0.42)',
   },
   size: { controlHeight: '32px', titlebarHeight: '36px' },
   layer: { base: 0, window: 100, overlay: 1000, tooltip: 2000 },
