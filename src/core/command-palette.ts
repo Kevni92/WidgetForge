@@ -8,11 +8,11 @@ export interface CommandPaletteItem {
   readonly id: string
   readonly label: string
   readonly category: string
-  readonly keywords?: readonly string[]
-  readonly shortcut?: string
-  readonly icon?: string
-  readonly priority?: number
-  readonly disabled?: boolean
+  readonly keywords?: readonly string[] | undefined
+  readonly shortcut?: string | undefined
+  readonly icon?: string | undefined
+  readonly priority?: number | undefined
+  readonly disabled?: boolean | undefined
   execute(): void
 }
 
@@ -234,9 +234,9 @@ export function createWidgetRegistryPaletteProvider(
 }
 
 export interface WidgetActionPaletteProviderOptions {
-  readonly providerId?: string
-  readonly category?: string
-  readonly instanceLabel?: string
+  readonly providerId?: string | undefined
+  readonly category?: string | undefined
+  readonly instanceLabel?: string | undefined
 }
 
 export function createWidgetActionPaletteProvider(
