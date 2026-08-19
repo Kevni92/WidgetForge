@@ -3,6 +3,7 @@ import {
   InvalidPaneOperationError,
   PaneDefinitionError,
   createSplitPane,
+  createTabPane,
   createWidgetPane,
   findPane,
   movePane,
@@ -10,6 +11,7 @@ import {
   replacePane,
   setSplitWeights,
   splitPaneAt,
+  reorderTab,
   validatePaneTree,
 } from '../src/core/pane'
 
@@ -124,5 +126,25 @@ describe('pane model', () => {
       axis: 'horizontal',
       children: [left, { ...right, instanceId: left.instanceId }],
     })).toThrow(PaneDefinitionError)
+  })
+
+  it('reorders first, middle and last tabs immutably while preserving the active id', () => {
+    const tabs = createTabPane({ id: 'tabs', activeId: 'middle', children: [
+      createWidgetPane({ id: 'first', widgetId: 'demo.first' }),
+      createWidgetPane({ id: 'middle', widgetId: 'demo.middle' }),
+      createWidgetPane({ id: 'last', widgetId: 'demo.last' }),
+    ] })
+    expect((reorderTab(tabs, 'tabs', 'first', 2) as typeof tabs).children.map((child) => child.id)).toEqual(['middle', 'last', 'first'])
+    expect((reorderTab(tabs, 'tabs', 'middle', 0) as typeof tabs).children.map((child) => child.id)).toEqual(['middle', 'first', 'last'])
+    expect((reorderTab(tabs, 'tabs', 'last', 0) as typeof tabs).children.map((child) => child.id)).toEqual(['last', 'first', 'middle'])
+    expect(reorderTab(tabs, 'tabs', 'first', 2)).toMatchObject({ activeId: 'middle' })
+    expect(tabs.children.map((child) => child.id)).toEqual(['first', 'middle', 'last'])
+  })
+
+  it('rejects reordering a locked tab pane or locked tab child', () => {
+    const tabs = createTabPane({ id: 'tabs', settings: { locked: true }, children: [left, right] })
+    expect(() => reorderTab(tabs, 'tabs', 'left', 1)).toThrow(InvalidPaneOperationError)
+    const lockedChildTabs = createTabPane({ id: 'tabs', children: [{ ...left, settings: { locked: true } }, right] })
+    expect(() => reorderTab(lockedChildTabs, 'tabs', 'left', 1)).toThrow(InvalidPaneOperationError)
   })
 })

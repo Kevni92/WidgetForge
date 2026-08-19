@@ -2,11 +2,12 @@ import { defineComponent, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import { createDockManager } from '../src/core/dock-manager'
-import { createSplitPane, createWidgetPane, findPane } from '../src/core/pane'
+import { createSplitPane, createTabPane, createWidgetPane, findPane } from '../src/core/pane'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
 import { createWorkspaceHistory } from '../src/core/workspace-history'
+import { createWorkspaceEditController } from '../src/core/workspace-edit'
 import WorkspaceHost from '../src/vue/WorkspaceHost.vue'
 
 const Widget = defineComponent({ template: '<span>widget</span>' })
@@ -38,20 +39,20 @@ describe('workspace docking interactions', () => {
   it('moves a pane with ctrl drag between windows while preserving its widget instance id', async () => {
     const { registry, windows, docks }=setup();const movable=createWidgetPane({id:'movable-pane',widgetId:'dock.a',instanceId:'stable-widget'});const stay=createWidgetPane({id:'stay-pane',widgetId:'dock.b',instanceId:'stay-widget'})
     windows.openPane({instanceId:'source',pane:createSplitPane({id:'source-root',axis:'horizontal',children:[movable,stay]}),position:{x:20,y:20},size:{width:320,height:220}});windows.open({widgetId:'dock.b',instanceId:'target',position:{x:420,y:80},size:{width:300,height:240}})
-    const targetPaneId=windows.get('target').rootPane.id;const wrapper=mount(WorkspaceHost,{props:{windows,docks,registry},attachTo:document.body});const workspace=wrapper.get('.wf-workspace-host').element;const sourcePane=wrapper.get('[data-pane-id="movable-pane"] .wf-pane-host__drag-handle').element;const targetPane=wrapper.get(`[data-window-instance-id="target"] [data-pane-id="${targetPaneId}"]`).element
+    const targetPaneId=windows.get('target').rootPane.id;const wrapper=mount(WorkspaceHost,{props:{windows,docks,registry},attachTo:document.body});globalThis.window.dispatchEvent(new KeyboardEvent('keydown',{key:'Control'}));await nextTick();const workspace=wrapper.get('.wf-workspace-host').element;const sourcePane=wrapper.get('[data-pane-id="movable-pane"] .wf-pane-host__drag-handle').element;const targetPane=wrapper.get(`[data-window-instance-id="target"] [data-pane-id="${targetPaneId}"]`).element
     stubRect(workspace,rect(0,0,900,650));stubRect(sourcePane,rect(40,70,140,150));stubRect(targetPane,rect(420,114,300,206))
     pointer(sourcePane,'pointerdown',80,120,true);pointer(globalThis.window,'pointermove',710,180,true);await nextTick()
     expect(wrapper.get(`[data-docking-target="${targetPaneId}"]`).attributes('data-docking-active-zone')).toBe('right')
-    pointer(globalThis.window,'pointerup',710,180,true);await nextTick()
+    pointer(globalThis.window,'pointerup',710,180,true);globalThis.window.dispatchEvent(new KeyboardEvent('keyup',{key:'Control'}));await nextTick()
     expect(findPane(windows.get('source').rootPane,'movable-pane')).toBeUndefined();const moved=findPane(windows.get('target').rootPane,'movable-pane');expect(moved?.kind).toBe('widget');expect(moved?.kind==='widget'?moved.instanceId:null).toBe('stable-widget');wrapper.unmount()
   })
 
   it('cleans the pane docking overlay when Escape aborts an edit drag', async () => {
     const { registry, windows, docks }=setup();windows.openPane({instanceId:'source',pane:createSplitPane({id:'source-root',axis:'horizontal',children:[createWidgetPane({id:'move',widgetId:'dock.a'}),createWidgetPane({id:'stay',widgetId:'dock.b'})]})});windows.open({widgetId:'dock.b',instanceId:'target'})
-    const targetPaneId=windows.get('target').rootPane.id;const wrapper=mount(WorkspaceHost,{props:{windows,docks,registry},attachTo:document.body});const workspace=wrapper.get('.wf-workspace-host').element;const sourcePane=wrapper.get('[data-pane-id="move"] .wf-pane-host__drag-handle').element;const targetPane=wrapper.get(`[data-window-instance-id="target"] [data-pane-id="${targetPaneId}"]`).element
+    const targetPaneId=windows.get('target').rootPane.id;const wrapper=mount(WorkspaceHost,{props:{windows,docks,registry},attachTo:document.body});globalThis.window.dispatchEvent(new KeyboardEvent('keydown',{key:'Control'}));await nextTick();const workspace=wrapper.get('.wf-workspace-host').element;const sourcePane=wrapper.get('[data-pane-id="move"] .wf-pane-host__drag-handle').element;const targetPane=wrapper.get(`[data-window-instance-id="target"] [data-pane-id="${targetPaneId}"]`).element
     stubRect(workspace,rect(0,0,900,650));stubRect(sourcePane,rect(40,70,140,150));stubRect(targetPane,rect(420,114,300,206))
     pointer(sourcePane,'pointerdown',80,120,true);pointer(globalThis.window,'pointermove',500,180,true);await nextTick();expect(wrapper.find('.wf-docking-overlay').exists()).toBe(true)
-    globalThis.window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await nextTick()
+    globalThis.window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));globalThis.window.dispatchEvent(new KeyboardEvent('keyup',{key:'Control',bubbles:true}));await nextTick()
     expect(wrapper.find('.wf-docking-overlay').exists()).toBe(false);expect(wrapper.get('.wf-workspace-host').attributes('data-workspace-edit-mode')).toBe('false');wrapper.unmount()
   })
 
@@ -69,5 +70,83 @@ describe('workspace docking interactions', () => {
     const targetPaneId=windows.get('target').rootPane.id,wrapper=mount(WorkspaceHost,{props:{windows,docks,registry},attachTo:document.body}),workspace=wrapper.get('.wf-workspace-host').element,sourcePane=wrapper.get('[data-pane-id="move"]').element,targetPane=wrapper.get(`[data-window-instance-id="target"] [data-pane-id="${targetPaneId}"]`).element
     stubRect(workspace,rect(0,0,900,650));stubRect(sourcePane,rect(40,70,140,150));stubRect(targetPane,rect(420,114,300,206));pointer(sourcePane,'pointerdown',80,120,true);pointer(globalThis.window,'pointermove',710,180,true);await nextTick()
     expect(wrapper.find('.wf-docking-overlay').exists()).toBe(false);pointer(globalThis.window,'pointerup',710,180,true);wrapper.unmount()
+  })
+
+  it('reorders tabs in normal mode without exposing pane handles or docking overlays', async () => {
+    const { registry, windows, docks } = setup()
+    windows.openPane({ instanceId: 'tabs', pane: createTabPane({ id: 'tabs-root', activeId: 'second', children: [
+      createWidgetPane({ id: 'first', widgetId: 'dock.a', instanceId: 'first-instance' }),
+      createWidgetPane({ id: 'second', widgetId: 'dock.b', instanceId: 'second-instance' }),
+      createWidgetPane({ id: 'third', widgetId: 'dock.a', instanceId: 'third-instance' }),
+    ] }) })
+    const history = createWorkspaceHistory(windows, docks)
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, history }, attachTo: document.body })
+    const tabbar = wrapper.get('[data-tab-container-id="tabs-root"]').element
+    const tabs = wrapper.findAll('[data-tab-pane-id]')
+    stubRect(tabbar, rect(0, 0, 300, 32))
+    tabs.forEach((tab, index) => stubRect(tab.element, rect(index * 100, 0, 100, 32)))
+    expect(wrapper.findAll('.wf-pane-host > .wf-pane-host__drag-handle')).toHaveLength(0)
+    expect(wrapper.findAll('[data-tab-drag-handle]')).toHaveLength(3)
+    expect(wrapper.get('[data-tab-drag-handle]').attributes('aria-label')).toBe('Reorder tab A')
+
+    pointer(wrapper.get('[data-tab-drag-handle]').element, 'pointerdown', 10, 12)
+    pointer(globalThis.window, 'pointermove', 280, 12)
+    await nextTick()
+    expect(wrapper.find('[data-tab-reorder-preview]').exists()).toBe(true)
+    expect(wrapper.find('.wf-docking-overlay').exists()).toBe(false)
+    pointer(globalThis.window, 'pointerup', 280, 12)
+    await nextTick()
+
+    const root = windows.get('tabs').rootPane
+    expect(root.kind === 'tabs' ? root.children.map((child) => child.id) : []).toEqual(['second', 'third', 'first'])
+    expect(root.kind === 'tabs' ? root.activeId : null).toBe('second')
+    expect(history.state.undoDepth).toBe(1)
+    wrapper.unmount(); history.dispose()
+  })
+
+  it('does not commit a reorder when the tab grip does not cross the drag threshold', async () => {
+    const { registry, windows, docks } = setup()
+    windows.openPane({ instanceId: 'tabs', pane: createTabPane({ id: 'tabs-root', children: [
+      createWidgetPane({ id: 'first', widgetId: 'dock.a' }),
+      createWidgetPane({ id: 'second', widgetId: 'dock.b' }),
+    ] }) })
+    const history = createWorkspaceHistory(windows, docks)
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, history }, attachTo: document.body })
+    const handle = wrapper.get('[data-tab-drag-handle]').element
+    pointer(handle, 'pointerdown', 10, 12)
+    pointer(globalThis.window, 'pointerup', 11, 12)
+    await nextTick()
+    const root = windows.get('tabs').rootPane
+    expect(root.kind === 'tabs' ? root.children.map((child) => child.id) : []).toEqual(['first', 'second'])
+    expect(history.state.undoDepth).toBe(0)
+    expect(wrapper.find('[data-tab-reorder-preview]').exists()).toBe(false)
+    wrapper.unmount(); history.dispose()
+  })
+
+  it('uses the tab grip for structural pane docking in edit mode', async () => {
+    const { registry, windows, docks } = setup()
+    const edit = createWorkspaceEditController({ mode: 'edit' })
+    windows.openPane({ instanceId: 'source', pane: createTabPane({ id: 'source-tabs', children: [
+      createWidgetPane({ id: 'first', widgetId: 'dock.a', instanceId: 'first-instance' }),
+      createWidgetPane({ id: 'second', widgetId: 'dock.b', instanceId: 'second-instance' }),
+    ] }) })
+    windows.open({ instanceId: 'target', widgetId: 'dock.a' })
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+    const workspace = wrapper.get('.wf-workspace-host').element
+    const sourceHandle = wrapper.get('[data-tab-pane-id="first"] [data-tab-drag-handle]').element
+    const targetPaneId = windows.get('target').rootPane.id
+    const targetPane = wrapper.get(`[data-window-instance-id="target"] [data-pane-id="${targetPaneId}"]`).element
+    stubRect(workspace, rect(0, 0, 900, 650)); stubRect(sourceHandle, rect(40, 70, 100, 30)); stubRect(targetPane, rect(420, 114, 300, 206))
+    expect(wrapper.get('[data-tab-pane-id="first"] [data-tab-drag-handle]').attributes('data-pane-drag-handle')).toBeDefined()
+    pointer(sourceHandle, 'pointerdown', 80, 84)
+    pointer(globalThis.window, 'pointermove', 710, 180)
+    await nextTick()
+    expect(wrapper.find('.wf-docking-overlay').exists()).toBe(true)
+    pointer(globalThis.window, 'pointerup', 710, 180)
+    await nextTick()
+    expect(findPane(windows.get('source').rootPane, 'first')).toBeUndefined()
+    expect(findPane(windows.get('target').rootPane, 'first')).toBeDefined()
+    expect(windows.get('source').rootPane).toMatchObject({ id: 'second' })
+    wrapper.unmount()
   })
 })

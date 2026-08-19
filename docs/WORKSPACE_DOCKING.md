@@ -24,10 +24,14 @@ Während eines normalen Window-Drags prüft `WindowManagerHost` andere sichtbare
 
 ## Pane-Edit-Mode
 
-`WorkspaceHost` besitzt die zentrale Edit-Session. `Ctrl` macht Pane-Grenzen sichtbar. `Ctrl` + Pointer-Drag auf einem Pane kann diesen Pane oder einen vollständigen verschachtelten Subtree in einen anderen Window- oder Dock-Pane verschieben.
+`WorkspaceHost` besitzt die zentrale Edit-Session. `Ctrl` macht Pane-Grenzen sichtbar. `Ctrl` + Pointer-Drag auf einem Pane kann diesen Pane oder einen vollständigen verschachtelten Subtree in einen anderen Window- oder Dock-Pane verschieben. Im permanenten und temporären Edit-Mode verwendet der Grip eines Tabs denselben strukturellen Pfad und reparented den direkten Tab-Pane-Knoten; im Normalmodus bleibt er auf Tab-Reordering innerhalb der aktuellen Tabbar begrenzt.
 
 Self-/Descendant-Drops werden verworfen. Ein kompletter Dock-Root kann nicht aus seinem Dock entfernt werden, weil ein Dock immer einen Root-Pane benötigt. Ein kompletter Window-Root darf in einen anderen Host verschoben werden; das anschließend leere Quellfenster wird geschlossen.
 
+## Tab-Reordering
+
+Tab-Reordering ist eine eigene, nicht-strukturelle Layout-Mutation. `reorderTab()` berechnet den neuen Tab-Baum immutable; `activeId`, Pane-IDs, Widget-Instanz-IDs und gemountete Widget-Zustände bleiben erhalten. Die Vue-Schicht misst nur die Tabbar und zeigt eine Einfügemarke. Außerhalb der aktuellen Tabbar existiert für diese Session kein gültiges Drop-Ziel und kein Docking-Overlay.
+
 ## Pointer-Lifecycle
 
-Jede Drag-Session besitzt genau einen zentralen Cleanup-Pfad. `pointerup`, `pointercancel`, Close/Unmount und das Starten einer neuen Session entfernen globale Listener und Drop-Previews deterministisch. Undo gehört nicht zu diesem Feature.
+Jede Drag-Session besitzt genau einen zentralen Cleanup-Pfad. `pointerup`, `pointercancel`, Escape, verlorenes Pointer-Capture, Close/Unmount und das Starten einer neuen Session entfernen globale Listener und Drop-Previews deterministisch. Eine Session bleibt entweder `tab-reorder` oder `pane-drag`; sie wechselt nicht implizit den Typ. Erfolgreiche Layout-Mutationen werden über Workspace-History undo/redo-fähig aufgezeichnet.
