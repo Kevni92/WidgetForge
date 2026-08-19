@@ -10,6 +10,7 @@ import { detectWorkspaceDropZone, movePaneToTarget, relocatePaneBetweenTrees, ty
 import DockHost from './DockHost.vue'
 import DockingOverlay from './DockingOverlay.vue'
 import { observeElementSize } from './observe-element-size'
+import { handleWorkspaceHistoryShortcut } from './workspace-history-shortcuts'
 import WindowManagerHost from './WindowManagerHost.vue'
 
 interface Props { windows: WindowManager; docks: DockManager; registry: WidgetRegistry; history?: WorkspaceHistory | undefined; historyShortcuts?: boolean | undefined }
@@ -55,8 +56,7 @@ function startPaneDrag(event:PointerEvent):void{if(!event.ctrlKey||event.button!
 function isLayoutPointer(event:PointerEvent):boolean{if(event.button!==0||!history)return false;const target=event.target;if(!(target instanceof HTMLElement))return false;return Boolean(target.closest('[data-window-drag-handle], [data-window-resize-handle], [data-dock-resize], [data-pane-divider-index]')||(event.ctrlKey&&target.closest('.wf-pane-host[data-pane-id]')))}
 function handlePointerDown(event:PointerEvent):void{if(isLayoutPointer(event)){history?.beginTransaction();historyPointerActive=true}startPaneDrag(event)}
 function finishHistoryPointer():void{if(!historyPointerActive)return;historyPointerActive=false;queueMicrotask(()=>history?.commitTransaction())}
-function isEditableTarget(target:EventTarget|null):boolean{return target instanceof HTMLElement&&(target.matches('input,textarea,select,[contenteditable="true"]')||target.closest('[contenteditable="true"]')!==null)}
-function onWorkspaceKeyDown(event:KeyboardEvent):void{if(!history||props.historyShortcuts===false||!(event.ctrlKey||event.metaKey)||isEditableTarget(event.target))return;const key=event.key.toLowerCase();if(key==='z'){event.preventDefault();if(event.shiftKey)history.redo();else history.undo()}else if(key==='y'){event.preventDefault();history.redo()}}
+function onWorkspaceKeyDown(event:KeyboardEvent):void{if(history)handleWorkspaceHistoryShortcut(history,event,props.historyShortcuts!==false)}
 function onGlobalKeyDown(event:KeyboardEvent):void{if(event.key==='Escape'){finishPaneDrag();paneDropPreview.value=null;return}if(event.key==='Control')controlPressed.value=true}
 function onKeyUp(event:KeyboardEvent):void{if(event.key==='Control')controlPressed.value=false}
 function onBlur():void{controlPressed.value=false;finishPaneDrag();finishHistoryPointer()}
