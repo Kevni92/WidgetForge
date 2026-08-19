@@ -13,7 +13,7 @@ const widget = (id: string, settings: Parameters<typeof createWidgetPane>[0]['se
 describe('PaneHost advanced layouts', () => {
   it('renders StackPane children as ordered layers', () => {
     const wrapper = mount(PaneHost, { props: { pane: createStackPane({ id: 'stack', children: [widget('base'), widget('overlay')] }), registry } })
-    expect(wrapper.get('[data-pane-kind="stack"]').exists()).toBe(true)
+    expect(wrapper.get('[data-pane-kind="stack"]').attributes('data-pane-id')).toBe('stack')
     expect(wrapper.findAll('.wf-pane-host__stack-layer').map((layer) => layer.attributes('data-stack-layer-id'))).toEqual(['base', 'overlay'])
     expect(wrapper.findAll('.probe')).toHaveLength(2)
   })
