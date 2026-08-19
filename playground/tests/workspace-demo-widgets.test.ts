@@ -17,10 +17,10 @@ function mountWithProviders(component: Component, navigator: WidgetNavigator, co
 }
 
 describe('fullscreen workspace demo widgets', () => {
-  it('topbar navigates including modal role demo, switches theme, exposes history/edit/lock and resets', async () => {
+  it('topbar navigates, switches theme/layout and exposes history/edit/lock/reset controls', async () => {
     const { navigator, navigate } = navigatorSpy()
-    const setTheme = vi.fn(); const resetWorkspace = vi.fn(); const undo = vi.fn(); const redo = vi.fn(); const setWorkspaceMode = vi.fn()
-    const controls: DemoControls = { theme: () => 'forge-dark', setTheme, resetWorkspace, canUndo: () => true, canRedo: () => true, undo, redo, workspaceMode: () => 'normal', setWorkspaceMode }
+    const setTheme = vi.fn(); const resetWorkspace = vi.fn(); const undo = vi.fn(); const redo = vi.fn(); const setWorkspaceMode = vi.fn(); const loadLayout = vi.fn()
+    const controls: DemoControls = { theme: () => 'forge-dark', setTheme, resetWorkspace, canUndo: () => true, canRedo: () => true, undo, redo, workspaceMode: () => 'normal', setWorkspaceMode, layoutNames: () => ['Default', 'Trading', 'Operations'], activeLayout: () => 'Default', loadLayout }
     const wrapper = mountWithProviders(WorkspaceTopbarWidget, navigator, controls)
     await wrapper.get('[data-demo-nav="market"]').trigger('click')
     expect(navigate).toHaveBeenCalledWith({ widgetId: 'market.ticker', parameters: { commodity: 'METALS', rows: 10 } })
@@ -30,6 +30,7 @@ describe('fullscreen workspace demo widgets', () => {
     await wrapper.get('[data-demo-action="lock"]').trigger('click'); expect(setWorkspaceMode).toHaveBeenCalledWith('locked')
     await wrapper.get('[data-demo-action="undo"]').trigger('click'); expect(undo).toHaveBeenCalledOnce()
     await wrapper.get('[data-demo-action="redo"]').trigger('click'); expect(redo).toHaveBeenCalledOnce()
+    await wrapper.get('select[aria-label="Workspace layout"]').setValue('Trading'); expect(loadLayout).toHaveBeenCalledWith('Trading')
     await wrapper.get('select[aria-label="Theme"]').setValue('forge-light'); expect(setTheme).toHaveBeenCalledWith('forge-light')
     await wrapper.get('[data-demo-action="reset"]').trigger('click'); expect(resetWorkspace).toHaveBeenCalledOnce()
     wrapper.unmount()
