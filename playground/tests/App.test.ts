@@ -17,6 +17,11 @@ describe('Fullscreen Playground App', () => {
     await wrapper.get('[data-workspace-new-window]').trigger('click')
     await wrapper.vm.$nextTick()
     expect(wrapper.get('[data-command-launcher] input').element).toBeTruthy()
+    expect(wrapper.find('[data-command-launcher] h2').exists()).toBe(false)
+    expect(wrapper.find('[data-command-launcher] .wf-command-launcher__intro').exists()).toBe(false)
+    expect(wrapper.get('[data-command-launcher] button[type="submit"]').text()).toBe('Open')
+    expect(wrapper.find('[data-window-layout="maximize"]').exists()).toBe(false)
+    expect(wrapper.find('[data-window-snap-layout-picker]').exists()).toBe(false)
     expect(document.activeElement).toBe(wrapper.get('[data-command-launcher] input').element)
 
     const input = wrapper.get('[data-command-launcher] input')
