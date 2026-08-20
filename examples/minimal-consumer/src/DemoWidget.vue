@@ -1,10 +1,27 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useData, useMutation } from 'widgetforge'
+import { demoMutation, demoResource } from './fixture-contract'
+
+const resource = useData(demoResource)
+const mutation = useMutation(demoMutation)
+const value = computed(() => resource.value.status === 'ready' ? resource.value.data.value : 0)
+const mutationState = computed(() => mutation.state.value)
+
+async function executeMutation(): Promise<void> {
+  await mutation.execute({ value: value.value })
+}
 </script>
 
 <template>
   <div class="example-widget">
     <strong>Hello from a packaged WidgetForge consumer.</strong>
-    <p>This component is registered by the consuming application.</p>
+    <p>Read state: {{ resource.status }} (value: {{ value }})</p>
+    <button type="button" :disabled="mutationState.status === 'pending'" @click="executeMutation">
+      Run generic mutation
+    </button>
+    <p v-if="mutationState.status === 'success'">Mutation confirmed by the fake transport.</p>
+    <p v-if="mutationState.status === 'error'">Mutation failed: {{ mutationState.error.message }}</p>
   </div>
 </template>
 

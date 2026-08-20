@@ -92,6 +92,6 @@ Nach erfolgreichem Deployment ist er unter `https://kevni92.github.io/WidgetForg
 - `src/primitives/` – generische UI-Primitives
 - `playground/` – Referenz-/Demo-Anwendung
 - `examples/minimal-consumer/` – npm-Tarball-Consumer für Package-Validierung
-- `docs/` – Konzept, Architektur und Distribution
+- `docs/` – Konzept, Architektur, Distribution und Data-/Mutation-Integration
 
-Siehe insbesondere `docs/CONCEPT.md`, `docs/ARCHITECTURE.md`, `docs/DISTRIBUTION.md` und `AGENTS.md`.
+Siehe insbesondere `docs/CONCEPT.md`, `docs/ARCHITECTURE.md`, `docs/DISTRIBUTION.md`, `docs/DATA_MUTATION_INTEGRATION.md` und `AGENTS.md`.
