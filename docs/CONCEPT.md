@@ -153,3 +153,21 @@ Tooltips sollen innerhalb ihres Inhalts wiederum interaktive/erklärbare Begriff
 ## Erfolgskriterium
 
 WidgetForge ist erfolgreich, wenn ein neues Spiel die Library installieren, ein Widget mit Manifest und Parametern registrieren und dieses über dieselben Framework-Mechanismen als Fenster öffnen kann, ohne Window-Management, Styling-Infrastruktur, Persistenz oder Transportlogik neu zu implementieren.
+
+## Lesen und serverseitige Mutationen
+
+WidgetForge trennt das Beobachten externer Daten vom Anfordern serverseitiger Zustandsänderungen:
+
+```text
+READ
+Widget -> DataClient -> DataProvider -> Consumer-Transport -> Server
+
+WRITE
+Widget -> MutationClient -> MutationProvider -> Consumer-Transport -> Server
+```
+
+`DataClient` stellt abonnierte Ressourcen, Cache- und Subscription-Zustand bereit. `MutationClient` führt explizite, typisierte Invocations aus. Mutationen werden weder gecacht noch dedupliziert; zwei explizite Aufrufe bleiben zwei Requests. Ein erfolgreicher Mutation-Request schreibt keine Data-Ressource lokal um und invalidiert keinen Cache automatisch. Der serverautoritativ publizierte Snapshot oder das Update kommt weiterhin über die Data-Pipeline zurück.
+
+Die konkrete Netzwerktechnik, das Wire-Format, der Server und fachliche Fehlercodes bleiben vollständig beim Consumer. `MutationProvider` ist deshalb ein kleiner, transport- und domänenunabhängiger Vertrag. WidgetForge führt keine automatische Retry- oder Offline-Queue-Policy ein, weil ein Verbindungsabbruch nicht beweist, dass der Server eine Mutation nicht bereits verarbeitet hat.
+
+`WidgetAction` bleibt davon getrennt: Ein Consumer kann in einem Action-Handler eine Mutation ausführen, aber Mutation und UI-/Navigations-Action sind keine gemeinsamen Framework-Konzepte.

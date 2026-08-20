@@ -116,6 +116,20 @@ Der Data Layer stellt reaktive Daten bereit. Provider liefern Snapshots und Änd
 
 Der WebSocket-Adapter ist austauschbar. Die Library darf nicht davon ausgehen, dass jedes Produkt dasselbe Nachrichtenprotokoll verwendet.
 
+## Mutation-Prinzip
+
+Serverseitige Zustandsänderungen laufen über eine von Data getrennte Pipeline:
+
+```text
+Widget -> MutationClient -> MutationProvider -> Consumer-Transport -> Server
+```
+
+Eine `MutationDefinition<Input, Result>` beschreibt nur die stabile Mutation-ID und die TypeScript-Typen. `MutationProvider` kapselt die konkrete Ausführung. Der `MutationClient` liefert pro Handle den Invocation-State `idle | pending | success | error`, normalisiert Provider-Fehler und erlaubt parallele, voneinander unabhängige Requests. Der sichtbare Handle-State folgt deterministisch der neuesten Invocation; die einzelnen Promises behalten trotzdem jeweils ihr eigenes Ergebnis oder ihren eigenen Fehler.
+
+Mutationen besitzen keinen Data-Cache und werden nicht dedupliziert. Ein erfolgreicher Write invalidiert oder überschreibt keine Data-Ressource automatisch. Ebenso gibt es keine implizite Wiederholung bei Transportfehlern. Ob und wie ein Consumer Requests absichert, wiederholt oder korreliert, ist Teil seines eigenen Protokollvertrags.
+
+Vue stellt diese Core-Fähigkeit später über Context und `useMutation` bereit. Weder `MutationClient` noch Widgets erzeugen selbst eine WebSocket-Verbindung. `WidgetAction`, Navigation und Window-Management bleiben eigenständige Framework-Konzepte.
+
 ## Testing
 
 Tests sind Bestandteil jedes Issues.
