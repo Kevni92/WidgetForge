@@ -30,7 +30,7 @@ Wird ein referenziertes Fenster geschlossen, materialisiert der `WindowManager` 
 
 ## Snap-Mapping
 
-Snap bleibt eine Window-Aktion. Beim Lock wird die Zone semantisch abgebildet: Hälften und Viertel verwenden Workspace-Kanten plus 50 Prozent, Drittel verwenden ein Drittel beziehungsweise zwei Drittel. Beim Resize wird der Vertrag neu aufgelöst; die alte Snap-Geometrie dient weiterhin als Floating-Restore-Geometrie.
+Snap bleibt eine Window-Aktion. Beim Lock wird die Zone semantisch abgebildet: Hälften und Viertel verwenden Workspace-Kanten plus 50 Prozent, Drittel verwenden ein Drittel beziehungsweise zwei Drittel. Beim Resize wird der responsive Vertrag neu aufgelöst; eine freie manuelle Geometry-Änderung beendet dagegen einen vorhandenen Snap-State und materialisiert die aktuelle Pixel-Geometrie.
 
 ## Persistenz und History
 
