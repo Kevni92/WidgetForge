@@ -1,5 +1,6 @@
 import { defineComponent } from 'vue'
 import { describe, expect, it } from 'vitest'
+import { createWidgetPane } from '../src/core/pane'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
@@ -101,5 +102,30 @@ describe('WindowManager snap and maximize state', () => {
     const locked = manager.lockWindow('snap', 'user')
     expect(locked).toMatchObject({ layoutLocked: true, snap: null, geometry: { position: { x: 20, y: 30 }, size: { width: 320, height: 500 } } })
     expect(locked.layoutSpec).toBeUndefined()
+  })
+
+  it('materializes snap, restore and responsive state together on a user geometry mutation', () => {
+    const manager = createWindowManager(registry)
+    manager.openPane({
+      instanceId: 'snap',
+      pane: createWidgetPane({ id: 'snap-root', widgetId: 'test.snap', instanceId: 'snap-widget' }),
+      position: { x: 20, y: 30 },
+      size: { width: 320, height: 200 },
+      snap: { zone: 'left', floatingGeometry: { position: { x: 20, y: 30 }, size: { width: 320, height: 200 } } },
+      restoreGeometry: { position: { x: 40, y: 50 }, size: { width: 360, height: 240 } },
+      layoutSpec: {
+        horizontal: { start: { target: { kind: 'workspace', edge: 'left' } }, size: { value: 50, unit: 'percent' } },
+        vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, end: { target: { kind: 'workspace', edge: 'bottom' } } },
+      },
+    })
+
+    manager.setGeometry('snap', { position: { x: 60, y: 70 }, size: { width: 280, height: 180 } }, 'user')
+
+    expect(manager.get('snap')).toMatchObject({
+      geometry: { position: { x: 60, y: 70 }, size: { width: 280, height: 180 } },
+      snap: null,
+      restoreGeometry: null,
+      layoutSpec: null,
+    })
   })
 })
