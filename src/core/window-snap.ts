@@ -20,6 +20,7 @@ export const WINDOW_SNAP_LAYOUTS: readonly WindowSnapLayoutDefinition[] = [
 ]
 export const WINDOW_SNAP_ZONES: readonly WindowSnapZone[] = WINDOW_SNAP_LAYOUTS.map((layout) => layout.zone)
 export function isWindowSnapZone(value: unknown): value is WindowSnapZone { return typeof value === 'string' && (WINDOW_SNAP_ZONES as readonly string[]).includes(value) }
+export function windowSnapZoneLabel(zone: WindowSnapZone): string { return WINDOW_SNAP_LAYOUTS.find((layout) => layout.zone === zone)?.label ?? zone }
 
 export function detectWindowSnapZone(point: WindowPosition, container: WindowSize, threshold = DEFAULT_SNAP_THRESHOLD): WindowSnapZone | null {
   if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return null

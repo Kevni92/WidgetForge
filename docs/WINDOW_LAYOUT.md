@@ -39,3 +39,9 @@ Workspace-Version 3 speichert `layoutSpec` optional neben `geometry`; alte v1-, 
 ## Edit-Mode
 
 Das generische Context Menu eines ausgewählten Fensters enthält `Layout…` für freie und gelockte Fenster. Der modale Dialog zeigt Instanz-ID, aufgelöste Pixelwerte und absolute beziehungsweise responsive Eingaben. Responsive Eingaben unterstützen Workspace-/Fensteranker, signed offsets, px/%-Einheiten und Füllen zwischen Ankern. Vor `Save` wird der vollständige Vertrag gegen alle Fenster der Fläche validiert; `Cancel`, Escape und Fokus-Trapping verändern den Workspace nicht.
+
+Im Edit-Mode ist der Einstieg zusätzlich als sichtbare `Edit layout`-Aktion und als Selection-Inspector verfügbar. Der Inspector zeigt Titel, stabile `instanceId`, die aufgelöste Geometrie in Pixeln sowie den kombinierten Oberflächen-/Regelstatus. `Floating`, `Snapped` und `Locked layout` beschreiben die Oberfläche; `Responsive active`, `Responsive dormant` und `Free geometry / materialized` beschreiben den Vertrag. Die öffentliche Core-Funktion `deriveWindowLayoutStatus()` hält diese Ableitung unabhängig von DOMRects.
+
+Der Layout-Dialog verwendet im Primärpfad `Left`, `Right`, `Top`, `Bottom`, `Width` und `Height`. Fensterziele sind nach Workspace und Windows gruppiert und zeigen Titel plus stabile ID. `Auf Canvas wählen` aktiviert einen nicht-invasiven Pick-Modus; die Quelle und das gewählte Zielfenster werden im Workspace markiert. Gegenüberliegende Anker erklären die deaktivierte Width-/Height-Eingabe über `Fill between ...`.
+
+Responsive Fensterreferenzen werden im Edit-Mode als gestrichelte, nicht interaktive Beziehungen dargestellt. `findWindowLayoutDependents()` liefert für Resize-Feedback den direkten und transitiven Abhängigkeitsgraphen deterministisch sortiert.

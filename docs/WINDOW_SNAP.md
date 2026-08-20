@@ -18,6 +18,8 @@ Die Edge-Erkennung ist pure Core-Logik. Außerhalb des konfigurierten Randbereic
 
 Während eines normalen Window-Drags berechnet `WindowManagerHost` die Zone aus den Pointer-Koordinaten und zeigt einen nicht interaktiven, semantisch gethemten Preview. Erst `pointerup` committed den Snap. `pointercancel`, Close und Unmount räumen Preview und Pointer-Session ohne Commit auf.
 
+Der Preview trägt zusätzlich den semantischen Zonenamen und erklärt `Release to snap as layout`. Dadurch bleibt die Snap-Zone auch ohne Kenntnis der Geometrie verständlich. Nach `Snap → Lock` zeigt die Titlebar-Aktion `Als Layout übernehmen`; der resultierende Status wird als `Locked layout · Responsive active` sichtbar.
+
 Die Standard-Titlebar bietet keine Snap-/Layout-Auswahl. Snap erfolgt im Default-Chrome ausschließlich über Drag und die vorhandenen Zonen/Previews; Maximieren, Restore und die Snap-Zustände bleiben davon getrennte Window-State-Operationen.
 
 ## Floating-Geometrie
@@ -35,3 +37,5 @@ Workspace-Snapshots speichern Snap-Zone und Floating-Geometrie. Ältere Snapshot
 ## Lock-Abgrenzung
 
 Ein Per-Window-Lock ist kein Dock. Ein Fenster darf vor dem Lock gesnappt sein; beim Lock wird die Zone in einen responsiven `layoutSpec` mit Workspace-Kanten und Prozentgrößen übersetzt. Während des Locks werden Move, Resize, Snap, Unsnap, Anchor und Window-Docking nicht angeboten bzw. abgelehnt. Nach dem Unlock bleibt derselbe responsive Vertrag bestehen, bis die erste manuelle Geometrieänderung ihn materialisiert. Siehe [Responsive Window Layout](./WINDOW_LAYOUT.md).
+
+Ändert sich die verfügbare Floating-Fläche, markiert der Window-Host gelockte responsive Fenster, deren aufgelöste Geometrie sich geändert hat, als `Resize affects this layout`. Das Feedback ist nicht interaktiv und verändert den kanonischen Workspace-State nicht.

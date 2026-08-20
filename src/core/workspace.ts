@@ -3,7 +3,7 @@ import { clonePaneTree, validatePaneTree, type PaneNode, type PaneSettings } fro
 import type { WidgetId } from './widget'
 import { DuplicateWindowInstanceError, type WindowManager, type WindowMode, type WindowState } from './window-manager'
 import type { WindowGeometry, WindowSize, WindowSizeConstraints } from './window-geometry'
-import { cloneWindowLayoutSpec, validateWindowLayoutReferences, validateWindowLayoutSpec, type WindowLayoutSpec } from './window-layout'
+import { cloneWindowLayoutSpec, validateWindowLayoutReferences, validateWindowLayoutSpec, type WindowLayoutRuleState, type WindowLayoutSpec } from './window-layout'
 import { createWindowOptions, type WindowOptions } from './window-options'
 import { isWindowSnapZone, type WindowSnapState } from './window-snap'
 import { UnknownWidgetError, WidgetParameterValidationError } from './widget-registry'
@@ -25,6 +25,7 @@ export interface WorkspaceWindowSnapshot {
   readonly restoreGeometry: WindowGeometry | null
   readonly layoutLocked?: boolean
   readonly layoutSpec?: WindowLayoutSpec | null
+  readonly layoutSpecState?: WindowLayoutRuleState
   readonly mode: WindowMode
   readonly focused: boolean
   readonly zIndex: number
@@ -159,6 +160,7 @@ export function validateWorkspaceSnapshot(snapshot: WorkspaceSnapshot): void {
     zIndexes.add(window.zIndex)
     if (window.focused) focusedCount += 1
     if (window.layoutLocked !== undefined && typeof window.layoutLocked !== 'boolean') throw new WorkspaceInvariantError(`invalid layout lock state for window "${window.instanceId}"`)
+    if (window.layoutSpecState !== undefined && !['none', 'active', 'dormant', 'materialized'].includes(window.layoutSpecState)) throw new WorkspaceInvariantError(`invalid layout rule state for window "${window.instanceId}"`)
     if (window.layoutSpec !== undefined && window.layoutSpec !== null) {
       try { validateWindowLayoutSpec(window.layoutSpec, window.instanceId) } catch (error) { throw new WorkspaceInvariantError(error instanceof Error ? error.message : `invalid layout spec for window "${window.instanceId}"`) }
     }
@@ -202,6 +204,7 @@ export function captureWorkspace(manager: WindowManager, dockManager?: DockManag
     restoreGeometry: window.restoreGeometry ? cloneGeometry(window.restoreGeometry) : null,
     layoutLocked: window.layoutLocked,
     ...(window.layoutSpec !== undefined ? { layoutSpec: window.layoutSpec ? cloneWindowLayoutSpec(window.layoutSpec) : null } : {}),
+    ...(window.layoutSpecState ? { layoutSpecState: window.layoutSpecState } : {}),
     mode: window.mode,
     focused: window.focused,
     zIndex: window.zIndex,
@@ -358,11 +361,12 @@ function readWindow(value: unknown): WorkspaceWindowSnapshot | null {
   if (value.mode === 'maximized' && !restoreGeometry) return null
   if (value.titleIsCustom !== undefined && typeof value.titleIsCustom !== 'boolean') return null
   if (value.layoutLocked !== undefined && typeof value.layoutLocked !== 'boolean') return null
+  if (value.layoutSpecState !== undefined && !['none', 'active', 'dormant', 'materialized'].includes(String(value.layoutSpecState))) return null
   let layoutSpec: WindowLayoutSpec | null | undefined
   if (value.layoutSpec !== undefined && value.layoutSpec !== null) {
     try { validateWindowLayoutSpec(value.layoutSpec, value.instanceId); layoutSpec = cloneWindowLayoutSpec(value.layoutSpec) } catch { return null }
   } else if (value.layoutSpec === null) layoutSpec = null
-  return { instanceId: value.instanceId, title: value.title, ...(value.titleIsCustom === true ? { titleIsCustom: true } : {}), rootPane, geometry, constraints, options, snap, restoreGeometry, layoutLocked: value.layoutLocked === true, ...(layoutSpec !== undefined ? { layoutSpec } : {}), mode: value.mode as WindowMode, focused: value.focused, zIndex: value.zIndex as number }
+  return { instanceId: value.instanceId, title: value.title, ...(value.titleIsCustom === true ? { titleIsCustom: true } : {}), rootPane, geometry, constraints, options, snap, restoreGeometry, layoutLocked: value.layoutLocked === true, ...(layoutSpec !== undefined ? { layoutSpec } : {}), ...(value.layoutSpecState ? { layoutSpecState: value.layoutSpecState as WindowLayoutRuleState } : {}), mode: value.mode as WindowMode, focused: value.focused, zIndex: value.zIndex as number }
 }
 
 function readDockRestoreWindow(value: unknown): DockRestoreWindow | undefined | null {
@@ -433,7 +437,7 @@ export function restoreWorkspace(
     candidates.push({
       index, instanceId: entry.instanceId, widgetId: entry.rootPane.kind === 'widget' ? entry.rootPane.widgetId : undefined, focused: entry.focused, mode: entry.mode, zIndex: entry.zIndex,
       open: (target) => {
-        target.openPane({ pane: entry.rootPane, instanceId: entry.instanceId, title: entry.title, titleIsCustom: entry.titleIsCustom === true, position: entry.geometry.position, size: entry.geometry.size, minSize: entry.constraints.minSize, ...(entry.constraints.maxSize ? { maxSize: entry.constraints.maxSize } : {}), options: entry.options, snap: entry.snap, restoreGeometry: entry.restoreGeometry, layoutLocked: entry.layoutLocked === true, ...(entry.layoutSpec !== undefined ? { layoutSpec: entry.layoutSpec } : {}) })
+        target.openPane({ pane: entry.rootPane, instanceId: entry.instanceId, title: entry.title, titleIsCustom: entry.titleIsCustom === true, position: entry.geometry.position, size: entry.geometry.size, minSize: entry.constraints.minSize, ...(entry.constraints.maxSize ? { maxSize: entry.constraints.maxSize } : {}), options: entry.options, snap: entry.snap, restoreGeometry: entry.restoreGeometry, layoutLocked: entry.layoutLocked === true, ...(entry.layoutSpec !== undefined ? { layoutSpec: entry.layoutSpec } : {}), ...(entry.layoutSpecState ? { layoutSpecState: entry.layoutSpecState } : {}) })
         if (entry.mode === 'maximized') target.maximizeWindow(entry.instanceId, options.container ?? entry.geometry.size, 'api')
         else if (options.container && !(entry.layoutLocked === true && entry.layoutSpec)) target.constrainToContainer(entry.instanceId, options.container, 'api')
         return target.get(entry.instanceId)

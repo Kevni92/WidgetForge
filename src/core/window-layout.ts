@@ -5,6 +5,40 @@ export type WindowLayoutUnit = 'px' | 'percent'
 export type WindowLayoutAxis = 'horizontal' | 'vertical'
 export type WindowLayoutEdge = 'left' | 'right' | 'top' | 'bottom'
 
+/** The durable relationship between a window and its responsive rule. */
+export type WindowLayoutRuleState = 'none' | 'active' | 'dormant' | 'materialized'
+
+/** The interaction state of a window surface. */
+export type WindowLayoutSurfaceState = 'floating' | 'snapped' | 'locked'
+
+export interface WindowLayoutStatusInput {
+  readonly layoutLocked: boolean
+  readonly layoutSpec?: WindowLayoutSpec | null
+  readonly layoutSpecState?: WindowLayoutRuleState
+  readonly snap?: { readonly zone: WindowSnapZone } | null
+}
+
+export interface WindowLayoutStatus {
+  readonly surface: WindowLayoutSurfaceState
+  readonly rule: WindowLayoutRuleState
+  readonly hasResponsiveSpec: boolean
+}
+
+/**
+ * Derive the user-facing layout state without relying on DOM state.  The
+ * optional rule state keeps the distinction between an untouched floating
+ * window and a responsive rule that was deliberately materialized.
+ */
+export function deriveWindowLayoutStatus(input: WindowLayoutStatusInput): WindowLayoutStatus {
+  const surface: WindowLayoutSurfaceState = input.layoutLocked ? 'locked' : input.snap ? 'snapped' : 'floating'
+  const rule = input.layoutSpecState === 'materialized'
+    ? 'materialized'
+    : input.layoutSpec
+      ? input.layoutLocked ? 'active' : 'dormant'
+    : input.layoutSpecState ?? (input.layoutLocked ? 'materialized' : 'none')
+  return { surface, rule, hasResponsiveSpec: input.layoutSpec !== undefined && input.layoutSpec !== null }
+}
+
 export interface WindowLayoutLength {
   readonly value: number
   readonly unit: WindowLayoutUnit
@@ -289,6 +323,28 @@ export function createWindowLayoutSpecFromSnap(zone: WindowSnapZone): WindowLayo
 
 export function layoutSpecReferencesWindow(spec: WindowLayoutSpec, instanceId: string): boolean {
   return [spec.horizontal.start, spec.horizontal.end, spec.vertical.start, spec.vertical.end].some((anchor) => anchor?.target.kind === 'window' && anchor.target.instanceId === instanceId)
+}
+
+/** Return direct and transitive responsive consumers of a window. */
+export function findWindowLayoutDependents(
+  windows: readonly Pick<ResponsiveLayoutWindow, 'instanceId' | 'layoutSpec'>[],
+  instanceId: string,
+): readonly string[] {
+  const dependents = new Set<string>()
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const window of windows) {
+      if (!window.layoutSpec || dependents.has(window.instanceId)) continue
+      const references = layoutSpecReferencesWindow(window.layoutSpec, instanceId)
+        || [...dependents].some((dependency) => layoutSpecReferencesWindow(window.layoutSpec as WindowLayoutSpec, dependency))
+      if (references) {
+        dependents.add(window.instanceId)
+        changed = true
+      }
+    }
+  }
+  return [...dependents].sort()
 }
 
 export function validateWindowLayoutReferences(windows: readonly Pick<ResponsiveLayoutWindow, 'instanceId' | 'layoutSpec'>[]): void {
