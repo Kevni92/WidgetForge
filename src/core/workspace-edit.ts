@@ -7,11 +7,13 @@ export type WorkspacePaneOwnerKind = 'window' | 'dock'
 export type PaneEditActionId = 'split' | 'move' | 'retarget' | 'lock' | 'unlock' | 'delete'
 export interface WorkspacePaneOwner { readonly kind: WorkspacePaneOwnerKind; readonly id: string }
 export interface WorkspacePaneSelection { readonly owner: WorkspacePaneOwner; readonly paneId: string }
-export interface WorkspaceEditSnapshot { readonly mode: WorkspaceEditMode; readonly selection: WorkspacePaneSelection | null; readonly paneLocks: readonly WorkspacePaneSelection[] }
+export interface WorkspaceWindowSelection { readonly instanceId: string }
+export interface WorkspaceEditSnapshot { readonly mode: WorkspaceEditMode; readonly selection: WorkspacePaneSelection | null; readonly windowSelection?: WorkspaceWindowSelection | null; readonly paneLocks: readonly WorkspacePaneSelection[] }
 export interface WorkspaceEditState extends WorkspaceEditSnapshot { readonly temporaryEdit: boolean; readonly editActive: boolean; readonly locked: boolean }
 export type WorkspaceEditListener = (state: WorkspaceEditState) => void
 
 function cloneSelection(selection: WorkspacePaneSelection | null): WorkspacePaneSelection | null { return selection ? { owner: { ...selection.owner }, paneId: selection.paneId } : null }
+function cloneWindowSelection(selection: WorkspaceWindowSelection | null | undefined): WorkspaceWindowSelection | null { return selection ? { instanceId: selection.instanceId } : null }
 function cloneLocks(locks: readonly WorkspacePaneSelection[]): WorkspacePaneSelection[] { return locks.map((lock) => cloneSelection(lock) as WorkspacePaneSelection) }
 function key(selection: WorkspacePaneSelection): string { return `${selection.owner.kind}:${selection.owner.id}:${selection.paneId}` }
 function isMode(value: unknown): value is WorkspaceEditMode { return value === 'normal' || value === 'edit' || value === 'locked' }
@@ -20,6 +22,7 @@ export class WorkspaceEditController {
   private mode: WorkspaceEditMode
   private temporaryEdit = false
   private selection: WorkspacePaneSelection | null
+  private windowSelection: WorkspaceWindowSelection | null
   private paneLocks: WorkspacePaneSelection[]
   private readonly listeners = new Set<WorkspaceEditListener>()
 
@@ -27,17 +30,19 @@ export class WorkspaceEditController {
     this.mode = initial?.mode ?? 'normal'
     if (!isMode(this.mode)) throw new Error(`invalid workspace edit mode "${String(this.mode)}"`)
     this.selection = cloneSelection(initial?.selection ?? null)
+    this.windowSelection = cloneWindowSelection(initial?.windowSelection)
     this.paneLocks = cloneLocks(initial?.paneLocks ?? [])
   }
 
-  get state(): WorkspaceEditState { return { mode: this.mode, temporaryEdit: this.temporaryEdit, editActive: this.mode === 'edit' || (this.mode === 'normal' && this.temporaryEdit), locked: this.mode === 'locked', selection: cloneSelection(this.selection), paneLocks: cloneLocks(this.paneLocks) } }
-  setMode(mode: WorkspaceEditMode): WorkspaceEditState { if (!isMode(mode)) throw new Error(`invalid workspace edit mode "${String(mode)}"`); if (this.mode === mode && !this.temporaryEdit) return this.state; this.mode = mode; this.temporaryEdit = false; if (mode !== 'edit') this.selection = null; this.emit(); return this.state }
-  setTemporaryEdit(active: boolean): WorkspaceEditState { const next = this.mode === 'normal' && active; if (next === this.temporaryEdit) return this.state; this.temporaryEdit = next; if (!next && this.mode !== 'edit') this.selection = null; this.emit(); return this.state }
-  selectPane(selection: WorkspacePaneSelection | null): WorkspaceEditState { if (!this.state.editActive) return this.state; const next = cloneSelection(selection); if (JSON.stringify(next) === JSON.stringify(this.selection)) return this.state; this.selection = next; this.emit(); return this.state }
+  get state(): WorkspaceEditState { return { mode: this.mode, temporaryEdit: this.temporaryEdit, editActive: this.mode === 'edit' || (this.mode === 'normal' && this.temporaryEdit), locked: this.mode === 'locked', selection: cloneSelection(this.selection), windowSelection: cloneWindowSelection(this.windowSelection), paneLocks: cloneLocks(this.paneLocks) } }
+  setMode(mode: WorkspaceEditMode): WorkspaceEditState { if (!isMode(mode)) throw new Error(`invalid workspace edit mode "${String(mode)}"`); if (this.mode === mode && !this.temporaryEdit) return this.state; this.mode = mode; this.temporaryEdit = false; if (mode !== 'edit') { this.selection = null; this.windowSelection = null } this.emit(); return this.state }
+  setTemporaryEdit(active: boolean): WorkspaceEditState { const next = this.mode === 'normal' && active; if (next === this.temporaryEdit) return this.state; this.temporaryEdit = next; if (!next && this.mode !== 'edit') { this.selection = null; this.windowSelection = null } this.emit(); return this.state }
+  selectPane(selection: WorkspacePaneSelection | null): WorkspaceEditState { if (!this.state.editActive) return this.state; const next = cloneSelection(selection); if (JSON.stringify(next) === JSON.stringify(this.selection) && this.windowSelection === null) return this.state; this.selection = next; this.windowSelection = null; this.emit(); return this.state }
+  selectWindow(instanceId: string | null): WorkspaceEditState { if (!this.state.editActive) return this.state; const next = instanceId ? { instanceId } : null; if (JSON.stringify(next) === JSON.stringify(this.windowSelection) && this.selection === null) return this.state; this.windowSelection = next; this.selection = null; this.emit(); return this.state }
   setPaneLocked(selection: WorkspacePaneSelection, locked: boolean): WorkspaceEditState { const paneKey = key(selection); const exists = this.paneLocks.some((candidate) => key(candidate) === paneKey); if (exists === locked) return this.state; this.paneLocks = locked ? [...this.paneLocks, cloneSelection(selection) as WorkspacePaneSelection] : this.paneLocks.filter((candidate) => key(candidate) !== paneKey); this.emit(); return this.state }
   isPaneLocked(selection: WorkspacePaneSelection): boolean { return this.paneLocks.some((candidate) => key(candidate) === key(selection)) }
-  snapshot(): WorkspaceEditSnapshot { return { mode: this.mode, selection: cloneSelection(this.selection), paneLocks: cloneLocks(this.paneLocks) } }
-  restore(snapshot: WorkspaceEditSnapshot): WorkspaceEditState { if (!isMode(snapshot.mode)) throw new Error(`invalid workspace edit mode "${String(snapshot.mode)}"`); this.mode = snapshot.mode; this.temporaryEdit = false; this.selection = snapshot.mode === 'edit' ? cloneSelection(snapshot.selection) : null; this.paneLocks = cloneLocks(snapshot.paneLocks ?? []); this.emit(); return this.state }
+  snapshot(): WorkspaceEditSnapshot { return { mode: this.mode, selection: cloneSelection(this.selection), windowSelection: cloneWindowSelection(this.windowSelection), paneLocks: cloneLocks(this.paneLocks) } }
+  restore(snapshot: WorkspaceEditSnapshot): WorkspaceEditState { if (!isMode(snapshot.mode)) throw new Error(`invalid workspace edit mode "${String(snapshot.mode)}"`); this.mode = snapshot.mode; this.temporaryEdit = false; this.selection = snapshot.mode === 'edit' ? cloneSelection(snapshot.selection) : null; this.windowSelection = snapshot.mode === 'edit' ? cloneWindowSelection(snapshot.windowSelection) : null; this.paneLocks = cloneLocks(snapshot.paneLocks ?? []); this.emit(); return this.state }
   subscribe(listener: WorkspaceEditListener): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
   private emit(): void { const state = this.state; for (const listener of [...this.listeners]) listener(state) }
 }

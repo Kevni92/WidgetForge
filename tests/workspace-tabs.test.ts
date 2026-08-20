@@ -1,4 +1,4 @@
-import { nextTick } from 'vue'
+import { h, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import { createWidgetRegistry } from '../src/core/widget-registry'
@@ -54,6 +54,20 @@ describe('WorkspaceTabs', () => {
     expect(collection.get('workspace-4').name).toBe('Workspace 4')
     expect(collection.get('workspace-4').windows.list()).toHaveLength(0)
     expect(wrapper.find('[data-workspace-tab="workspace-4"]').exists()).toBe(true)
+    expect(wrapper.find('[data-workspace-add]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('renders consumer-provided actions in a reserved right-hand chrome region', () => {
+    const collection = createCollection()
+    const wrapper = mount(WorkspaceTabs, {
+      props: { manager: collection },
+      slots: { actions: () => h('button', { type: 'button', 'data-new-window-action': true }, 'New window') },
+      attachTo: document.body,
+    })
+
+    expect(wrapper.get('[data-workspace-tab-actions]').element.previousElementSibling?.classList).toContain('wf-workspace-tabs__list')
+    expect(wrapper.get('[data-workspace-tab-actions] [data-new-window-action]').text()).toBe('New window')
     expect(wrapper.find('[data-workspace-add]').exists()).toBe(true)
     wrapper.unmount()
   })

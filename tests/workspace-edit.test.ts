@@ -24,6 +24,23 @@ describe('workspace edit controller', () => {
     expect(restored.state.mode).toBe('edit'); expect(restored.state.selection).toEqual(selection); expect(restored.isPaneLocked(selection)).toBe(true)
     restored.setPaneLocked(selection, false); expect(restored.isPaneLocked(selection)).toBe(false)
   })
+
+  it('keeps window-host selection separate from pane selection and serializes it', () => {
+    const edit = createWorkspaceEditController({ mode: 'edit' })
+    edit.selectWindow('locked-window')
+    expect(edit.state.windowSelection).toEqual({ instanceId: 'locked-window' })
+    expect(edit.state.selection).toBeNull()
+
+    const snapshot = JSON.parse(JSON.stringify(edit.snapshot()))
+    const restored = createWorkspaceEditController(); restored.restore(snapshot)
+    expect(restored.state.windowSelection).toEqual({ instanceId: 'locked-window' })
+
+    restored.selectPane(selection)
+    expect(restored.state.selection).toEqual(selection)
+    expect(restored.state.windowSelection).toBeNull()
+    restored.selectWindow(null)
+    expect(restored.state.windowSelection).toBeNull()
+  })
 })
 
 describe('generic pane edit actions', () => {

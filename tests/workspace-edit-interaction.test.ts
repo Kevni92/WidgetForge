@@ -104,6 +104,30 @@ describe('WorkspaceHost edit mode', () => {
     wrapper.unmount()
   })
 
+  it('selects a chrome-less locked window as a host and unlocks it from visible edit actions', async () => {
+    const { registry, windows, docks, edit } = setup('edit')
+    const before = windows.get('window')
+    windows.lockWindow('window', 'api')
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+
+    await wrapper.get('.wf-window-frame[data-window-instance-id="window"]').trigger('pointerdown')
+    await nextTick()
+    expect(edit.state.windowSelection).toEqual({ instanceId: 'window' })
+    expect(wrapper.get('.wf-window-frame[data-window-selected="true"]').attributes('data-window-instance-id')).toBe('window')
+    expect(wrapper.get('[data-window-selection-lock]').attributes('aria-label')).toBe('Unlock window Edit')
+
+    await wrapper.get('[data-window-selection-lock]').trigger('click')
+    await nextTick()
+    expect(windows.get('window').layoutLocked).toBe(false)
+    expect(windows.get('window').geometry).toEqual(before.geometry)
+    expect(windows.get('window').rootPane).toEqual(before.rootPane)
+    expect(edit.state.windowSelection).toBeNull()
+    expect(wrapper.find('[data-window-selected="true"]').exists()).toBe(false)
+    expect(wrapper.find('.wf-window-shell__titlebar').exists()).toBe(true)
+    expect(document.activeElement).toBe(wrapper.get('.wf-window-shell').element)
+    wrapper.unmount()
+  })
+
   it('keeps a click on pane content when the pointer does not cross the drag threshold', async () => {
     const { registry, windows, docks, edit } = setup('edit')
     const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
