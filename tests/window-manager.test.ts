@@ -10,6 +10,7 @@ import {
   WindowLayoutLockedError,
 } from '../src/core/window-manager'
 import { createWidgetNavigator } from '../src/core/navigation'
+import { WindowLayoutValidationError } from '../src/core/window-layout'
 
 const EmptyWidget = defineComponent({ template: '<div />' })
 
@@ -146,6 +147,65 @@ describe('WindowManager', () => {
     expect(manager.get('locked').layoutLocked).toBe(false)
     manager.setGeometry('locked', { position: { x: 500, y: 500 }, size: before.geometry.size }, 'user')
     expect(manager.get('locked').geometry.position).toEqual({ x: 500, y: 500 })
+  })
+
+  it('resolves responsive locked geometry on workspace resize and materializes after unlock', () => {
+    const manager = createWindowManager(createRegistry())
+    manager.open({ widgetId: 'test.market', instanceId: 'sidebar', position: { x: 20, y: 20 }, size: { width: 200, height: 120 } })
+    manager.setLayoutSpec('sidebar', {
+      horizontal: { start: { target: { kind: 'workspace', edge: 'left' } }, size: { value: 25, unit: 'percent' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, end: { target: { kind: 'workspace', edge: 'bottom' } } },
+    }, { width: 800, height: 600 }, 'user')
+    manager.lockWindow('sidebar', 'user')
+    expect(manager.get('sidebar').geometry).toEqual({ position: { x: 0, y: 0 }, size: { width: 200, height: 600 } })
+
+    manager.resolveResponsiveLayouts({ width: 1200, height: 700 }, 'api')
+    expect(manager.get('sidebar').geometry).toEqual({ position: { x: 0, y: 0 }, size: { width: 300, height: 700 } })
+    manager.unlockWindow('sidebar', 'user')
+    manager.setGeometry('sidebar', { position: { x: 40, y: 50 }, size: { width: 300, height: 700 } }, 'user')
+    expect(manager.get('sidebar').layoutSpec).toBeNull()
+    expect(manager.get('sidebar').geometry.position).toEqual({ x: 40, y: 50 })
+  })
+
+  it('converts snap zones to semantic specs and materializes dependents on delete', () => {
+    const manager = createWindowManager(createRegistry())
+    manager.open({ widgetId: 'test.market', instanceId: 'base', position: { x: 10, y: 20 }, size: { width: 200, height: 100 } })
+    manager.open({ widgetId: 'test.market', instanceId: 'dependent', position: { x: 0, y: 0 }, size: { width: 100, height: 80 } })
+    manager.setLayoutSpec('dependent', {
+      horizontal: { start: { target: { kind: 'window', instanceId: 'base', edge: 'right' } }, size: { value: 100, unit: 'px' } },
+      vertical: { start: { target: { kind: 'window', instanceId: 'base', edge: 'top' } }, size: { value: 80, unit: 'px' } },
+    }, { width: 800, height: 600 }, 'user')
+    manager.snapWindow('base', 'left', { width: 800, height: 600 }, 'api')
+    manager.lockWindow('base', 'user')
+    expect(manager.get('base').layoutSpec?.horizontal.size).toEqual({ value: 50, unit: 'percent' })
+    manager.close('base', 'user')
+    const materialized = manager.get('dependent')
+    expect(materialized.layoutSpec?.horizontal.start?.target).toEqual({ kind: 'workspace', edge: 'left' })
+    expect(materialized.layoutSpec?.vertical.start?.target).toEqual({ kind: 'workspace', edge: 'top' })
+  })
+
+  it('rejects unknown responsive references before mutating state', () => {
+    const manager = createWindowManager(createRegistry())
+    manager.open({ widgetId: 'test.market', instanceId: 'window' })
+    expect(() => manager.setLayoutSpec('window', {
+      horizontal: { start: { target: { kind: 'window', instanceId: 'missing', edge: 'left' } }, size: { value: 20, unit: 'px' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, size: { value: 20, unit: 'px' } },
+    }, { width: 800, height: 600 }, 'user')).toThrow(WindowLayoutValidationError)
+    expect(manager.get('window').layoutSpec).toBeUndefined()
+  })
+
+  it('re-resolves locked dependents when an unlocked reference is manually moved', () => {
+    const manager = createWindowManager(createRegistry())
+    manager.open({ widgetId: 'test.market', instanceId: 'reference', position: { x: 50, y: 40 }, size: { width: 180, height: 120 } })
+    manager.open({ widgetId: 'test.market', instanceId: 'dependent', position: { x: 0, y: 0 }, size: { width: 100, height: 80 } })
+    manager.resolveResponsiveLayouts({ width: 800, height: 600 }, 'api')
+    manager.setLayoutSpec('dependent', {
+      horizontal: { start: { target: { kind: 'window', instanceId: 'reference', edge: 'right' } }, size: { value: 100, unit: 'px' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, size: { value: 80, unit: 'px' } },
+    }, { width: 800, height: 600 }, 'user')
+    manager.lockWindow('dependent', 'user')
+    manager.setGeometry('reference', { position: { x: 200, y: 40 }, size: { width: 180, height: 120 } }, 'user')
+    expect(manager.get('dependent').geometry.position.x).toBe(380)
   })
 
   it('closes only the requested instance and restores focus consistently', () => {

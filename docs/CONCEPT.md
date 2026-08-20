@@ -72,7 +72,7 @@ Der Workspace beschreibt den aktuellen UI-Zustand:
 - Position und Größe,
 - Fensterstatus,
 - Fokus/Z-Reihenfolge,
-- perspektivisch gespeicherte Layouts.
+- responsive Layoutverträge neben der aktuell aufgelösten Pixelgeometrie.
 
 Der Zustand muss von konkreten Spielinhalten getrennt bleiben.
 

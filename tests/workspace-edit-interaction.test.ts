@@ -96,7 +96,7 @@ describe('WorkspaceHost edit mode', () => {
 
     wrapper.get('.wf-pane-host[data-pane-id]').element.dispatchEvent(new MouseEvent('contextmenu', { clientX: 100, clientY: 100, bubbles: true, cancelable: true }))
     await nextTick()
-    expect(wrapper.findAll('[role="menuitem"]').map((item) => item.text())).toEqual(['Unlock window'])
+    expect(wrapper.findAll('[role="menuitem"]').map((item) => item.text())).toEqual(['Unlock window', 'Layout…'])
     await wrapper.get('[role="menuitem"]').trigger('click')
     await nextTick()
     expect(windows.get('window').layoutLocked).toBe(false)

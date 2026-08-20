@@ -141,8 +141,8 @@ describe('Fullscreen Playground App', () => {
     const lockedOperations = wrapper.get('[data-window-instance-id="operations-main"]')
     await lockedOperations.get('[data-pane-id="operations-root"]').trigger('contextmenu', { clientX: 120, clientY: 120 })
     await wrapper.vm.$nextTick()
-    expect(wrapper.findAll('.wf-context-menu__item')).toHaveLength(1)
-    expect(wrapper.get('.wf-context-menu__item').text()).toBe('Unlock window')
+    expect(wrapper.findAll('.wf-context-menu__item')).toHaveLength(2)
+    expect(wrapper.findAll('.wf-context-menu__item').map((item) => item.text())).toEqual(['Unlock window', 'Layout…'])
 
     await wrapper.get('.wf-context-menu__item').trigger('click')
     await wrapper.vm.$nextTick()

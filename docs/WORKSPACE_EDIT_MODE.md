@@ -24,7 +24,7 @@ Ein Fenster besitzt zusätzlich den kanonischen `WindowState.layoutLocked`-Wert.
 
 Das Locken und Entsperren ist nur im Edit-Mode möglich. Ein gelocktes Fenster liegt in einer eigenen deterministischen Layout-Ebene unter normalen Floating-Fenstern, bleibt fokussierbar und rendert seinen Widget-Inhalt interaktiv. Bewegung, Resize, Snap, Anchor und Window-Docking werden dagegen abgelehnt. Titelbar, Titel, Header-Actions und Resize-Griffe werden vollständig entfernt.
 
-Im Edit-Mode markiert die generische Workspace-Auswahl auch ein chrome-less gelocktes Fenster. Sein Context Menu bietet dann ausschließlich `Unlock window`; die Aktion arbeitet über die öffentliche Workspace-/Window-API und benötigt keine Playground-Sonderbehandlung.
+Im Edit-Mode markiert die generische Workspace-Auswahl auch ein chrome-less gelocktes Fenster. Sein Context Menu bietet `Unlock window` und `Layout…`; beide Aktionen arbeiten über die öffentliche Workspace-/Window-API und benötigen keine Playground-Sonderbehandlung. Der Layout-Dialog validiert responsive Anchors, Einheiten, Referenzen und Zyklen vor dem Speichern.
 
 ## Handle-Semantik
 
