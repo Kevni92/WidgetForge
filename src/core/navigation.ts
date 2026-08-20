@@ -17,6 +17,13 @@ export interface NavigationResult {
   readonly instanceId: string
 }
 
+export interface WidgetNavigationContext {
+  readonly target?: {
+    readonly kind: 'launcher-window'
+    readonly windowInstanceId: string
+  }
+}
+
 export type WidgetNavigationErrorCode = 'unknown-widget' | 'invalid-parameters'
 
 export class WidgetNavigationError extends Error {
@@ -33,7 +40,7 @@ export class WidgetNavigationError extends Error {
 }
 
 export interface WidgetNavigator {
-  navigate(intent: NavigationIntent): NavigationResult
+  navigate(intent: NavigationIntent, context?: WidgetNavigationContext): NavigationResult
 }
 
 export interface ActiveWorkspaceNavigationSource {
@@ -44,6 +51,7 @@ function navigateWidget(
   registry: WidgetRegistry,
   windowManager: WindowManager,
   intent: NavigationIntent,
+  context?: WidgetNavigationContext,
 ): NavigationResult {
   try {
     registry.resolve(intent.widgetId, intent.parameters ?? {})
@@ -57,10 +65,9 @@ function navigateWidget(
     throw error
   }
 
-  const window = windowManager.open({
-    widgetId: intent.widgetId,
-    parameters: intent.parameters ?? {},
-  })
+  const window = context?.target?.kind === 'launcher-window'
+    ? windowManager.replaceLauncherWindow(context.target.windowInstanceId, { widgetId: intent.widgetId, parameters: intent.parameters ?? {} })
+    : windowManager.open({ widgetId: intent.widgetId, parameters: intent.parameters ?? {} })
   return { widgetId: intent.widgetId, instanceId: window.instanceId }
 }
 
@@ -70,7 +77,7 @@ export class WidgetNavigatorService implements WidgetNavigator {
     private readonly windowManager: WindowManager,
   ) {}
 
-  navigate(intent: NavigationIntent): NavigationResult { return navigateWidget(this.registry, this.windowManager, intent) }
+  navigate(intent: NavigationIntent, context?: WidgetNavigationContext): NavigationResult { return navigateWidget(this.registry, this.windowManager, intent, context) }
 }
 
 export class ActiveWorkspaceNavigatorService implements WidgetNavigator {
@@ -79,8 +86,8 @@ export class ActiveWorkspaceNavigatorService implements WidgetNavigator {
     private readonly source: ActiveWorkspaceNavigationSource,
   ) {}
 
-  navigate(intent: NavigationIntent): NavigationResult {
-    return navigateWidget(this.registry, this.source.getActive().windows, intent)
+  navigate(intent: NavigationIntent, context?: WidgetNavigationContext): NavigationResult {
+    return navigateWidget(this.registry, this.source.getActive().windows, intent, context)
   }
 }
 

@@ -18,6 +18,8 @@ Nicht persistiert werden Runtime-Lifecycle-Objekte, Manifest-Constraints, Kompon
 - `serializeWorkspace(manager)` erzeugt JSON.
 - `restoreWorkspace(manager, input)` akzeptiert das Modell oder JSON und stellt es in einem leeren `WindowManager` wieder her. Mit `{ atomic: true }` wird bei jedem Restore-Problem der gesamte Restore verworfen und der Manager leer gelassen; das ist der vorgesehene Pfad für Persistenz, History und Recovery. Ein optionales `{ container: { width, height } }` normalisiert gespeicherte Geometrien bereits gegen die aktuelle Floating-Fläche.
 
+Leere Startfenster werden über `WindowManager.openEmptyWindow()` beziehungsweise `openLauncherWindow()` geöffnet. Der Launcher ist ein framework-eigener Root-Pane und wird durch `replaceLauncherWindow()` im selben Fenster durch das aufgelöste Widget ersetzt. Damit sind Öffnen, Ersetzen, Undo/Redo sowie Persistenz normale Workspace-Operationen.
+
 Geometrie bleibt im Core deterministisch: `normalizeWindowGeometry()` erhält Fenstergröße und Constraints und verschiebt Fenster so, dass mindestens die konfigurierte sichtbare Region erreichbar bleibt. Wenn ein Workspace kleiner als die deklarierte Mindestgröße ist, bleibt die Mindestgröße erhalten; der sichtbare Recovery-Bereich bleibt trotzdem erreichbar. `WindowManagerHost` ruft diese Normalisierung bei Restore und bei jeder Größenänderung der Floating-Fläche auf.
 
 Restore ist pro Fenster fehlertolerant: entfernte Widgets, ungültige Parameter oder beschädigte Einträge werden übersprungen und als `WorkspaceRestoreIssue` zurückgegeben. Ein ungültiges Dokument oder eine nicht unterstützte Workspace-Version wird nicht teilweise geladen.

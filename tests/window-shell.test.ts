@@ -104,4 +104,33 @@ describe('WindowShell', () => {
       wrapper.unmount()
     }
   })
+
+  it('keeps the outer border and shadow separate from the shared clipped surface', () => {
+    const registry = createWidgetRegistry()
+    const wrapper = mount(WindowShell, {
+      props: { registry, widgetId: 'clipping.widget', instanceId: 'clipping-window', title: 'Clipping' },
+      slots: { default: () => h('div', { class: 'corner-sensitive-content' }, 'Content') },
+    })
+
+    const shell = wrapper.get('.wf-window-shell')
+    const surface = wrapper.get('.wf-window-shell__surface')
+
+    expect(surface.element.parentElement).toBe(shell.element)
+    expect(surface.find('.wf-window-shell__titlebar').exists()).toBe(true)
+    expect(surface.find('.wf-window-shell__content .corner-sensitive-content').exists()).toBe(true)
+    expect(shell.classes()).toContain('wf-window-shell--chrome-default')
+    expect(shell.classes()).not.toContain('wf-window-shell--chrome-none')
+  })
+
+  it('offers all four workspace edges through the generic dock action', async () => {
+    const registry = createWidgetRegistry()
+    const wrapper = mount(WindowShell, {
+      props: { registry, widgetId: 'dockable.widget', instanceId: 'dockable-window', title: 'Dockable', dockable: true },
+    })
+
+    await wrapper.get('.wf-window-shell__dock').trigger('click')
+    expect(wrapper.findAll('[data-window-dock-position]')).toHaveLength(4)
+    await wrapper.get('[data-window-dock-position="right"]').trigger('click')
+    expect(wrapper.emitted('dock')?.[0]).toEqual(['right'])
+  })
 })

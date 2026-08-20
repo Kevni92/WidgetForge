@@ -52,7 +52,7 @@ windows.open({ widgetId: 'market.ticker', instanceId: 'dock-demo-market', parame
 
 <template>
   <div class="workspace-dock-showcase" data-workspace-dock-showcase>
-  <div class="workspace-dock-showcase__hint">Normal: drag a tab grip to reorder tabs. Edit mode/Ctrl: drag any pane surface or tab button to rearrange the workspace, or drop it on free space to open a new window.</div>
+  <div class="workspace-dock-showcase__hint">Window titlebar: use the anchor action to move a floating window to any workspace edge. Normal: drag a tab grip to reorder tabs. Edit mode/Ctrl: rearrange panes or detach a dock back to a window.</div>
     <WorkspaceHost :windows="windows" :docks="docks" :registry="playgroundWidgetRegistry" />
   </div>
 </template>

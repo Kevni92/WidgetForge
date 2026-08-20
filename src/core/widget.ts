@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import { cloneDocumentationMetadata, validateDocumentationMetadata, type DocumentationMetadata } from './documentation'
 import { validateWidgetActions, type WidgetAction } from './widget-actions'
 import { validateWidgetViewStateDefinition, WidgetViewStateError, type WidgetViewStateDefinition } from './widget-view-state'
 import { createWindowOptions, type WindowOptionsOverride } from './window-options'
@@ -6,9 +7,9 @@ import { createWindowOptions, type WindowOptionsOverride } from './window-option
 export type WidgetId = string
 
 export type WidgetParameterDefinition =
-  | { type: 'string'; required?: boolean; default?: string }
-  | { type: 'number'; required?: boolean; default?: number }
-  | { type: 'boolean'; required?: boolean; default?: boolean }
+  | { type: 'string'; required?: boolean; default?: string; description?: string; example?: string }
+  | { type: 'number'; required?: boolean; default?: number; description?: string; example?: number }
+  | { type: 'boolean'; required?: boolean; default?: boolean; description?: string; example?: boolean }
 
 export type WidgetParameterSchema = Record<string, WidgetParameterDefinition>
 type WidgetParameterValue<TDefinition extends WidgetParameterDefinition> = TDefinition extends { type: 'string' } ? string : TDefinition extends { type: 'number' } ? number : boolean
@@ -45,6 +46,8 @@ export interface WidgetManifest<TSchema extends WidgetParameterSchema = WidgetPa
   id: WidgetId
   title: string
   component: Component
+  description?: string
+  documentation?: DocumentationMetadata
   parameters?: TSchema
   window?: WidgetWindowMetadata
   capabilities?: WidgetCapabilities
@@ -83,6 +86,8 @@ function validateParameterSchema(parameters?: WidgetParameterSchema): void {
   for (const [name, definition] of Object.entries(parameters)) {
     if (!name.trim()) throw new WidgetDefinitionError('parameter names must not be empty')
     if ('default' in definition && definition.default !== undefined && typeof definition.default !== definition.type) throw new WidgetDefinitionError(`default value for parameter "${name}" must be a ${definition.type}`)
+    if ('example' in definition && definition.example !== undefined && typeof definition.example !== definition.type) throw new WidgetDefinitionError(`example value for parameter "${name}" must be a ${definition.type}`)
+    if (definition.description !== undefined && !definition.description.trim()) throw new WidgetDefinitionError(`description for parameter "${name}" must not be empty`)
   }
 }
 function strongerMinimum(first?: WidgetSize, second?: WidgetSize): WidgetSize | undefined {
@@ -108,6 +113,8 @@ export function defineWidget<const TSchema extends WidgetParameterSchema = Widge
   if (!manifest.title.trim()) throw new WidgetDefinitionError('widget title must not be empty')
   const componentType = typeof manifest.component
   if (componentType !== 'object' && componentType !== 'function') throw new WidgetDefinitionError('widget component must be a Vue component')
+  if (manifest.description !== undefined && !manifest.description.trim()) throw new WidgetDefinitionError('widget description must not be empty')
+  try { validateDocumentationMetadata(manifest.documentation, 'widget.documentation') } catch (error) { throw new WidgetDefinitionError(error instanceof Error ? error.message : 'invalid widget documentation') }
   validateParameterSchema(manifest.parameters); validateWindowMetadata(manifest.window); validateCapabilities(manifest)
   try { validateWidgetActions(manifest.actions) } catch (error) { throw new WidgetDefinitionError(error instanceof Error ? error.message : 'invalid widget actions') }
   if (manifest.viewState) { try { validateWidgetViewStateDefinition(manifest.viewState) } catch (error) { throw new WidgetDefinitionError(error instanceof WidgetViewStateError ? error.message : 'invalid widget view state') } }
@@ -123,5 +130,32 @@ export function defineWidget<const TSchema extends WidgetParameterSchema = Widge
       ...(!capabilities.multipleInstances ? { singleton: true } : {}),
       ...(minimum ? { minSize: minimum } : {}),
     },
+  }
+}
+
+export function cloneWidgetManifest<TSchema extends WidgetParameterSchema = WidgetParameterSchema>(manifest: WidgetManifest<TSchema>): WidgetManifest<TSchema> {
+  const parameters = manifest.parameters === undefined
+    ? undefined
+    : Object.fromEntries(Object.entries(manifest.parameters).map(([name, definition]) => [name, { ...definition }])) as TSchema
+  const window = manifest.window
+    ? {
+        ...manifest.window,
+        ...(manifest.window.defaultSize ? { defaultSize: { ...manifest.window.defaultSize } } : {}),
+        ...(manifest.window.minSize ? { minSize: { ...manifest.window.minSize } } : {}),
+        ...(manifest.window.maxSize ? { maxSize: { ...manifest.window.maxSize } } : {}),
+        ...(manifest.window.options ? { options: { ...manifest.window.options, ...(manifest.window.options.headerActions ? { headerActions: manifest.window.options.headerActions.map((action) => ({ ...action })) } : {}) } } : {}),
+      }
+    : undefined
+  const capabilities = manifest.capabilities
+    ? { ...manifest.capabilities, ...(manifest.capabilities.minimumUsefulSize ? { minimumUsefulSize: { ...manifest.capabilities.minimumUsefulSize } } : {}) }
+    : undefined
+  return {
+    ...manifest,
+    ...(manifest.description !== undefined ? { description: manifest.description } : {}),
+    ...(manifest.documentation !== undefined ? { documentation: cloneDocumentationMetadata(manifest.documentation) } : {}),
+    ...(parameters !== undefined ? { parameters } : {}),
+    ...(window !== undefined ? { window } : {}),
+    ...(capabilities !== undefined ? { capabilities } : {}),
+    ...(manifest.actions !== undefined ? { actions: manifest.actions.map((action) => ({ ...action, ...(action.target?.kind === 'navigation' ? { target: { kind: 'navigation', intent: { ...action.target.intent, ...(action.target.intent.parameters ? { parameters: { ...action.target.intent.parameters } } : {}) } } } : {}) })) } : {}),
   }
 }

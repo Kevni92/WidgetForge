@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, markRaw, onBeforeUnmount, shallowRef, toRaw } from 'vue'
 import { createSelectionStore, type SelectionStore } from '../core/selection'
+import type { CommandRegistry } from '../core/commands'
 import type { WidgetRegistry } from '../core/widget-registry'
 import type { WorkspaceCollectionManager, WorkspaceRuntime } from '../core/workspace-collection'
 import { provideSelectionStore } from './selection-context'
@@ -9,6 +10,10 @@ import WorkspaceHost from './WorkspaceHost.vue'
 interface Props {
   manager: WorkspaceCollectionManager
   registry: WidgetRegistry
+  commands?: CommandRegistry | undefined
+  newWindowLabel?: string | undefined
+  launcherPlaceholder?: string | undefined
+  launcherSubmitLabel?: string | undefined
   layoutLocked?: boolean
   selectionStore?: SelectionStore
 }
@@ -37,6 +42,10 @@ onBeforeUnmount(unsubscribe)
       :windows="activeWorkspace.windows"
       :docks="activeWorkspace.docks"
       :registry="registry"
+      :commands="commands"
+      :new-window-label="newWindowLabel"
+      :launcher-placeholder="launcherPlaceholder"
+      :launcher-submit-label="launcherSubmitLabel"
       :layout-locked="layoutLocked"
       :data-workspace-id="activeWorkspace.id"
     />

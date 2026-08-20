@@ -9,6 +9,9 @@ export type PaneParameters = Readonly<Record<string, PaneParameterValue>>
 export type PaneSplitEdge = 'left' | 'right' | 'top' | 'bottom'
 export type PaneSizeMode = 'flex' | 'fixed' | 'content'
 
+/** Reserved framework widget identity for an empty command-launcher window. */
+export const COMMAND_LAUNCHER_WIDGET_ID = '@widgetforge/command-launcher' as const
+
 export interface PaneSettings {
   readonly resizable?: boolean
   readonly minSize?: number
@@ -65,6 +68,14 @@ export interface CreateWidgetPaneOptions {
   instanceId?: string
   parameters?: PaneParameters
   settings?: PaneSettings
+}
+
+export type CommandLauncherPane = WidgetPane & { readonly widgetId: typeof COMMAND_LAUNCHER_WIDGET_ID }
+
+export interface CreateCommandLauncherPaneOptions {
+  readonly id: PaneId
+  readonly instanceId?: string
+  readonly settings?: PaneSettings
 }
 
 export interface CreateSplitPaneOptions {
@@ -192,6 +203,19 @@ export function createWidgetPane(options: CreateWidgetPaneOptions): WidgetPane {
     kind: 'widget', id: options.id, widgetId: options.widgetId, instanceId, parameters,
     ...(options.settings ? { settings: cloneSettings(options.settings) } : {}),
   }
+}
+
+export function createCommandLauncherPane(options: CreateCommandLauncherPaneOptions): CommandLauncherPane {
+  return createWidgetPane({
+    id: options.id,
+    widgetId: COMMAND_LAUNCHER_WIDGET_ID,
+    instanceId: options.instanceId ?? `${options.id}.launcher`,
+    ...(options.settings ? { settings: options.settings } : {}),
+  }) as CommandLauncherPane
+}
+
+export function isCommandLauncherPane(pane: PaneNode | undefined): pane is CommandLauncherPane {
+  return pane?.kind === 'widget' && pane.widgetId === COMMAND_LAUNCHER_WIDGET_ID
 }
 
 export function createSplitPane(options: CreateSplitPaneOptions): SplitPane {

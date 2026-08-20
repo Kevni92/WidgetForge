@@ -138,7 +138,7 @@ function normalizeCollection(registry: WidgetRegistry, value: unknown): Workspac
 }
 
 function compatibleWindow(current: WindowState, target: WorkspaceWindowSnapshot): boolean {
-  if (current.title !== target.title || !sameValue(current.constraints, target.constraints)) return false
+  if (current.title !== target.title || current.titleIsCustom !== (target.titleIsCustom === true) || !sameValue(current.constraints, target.constraints)) return false
   if (target.mode === 'normal' && target.restoreGeometry !== null && target.snap === null) return false
   if (target.snap !== null && target.restoreGeometry !== null) return false
   return true
@@ -186,6 +186,7 @@ function openWindow(windows: WindowManager, target: WorkspaceWindowSnapshot): vo
     pane: target.rootPane,
     instanceId: target.instanceId,
     title: target.title,
+    titleIsCustom: target.titleIsCustom === true,
     position: target.geometry.position,
     size: target.geometry.size,
     minSize: target.constraints.minSize,

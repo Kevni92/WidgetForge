@@ -1,0 +1,55 @@
+<script setup lang="ts">
+import type { CommandRegistry } from '../core/commands'
+import type { NavigationResult, WidgetNavigationContext, WidgetNavigator } from '../core/navigation'
+import CommandInput from './CommandInput.vue'
+
+interface CommandLauncherProps {
+  commands?: CommandRegistry | undefined
+  navigator: WidgetNavigator
+  context?: WidgetNavigationContext | undefined
+  placeholder?: string | undefined
+  submitLabel?: string | undefined
+}
+
+const props = withDefaults(defineProps<CommandLauncherProps>(), {
+  placeholder: 'Type a command',
+  submitLabel: 'Open',
+})
+
+const emit = defineEmits<{
+  executed: [result: NavigationResult]
+  error: [error: Error]
+  close: []
+}>()
+</script>
+
+<template>
+  <section class="wf-command-launcher" data-command-launcher aria-label="Command launcher" @keydown.esc.prevent="emit('close')">
+    <div class="wf-command-launcher__intro">
+      <h2 class="wf-command-launcher__title">New Window</h2>
+      <p class="wf-command-launcher__description">Open a registered widget with a command.</p>
+    </div>
+    <CommandInput
+      v-if="props.commands"
+      :commands="props.commands"
+      :navigator="props.navigator"
+      :context="props.context"
+      :placeholder="props.placeholder"
+      :submit-label="props.submitLabel"
+      auto-focus
+      @executed="emit('executed', $event)"
+      @error="emit('error', $event)"
+    />
+    <p v-else class="wf-command-launcher__unavailable" data-command-launcher-unavailable>
+      No command registry is configured for this workspace.
+    </p>
+  </section>
+</template>
+
+<style scoped>
+.wf-command-launcher{display:flex;min-width:0;min-height:0;height:100%;flex-direction:column;justify-content:center;gap:var(--wf-space-lg);color:var(--wf-color-text);font-family:var(--wf-font-family)}
+.wf-command-launcher__intro{display:grid;gap:var(--wf-space-xs)}
+.wf-command-launcher__title{margin:0;font-size:var(--wf-font-size-lg);font-weight:var(--wf-font-weight-semibold)}
+.wf-command-launcher__description,.wf-command-launcher__unavailable{margin:0;color:var(--wf-color-text-muted);font-size:var(--wf-font-size-sm)}
+.wf-command-launcher__unavailable{padding:var(--wf-space-sm);border:1px solid var(--wf-color-border-subtle);border-radius:var(--wf-radius-sm);background:var(--wf-color-surface-raised)}
+</style>

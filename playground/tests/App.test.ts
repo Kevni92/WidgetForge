@@ -11,6 +11,46 @@ describe('Fullscreen Playground App', () => {
   beforeEach(() => { window.localStorage.clear(); vi.useFakeTimers() })
   afterEach(() => { vi.useRealTimers() })
 
+  it('demonstrates the public empty-window launcher flow with an error and a real command', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    const beforeWidgets = wrapper.findAll('.production-widget').length
+    await wrapper.get('[data-workspace-new-window]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[data-command-launcher] input').element).toBeTruthy()
+    expect(document.activeElement).toBe(wrapper.get('[data-command-launcher] input').element)
+
+    const input = wrapper.get('[data-command-launcher] input')
+    await input.setValue('does-not-exist')
+    await wrapper.get('[data-command-launcher] form').trigger('submit')
+    expect(wrapper.get('[data-command-input-feedback]').text()).toContain('unknown command')
+
+    await input.setValue('production')
+    await wrapper.get('[data-command-launcher] form').trigger('submit')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-command-launcher]').exists()).toBe(false)
+    expect(wrapper.findAll('.production-widget').length).toBe(beforeWidgets + 1)
+    wrapper.unmount()
+  })
+
+  it('opens the generic Help widget through the public command launcher', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    await wrapper.get('[data-workspace-new-window]').trigger('click')
+    await wrapper.vm.$nextTick()
+    const input = wrapper.get('[data-command-launcher] input')
+    await input.setValue('help')
+    await wrapper.get('[data-command-launcher] form').trigger('submit')
+    await wrapper.vm.$nextTick()
+
+    const help = wrapper.get('[data-help-widget]')
+    expect(help.find('[data-help-entry="widget:market.ticker"]').exists()).toBe(true)
+    expect(help.find('[data-help-entry="command:market"]').exists()).toBe(true)
+    await help.get('[aria-label="Search widgets and commands"]').setValue('market')
+    await help.get('[data-help-entry="widget:market.ticker"]').trigger('click')
+    expect(help.get('[data-help-detail]').text()).toContain('rows')
+    expect(help.get('[data-help-detail]').text()).toContain('number')
+    wrapper.unmount()
+  })
+
   it('renders a cohesive fullscreen simulation workspace with docks, panes, groups, roles and chrome variants', async () => {
     const wrapper = mount(App)
     expect(wrapper.get('[data-fullscreen-workspace-demo]').element).toBeTruthy()

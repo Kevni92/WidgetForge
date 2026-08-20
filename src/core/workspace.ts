@@ -1,4 +1,4 @@
-import { DuplicateDockError, type DockManager, type DockPosition, type DockState } from './dock-manager'
+import { DuplicateDockError, type DockManager, type DockPosition, type DockRestoreWindow, type DockState } from './dock-manager'
 import { clonePaneTree, validatePaneTree, type PaneNode, type PaneSettings } from './pane'
 import type { WidgetId } from './widget'
 import { DuplicateWindowInstanceError, type WindowManager, type WindowMode, type WindowState } from './window-manager'
@@ -15,6 +15,7 @@ export type WorkspaceParameters = Readonly<Record<string, WorkspaceParameterValu
 export interface WorkspaceWindowSnapshot {
   readonly instanceId: string
   readonly title: string
+  readonly titleIsCustom?: boolean
   readonly rootPane: PaneNode
   readonly geometry: WindowGeometry
   readonly constraints: WindowSizeConstraints
@@ -34,6 +35,7 @@ export interface WorkspaceDockSnapshot {
   readonly minThickness: number
   readonly maxThickness: number | null
   readonly resizable: boolean
+  readonly restoreWindow?: DockRestoreWindow
 }
 
 export interface WorkspaceSnapshot {
@@ -97,10 +99,24 @@ function isFiniteNumber(value: unknown): value is number { return typeof value =
 function cloneGeometry(geometry: WindowGeometry): WindowGeometry { return { position: { ...geometry.position }, size: { ...geometry.size } } }
 function cloneConstraints(constraints: WindowSizeConstraints): WindowSizeConstraints { return { minSize: { ...constraints.minSize }, maxSize: constraints.maxSize ? { ...constraints.maxSize } : null } }
 function cloneSnap(snap: WindowSnapState | null): WindowSnapState | null { return snap ? { zone: snap.zone, floatingGeometry: cloneGeometry(snap.floatingGeometry) } : null }
+function cloneDockRestoreWindow(window: DockRestoreWindow): DockRestoreWindow {
+  return { ...window, geometry: cloneGeometry(window.geometry), constraints: cloneConstraints(window.constraints), options: { ...window.options } }
+}
 
 function validateGeometry(geometry: WindowGeometry, label: string): void {
   if (!isFiniteNumber(geometry.position.x) || !isFiniteNumber(geometry.position.y) || !isFiniteNumber(geometry.size.width) || !isFiniteNumber(geometry.size.height) || geometry.size.width <= 0 || geometry.size.height <= 0) {
     throw new WorkspaceInvariantError(`${label} must contain finite positive geometry`)
+  }
+}
+
+function validateDockRestoreWindow(window: DockRestoreWindow, dockId: string): void {
+  if (!window.instanceId.trim() || !window.title.trim()) throw new WorkspaceInvariantError(`dock "${dockId}" has invalid restore window identity`)
+  validateGeometry(window.geometry, `dock "${dockId}" restore geometry`)
+  if (!isFiniteNumber(window.constraints.minSize.width) || !isFiniteNumber(window.constraints.minSize.height) || window.constraints.minSize.width <= 0 || window.constraints.minSize.height <= 0) {
+    throw new WorkspaceInvariantError(`dock "${dockId}" has invalid restore window minimum size`)
+  }
+  if (window.constraints.maxSize && (!isFiniteNumber(window.constraints.maxSize.width) || !isFiniteNumber(window.constraints.maxSize.height) || window.constraints.maxSize.width < window.constraints.minSize.width || window.constraints.maxSize.height < window.constraints.minSize.height)) {
+    throw new WorkspaceInvariantError(`dock "${dockId}" has invalid restore window maximum size`)
   }
 }
 
@@ -131,7 +147,7 @@ export function validateWorkspaceSnapshot(snapshot: WorkspaceSnapshot): void {
   if (snapshot.version !== WORKSPACE_VERSION) throw new WorkspaceInvariantError(`unsupported workspace version "${String(snapshot.version)}"`)
   if (!Array.isArray(snapshot.windows) || !Array.isArray(snapshot.docks)) throw new WorkspaceInvariantError('workspace windows and docks must be arrays')
 
-  const windowIds = new Set<string>(), dockIds = new Set<string>(), paneIds = new Set<string>(), widgetInstances = new Set<string>(), zIndexes = new Set<number>()
+  const windowIds = new Set<string>(), restoreWindowIds = new Set<string>(), dockIds = new Set<string>(), paneIds = new Set<string>(), widgetInstances = new Set<string>(), zIndexes = new Set<number>()
   let focusedCount = 0
   for (const window of snapshot.windows) {
     if (windowIds.has(window.instanceId)) throw new WorkspaceInvariantError(`duplicate window instance id "${window.instanceId}" in workspace`)
@@ -156,6 +172,11 @@ export function validateWorkspaceSnapshot(snapshot: WorkspaceSnapshot): void {
       throw new WorkspaceInvariantError(`invalid thickness constraints for dock "${dock.id}"`)
     }
     try { validatePaneTree(dock.rootPane) } catch (error) { throw new WorkspaceInvariantError(error instanceof Error ? error.message : `invalid pane tree for dock "${dock.id}"`) }
+    if (dock.restoreWindow) {
+      if (windowIds.has(dock.restoreWindow.instanceId) || restoreWindowIds.has(dock.restoreWindow.instanceId)) throw new WorkspaceInvariantError(`duplicate restore window instance id "${dock.restoreWindow.instanceId}" in workspace`)
+      restoreWindowIds.add(dock.restoreWindow.instanceId)
+      validateDockRestoreWindow(dock.restoreWindow, dock.id)
+    }
     validatePaneOwnership(dock.rootPane, paneIds, widgetInstances)
   }
 }
@@ -164,6 +185,7 @@ export function captureWorkspace(manager: WindowManager, dockManager?: DockManag
   const windows = manager.list().slice().sort((a, b) => a.zIndex - b.zIndex).map((window) => ({
     instanceId: window.instanceId,
     title: window.title,
+    titleIsCustom: window.titleIsCustom,
     rootPane: clonePaneTree(window.rootPane),
     geometry: cloneGeometry(window.geometry),
     constraints: cloneConstraints(window.constraints),
@@ -174,7 +196,10 @@ export function captureWorkspace(manager: WindowManager, dockManager?: DockManag
     focused: window.focused,
     zIndex: window.zIndex,
   }))
-  const docks = (dockManager?.list() ?? []).map((dock) => ({ ...dock, rootPane: clonePaneTree(dock.rootPane) }))
+  const docks = (dockManager?.list() ?? []).map((dock): WorkspaceDockSnapshot => {
+    const snapshot: WorkspaceDockSnapshot = { ...dock, rootPane: clonePaneTree(dock.rootPane) }
+    return dock.restoreWindow ? { ...snapshot, restoreWindow: cloneDockRestoreWindow(dock.restoreWindow) } : snapshot
+  })
   const snapshot: WorkspaceSnapshot = { version: WORKSPACE_VERSION, windows, docks }
   validateWorkspaceSnapshot(snapshot)
   return snapshot
@@ -321,16 +346,26 @@ function readWindow(value: unknown): WorkspaceWindowSnapshot | null {
   const restoreGeometry = value.restoreGeometry === undefined || value.restoreGeometry === null ? null : readGeometry(value.restoreGeometry)
   if (!rootPane || !geometry || !constraints || !options || snap === undefined || (value.restoreGeometry !== undefined && value.restoreGeometry !== null && !restoreGeometry)) return null
   if (value.mode === 'maximized' && !restoreGeometry) return null
-  return { instanceId: value.instanceId, title: value.title, rootPane, geometry, constraints, options, snap, restoreGeometry, mode: value.mode as WindowMode, focused: value.focused, zIndex: value.zIndex as number }
+  if (value.titleIsCustom !== undefined && typeof value.titleIsCustom !== 'boolean') return null
+  return { instanceId: value.instanceId, title: value.title, ...(value.titleIsCustom === true ? { titleIsCustom: true } : {}), rootPane, geometry, constraints, options, snap, restoreGeometry, mode: value.mode as WindowMode, focused: value.focused, zIndex: value.zIndex as number }
+}
+
+function readDockRestoreWindow(value: unknown): DockRestoreWindow | undefined | null {
+  if (value === undefined || value === null) return undefined
+  if (!isRecord(value) || typeof value.instanceId !== 'string' || !value.instanceId.trim() || typeof value.title !== 'string' || !value.title.trim()) return null
+  const geometry = readGeometry(value.geometry), constraints = readConstraints(value.constraints), options = readWindowOptions(value.options)
+  if (!geometry || !constraints || !options) return null
+  return { instanceId: value.instanceId, title: value.title, geometry, constraints, options }
 }
 
 function readDock(value: unknown): WorkspaceDockSnapshot | null {
   if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim() || !['top', 'bottom', 'left', 'right'].includes(String(value.position))) return null
-  const rootPane = readPane(value.rootPane)
+  const rootPane = readPane(value.rootPane), restoreWindow = readDockRestoreWindow(value.restoreWindow)
   if (!rootPane || !isFiniteNumber(value.thickness) || value.thickness < 0 || !isFiniteNumber(value.minThickness) || value.minThickness < 0) return null
+  if (restoreWindow === null) return null
   const max = value.maxThickness === null ? null : value.maxThickness
   if (value.thickness < value.minThickness || (max !== null && (!isFiniteNumber(max) || max < value.minThickness || value.thickness > max)) || typeof value.resizable !== 'boolean') return null
-  return { id: value.id, position: value.position as DockPosition, rootPane, thickness: value.thickness, minThickness: value.minThickness, maxThickness: max, resizable: value.resizable }
+  return { id: value.id, position: value.position as DockPosition, rootPane, thickness: value.thickness, minThickness: value.minThickness, maxThickness: max, resizable: value.resizable, ...(restoreWindow ? { restoreWindow } : {}) }
 }
 
 interface RestoreCandidate {
@@ -383,7 +418,7 @@ export function restoreWorkspace(
     candidates.push({
       index, instanceId: entry.instanceId, widgetId: entry.rootPane.kind === 'widget' ? entry.rootPane.widgetId : undefined, focused: entry.focused, mode: entry.mode, zIndex: entry.zIndex,
       open: (target) => {
-        target.openPane({ pane: entry.rootPane, instanceId: entry.instanceId, title: entry.title, position: entry.geometry.position, size: entry.geometry.size, minSize: entry.constraints.minSize, ...(entry.constraints.maxSize ? { maxSize: entry.constraints.maxSize } : {}), options: entry.options, snap: entry.snap, restoreGeometry: entry.restoreGeometry })
+        target.openPane({ pane: entry.rootPane, instanceId: entry.instanceId, title: entry.title, titleIsCustom: entry.titleIsCustom === true, position: entry.geometry.position, size: entry.geometry.size, minSize: entry.constraints.minSize, ...(entry.constraints.maxSize ? { maxSize: entry.constraints.maxSize } : {}), options: entry.options, snap: entry.snap, restoreGeometry: entry.restoreGeometry })
         if (entry.mode === 'maximized') target.maximizeWindow(entry.instanceId, options.container ?? entry.geometry.size, 'api')
         else if (options.container) target.constrainToContainer(entry.instanceId, options.container, 'api')
         return target.get(entry.instanceId)
@@ -420,7 +455,7 @@ export function restoreWorkspace(
     const dock = readDock(value)
     if (!dock) { issues.push({ code: 'invalid-dock', message: 'invalid workspace dock entry', index }); return }
     try {
-      const added = dockManager.add({ id: dock.id, position: dock.position, pane: dock.rootPane, thickness: dock.thickness, minThickness: dock.minThickness, ...(dock.maxThickness !== null ? { maxThickness: dock.maxThickness } : {}), resizable: dock.resizable })
+      const added = dockManager.add({ id: dock.id, position: dock.position, pane: dock.rootPane, thickness: dock.thickness, minThickness: dock.minThickness, ...(dock.maxThickness !== null ? { maxThickness: dock.maxThickness } : {}), resizable: dock.resizable, ...(dock.restoreWindow ? { restoreWindow: dock.restoreWindow } : {}) })
       try { validatePaneOwnership(added.rootPane, paneIds, widgetInstances) } catch (error) {
         dockManager.remove(dock.id)
         issues.push({ code: 'invalid-workspace', message: error instanceof Error ? error.message : 'workspace pane identities are not unique', index, dockId: dock.id })

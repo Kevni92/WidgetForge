@@ -37,10 +37,12 @@ import {
 } from "../core/pane";
 import { resizePaneSplitWeights } from "../core/pane-layout";
 import type { WidgetActionBinding } from "../core/widget-actions";
+import type { CommandRegistry } from "../core/commands";
 import type { WidgetLifecycleController } from "../core/widget-lifecycle";
 import type { WidgetRegistry } from "../core/widget-registry";
 import { observeElementSize } from "./observe-element-size";
 import { providePaneContext, type PaneHostType } from "./pane-context";
+import { provideWidgetDocumentationForHost } from './documentation-context'
 import WidgetActionToolbar from "./WidgetActionToolbar.vue";
 import WidgetHost from "./WidgetHost.vue";
 
@@ -48,6 +50,7 @@ defineOptions({ name: "PaneHost" });
 interface PaneHostProps {
   pane: PaneNode;
   registry: WidgetRegistry;
+  commandRegistry?: CommandRegistry | undefined;
   lifecycle?: WidgetLifecycleController | undefined;
   layoutLocked?: boolean;
   editMode?: boolean;
@@ -73,6 +76,7 @@ const emit = defineEmits<{
   actionsChange: [bindings: readonly WidgetActionBinding[]];
 }>();
 const registry = toRaw(props.registry);
+provideWidgetDocumentationForHost(registry, props.commandRegistry);
 const rootElement = ref<HTMLElement | null>(null);
 const measuredSize = shallowRef({ width: 0, height: 0 });
 const widgetActions = shallowRef<readonly WidgetActionBinding[]>([]);

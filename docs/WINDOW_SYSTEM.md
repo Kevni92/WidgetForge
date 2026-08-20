@@ -10,6 +10,8 @@ Ein Window enthält genau einen kanonischen `rootPane`. Der Root-Pane kann ein W
 
 `WindowManager.open({ widgetId, parameters })` bleibt als Convenience-API erhalten und erzeugt intern einen Widget-Root-Pane. `openPane(...)` öffnet vollständige Pane-Bäume. Layoutänderungen laufen über `setRootPane(...)` und werden vom `PaneHost` gerendert.
 
+`openEmptyWindow()` beziehungsweise `openLauncherWindow()` erzeugt ein normales Fenster mit einem framework-eigenen Command-Launcher-Root. `replaceLauncherWindow()` validiert das Ziel-Widget und ersetzt den Root-Pane atomar; die Fensterinstanz bleibt stabil und die neue Widget-Instanz erhält deterministisch die ID `<windowInstanceId>.widget`. Ohne expliziten Fenstertitel wird der Titel aus dem Widget-Manifest aktualisiert. Die Fenstergröße wird nur gegen die Ziel-Constraints angepasst.
+
 Damit gilt die Architekturgrenze:
 
 `Window -> Root Pane -> Widget / Split Panes`
@@ -32,6 +34,8 @@ Koordinaten sind relativ zum Container des `WindowManagerHost`.
 ## Workspace-Persistenz
 
 Workspace-Format v2 speichert den Root-Pane-Baum, Titel, Geometrie, Constraints, Window-Mode, Fokus und Z-Reihenfolge. Das alte Format v1 wird beim Restore weiterhin gelesen und als einzelner Widget-Root-Pane migriert. Runtime-Lifecycle-Objekte bleiben ausdrücklich außerhalb des serialisierten States.
+
+Ein Launcher-Root ist Teil desselben serialisierbaren Pane-Modells. Dadurch können sowohl ein noch leerer Launcher als auch der nachfolgende Widget-Zustand ohne Sonderformat gespeichert und wiederhergestellt werden.
 
 ## Dragging
 
