@@ -28,6 +28,9 @@ describe('CommandLauncher', () => {
     const wrapper = mountLauncher({ navigate })
     await nextTick()
 
+    expect(wrapper.find('.wf-command-launcher__intro').exists()).toBe(false)
+    expect(wrapper.find('h2').exists()).toBe(false)
+    expect(wrapper.get('button[type="submit"]').text()).toBe('Open')
     expect(document.activeElement).toBe(wrapper.get('input').element)
     await wrapper.get('input').setValue('planet ARC-01')
     await wrapper.get('form').trigger('submit')

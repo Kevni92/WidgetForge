@@ -33,6 +33,11 @@ describe('Workspace launcher flow', () => {
     await wrapper.vm.$nextTick()
     const windowBefore = windows.get('wf-window-1')
     expect(wrapper.get('[data-command-launcher]')).toBeTruthy()
+    expect(wrapper.find('[data-command-launcher] h2').exists()).toBe(false)
+    expect(wrapper.find('[data-command-launcher] .wf-command-launcher__intro').exists()).toBe(false)
+    expect(wrapper.get('[data-command-launcher] button[type="submit"]').text()).toBe('Open')
+    expect(wrapper.find('[data-window-layout="maximize"]').exists()).toBe(false)
+    expect(wrapper.find('[data-window-snap-layout-picker]').exists()).toBe(false)
     expect(document.activeElement).toBe(wrapper.get('[data-command-launcher] input').element)
     expect(history.state.undoDepth).toBe(1)
 

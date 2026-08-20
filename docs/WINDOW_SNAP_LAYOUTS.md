@@ -6,7 +6,7 @@ WidgetForge unterscheidet Snap-Layouts und Maximieren semantisch.
 
 Unterstützt werden linke/rechte sowie obere/untere Hälfte, vier Viertel und horizontale `1/3 + 2/3`-Varianten. `snapWindowGeometry()` berechnet alle Geometrien deterministisch relativ zur verfügbaren Floating-Fläche des `WindowManagerHost`.
 
-Pointer-Edge-Detection verwendet Halves und Quarters. Die 1/3-/2/3-Varianten werden über den generischen `WindowSnapLayoutPicker` gewählt.
+Pointer-Edge-Detection verwendet Halves und Quarters. Die 1/3-/2/3-Varianten können über den exportierten `WindowSnapLayoutPicker` in eigener Consumer-Chrome gewählt werden; das Default-Window-Chrome rendert diesen Picker nicht.
 
 ## Maximized
 

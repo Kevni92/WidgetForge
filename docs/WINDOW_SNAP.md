@@ -16,6 +16,8 @@ Die Edge-Erkennung ist pure Core-Logik. Außerhalb des konfigurierten Randbereic
 
 Während eines normalen Window-Drags berechnet `WindowManagerHost` die Zone aus den Pointer-Koordinaten und zeigt einen nicht interaktiven, semantisch gethemten Preview. Erst `pointerup` committed den Snap. `pointercancel`, Close und Unmount räumen Preview und Pointer-Session ohne Commit auf.
 
+Die Standard-Titlebar bietet keine Snap-/Layout-Auswahl. Snap erfolgt im Default-Chrome ausschließlich über Drag und die vorhandenen Zonen/Previews; Maximieren, Restore und die Snap-Zustände bleiben davon getrennte Window-State-Operationen.
+
 ## Floating-Geometrie
 
 Beim ersten Snap wird die vorherige Floating-Geometrie in `WindowState.snap.floatingGeometry` gespeichert. Ein Wechsel zwischen Snap-Zonen überschreibt sie nicht. Wird ein gesnapptes Window wieder aus dem Rand gezogen, wird diese Größe wiederhergestellt und sinnvoll unter dem Pointer platziert.

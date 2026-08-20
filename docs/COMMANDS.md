@@ -68,3 +68,5 @@ Konkrete Commands wie `planet`, `market` oder andere Spielbegriffe gehören auss
 ```
 
 Die Navigation des Launcher-Roots nutzt dieselbe `CommandRegistry` und dieselbe Widget-Parameterprüfung wie die normale Widget-Navigation. Der typisierte `WidgetNavigationContext` markiert das aktuelle Launcher-Fenster als Ziel; ein erfolgreicher Command ersetzt nur dessen Root-Pane. Fensterinstanz, Geometrie, Optionen, Fokus und Z-Reihenfolge bleiben erhalten. Ein ungültiger Command verändert den Workspace nicht und lässt die Eingabe für die Korrektur fokussiert.
+
+Der leere Launcher zeigt ausschließlich die normale `CommandInput`-Zeile mit Eingabefeld und `Open`-Aktion. Überschrift und Einführungstext gehören nicht zum Launcher-Inhalt; seine Oberfläche nutzt die normalen semantischen Window-/Pane-Surfaces.
