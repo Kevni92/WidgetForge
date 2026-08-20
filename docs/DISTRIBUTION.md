@@ -13,6 +13,8 @@ No `src/*`, `core/*`, `vue/*`, `data/*` or `primitives/*` package subpaths are e
 
 The root entry explicitly lists its exports instead of forwarding an internal barrel with `export *`. Adding a new internal primitive therefore does not automatically make it public.
 
+The read/write consumer surface is also root-only. Published consumers use `DataClient`/`useData`, `MutationClient`/`useMutation`, `RealtimeDataProvider`, `RealtimeMutationProvider` and the shared realtime contracts from `widgetforge`; no `src/*` or `dist/*` subpath is required.
+
 ## Build artifacts
 
 `npm run build` produces:
@@ -28,6 +30,8 @@ Vue is a peer dependency and stays external to the JavaScript bundle.
 `npm pack` is the release boundary. CI creates the actual package tarball and installs it into `examples/minimal-consumer`, which is not linked to the WidgetForge source tree. The example must pass both TypeScript checking and a production Vite build.
 
 This catches missing package exports, missing declaration files, missing CSS, bundled peer-dependency mistakes and accidental reliance on internal source paths before publication.
+
+The minimal consumer exercises both Data and Mutation against one consumer-owned fake realtime transport. The fixture contains no server, WebSocket package, Node-only runtime dependency or domain model. It verifies only that the declarations, root exports, Vue providers and ESM build can be consumed from the actual tarball.
 
 ## Publishing
 

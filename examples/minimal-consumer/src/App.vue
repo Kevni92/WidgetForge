@@ -1,14 +1,29 @@
 <script setup lang="ts">
-import { markRaw } from 'vue'
+import { markRaw, onUnmounted } from 'vue'
 import {
+  DataClientProvider,
+  MutationClientProvider,
   ThemeProvider,
   WindowManagerHost,
+  createDataClient,
+  createMutationClient,
+  createRealtimeDataProvider,
+  createRealtimeMutationProvider,
   createWidgetRegistry,
   createWindowManager,
   defaultTheme,
   defineWidget,
 } from 'widgetforge'
 import DemoWidget from './DemoWidget.vue'
+import { FakeSharedRealtimeTransport } from './fake-realtime'
+
+const transport = markRaw(new FakeSharedRealtimeTransport())
+const dataProvider = markRaw(createRealtimeDataProvider(transport))
+const mutationProvider = markRaw(createRealtimeMutationProvider(transport))
+const dataClient = markRaw(createDataClient(dataProvider))
+const mutationClient = markRaw(createMutationClient(mutationProvider))
+transport.connect()
+onUnmounted(() => transport.disconnect())
 
 const registry = markRaw(createWidgetRegistry([
   defineWidget({
@@ -32,12 +47,16 @@ manager.open({
 
 <template>
   <ThemeProvider :theme="defaultTheme">
-    <main class="consumer-shell">
-      <h1>WidgetForge package consumer</h1>
-      <div class="consumer-workspace">
-        <WindowManagerHost :manager="manager" :registry="registry" />
-      </div>
-    </main>
+    <DataClientProvider :client="dataClient">
+      <MutationClientProvider :client="mutationClient">
+        <main class="consumer-shell">
+          <h1>WidgetForge package consumer</h1>
+          <div class="consumer-workspace">
+            <WindowManagerHost :manager="manager" :registry="registry" />
+          </div>
+        </main>
+      </MutationClientProvider>
+    </DataClientProvider>
   </ThemeProvider>
 </template>
 
