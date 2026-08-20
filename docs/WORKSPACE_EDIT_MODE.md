@@ -8,7 +8,7 @@ WidgetForge trennt normale Nutzung und Layout-Bearbeitung explizit.
 - `edit`: Pane-Grenzen, Auswahl und Layout-Handles werden sichtbar. Pane-Reparenting ist ohne dauerhaft gehaltene Modifier-Taste möglich.
 - `locked`: strukturelle Layout-Interaktionen sind gesperrt. Widget-Interaktion, Fokus, Tabs sowie Window-Aktionen wie Minimieren/Schließen bleiben nutzbar.
 
-`WorkspaceEditController` ist DOM-/Vue-unabhängig und hält Modus, Pane-Auswahl und optionale Pane-Locks. `snapshot()`/`restore()` sind vollständig serialisierbar und können von Anwendungen unabhängig vom Workspace-Snapshot persistiert werden.
+`WorkspaceEditController` ist DOM-/Vue-unabhängig und hält Modus, Pane-Auswahl, Window-Host-Auswahl und optionale Pane-Locks. `snapshot()`/`restore()` sind vollständig serialisierbar und können von Anwendungen unabhängig vom Workspace-Snapshot persistiert werden.
 
 ## Interaktionsgrenzen
 
@@ -24,7 +24,9 @@ Ein Fenster besitzt zusätzlich den kanonischen `WindowState.layoutLocked`-Wert.
 
 Das Locken und Entsperren ist nur im Edit-Mode möglich. Ein gelocktes Fenster liegt in einer eigenen deterministischen Layout-Ebene unter normalen Floating-Fenstern, bleibt fokussierbar und rendert seinen Widget-Inhalt interaktiv. Bewegung, Resize, Snap, Anchor und Window-Docking werden dagegen abgelehnt. Titelbar, Titel, Header-Actions und Resize-Griffe werden vollständig entfernt.
 
-Im Edit-Mode markiert die generische Workspace-Auswahl auch ein chrome-less gelocktes Fenster. Sein Context Menu bietet `Unlock window` und `Layout…`; beide Aktionen arbeiten über die öffentliche Workspace-/Window-API und benötigen keine Playground-Sonderbehandlung. Der Layout-Dialog validiert responsive Anchors, Einheiten, Referenzen und Zyklen vor dem Speichern.
+Im Edit-Mode markiert die generische Workspace-Auswahl auch ein chrome-less gelocktes Fenster. Die Window-Host-Auswahl verwendet die `instanceId` unabhängig von der Root-Pane-ID und stellt eine sichtbare `Lock`-/`Unlock`-Action bereit; dadurch bleibt Unlock auch ohne Titlebar direkt per Keyboard erreichbar. Das Context Menu bietet zusätzlich `Unlock window` und `Layout…`; alle Aktionen arbeiten über die öffentliche Workspace-/Window-API und benötigen keine Playground-Sonderbehandlung. Der Layout-Dialog validiert responsive Anchors, Einheiten, Referenzen und Zyklen vor dem Speichern.
+
+Ein gelocktes Fenster darf Widget-internen Fokus behalten. Dieser fachliche Fokus wird weiterhin im Window-State geführt, steuert aber nicht mehr den Floating-Window-Active-Border: Für gelockte Fenster bleibt die äußere Shell passiv. Eine Edit-Auswahl wird separat über das Window-Selection-Marker-Attribut dargestellt.
 
 ## Handle-Semantik
 

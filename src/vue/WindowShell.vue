@@ -91,6 +91,7 @@ const resolvedTitle = computed(() => {
   try { return markRaw(toRaw(props.registry)).get(pane.widgetId).title } catch { return pane.widgetId }
 })
 const ariaRole = computed(() => props.windowRole === 'modal' ? 'dialog' : 'region')
+const visualFocused = computed(() => props.focused && !props.windowLocked)
 function requestFocus(): void { emit('focus', { instanceId: props.instanceId }) }
 function requestLock(): void { if (props.editMode && !props.windowLocked) emit('lock', { instanceId: props.instanceId }) }
 function requestClose(): void { dockPickerOpen.value = false; emit('close', { instanceId: props.instanceId }) }
@@ -105,7 +106,7 @@ function closeLauncher(): void { props.onLauncherClose?.() }
 </script>
 
 <template>
-  <section class="wf-window-shell" :class="[`wf-window-shell--role-${windowRole}`,`wf-window-shell--chrome-${chrome}`,{'wf-window-shell--focused':focused,'wf-window-shell--minimized':minimized,'wf-window-shell--maximized':maximized,'wf-window-shell--layout-locked':windowLocked,'wf-window-shell--headerless':!showHeader || windowLocked,'wf-window-shell--glass':glass}]" :data-window-instance-id="instanceId" :data-focused="focused ? 'true' : 'false'" :data-window-role="windowRole" :data-window-mode="minimized ? 'minimized' : maximized ? 'maximized' : 'normal'" :data-window-locked="windowLocked || undefined" :data-window-header="header" :data-window-chrome="chrome" :data-window-glass="glass || undefined" :role="ariaRole" :aria-modal="windowRole === 'modal' ? 'true' : undefined" :aria-label="resolvedTitle" :aria-expanded="minimized ? 'false' : 'true'" :tabindex="windowRole === 'modal' ? -1 : undefined" @mouseenter="setHovered(true)" @mouseleave="setHovered(false)" @pointerdown="requestFocus">
+  <section class="wf-window-shell" :class="[`wf-window-shell--role-${windowRole}`,`wf-window-shell--chrome-${chrome}`,{'wf-window-shell--focused':visualFocused,'wf-window-shell--minimized':minimized,'wf-window-shell--maximized':maximized,'wf-window-shell--layout-locked':windowLocked,'wf-window-shell--headerless':!showHeader || windowLocked,'wf-window-shell--glass':glass}]" :data-window-instance-id="instanceId" :data-focused="focused ? 'true' : 'false'" :data-window-visual-focused="visualFocused ? 'true' : 'false'" :data-window-role="windowRole" :data-window-mode="minimized ? 'minimized' : maximized ? 'maximized' : 'normal'" :data-window-locked="windowLocked || undefined" :data-window-header="header" :data-window-chrome="chrome" :data-window-glass="glass || undefined" :role="ariaRole" :aria-modal="windowRole === 'modal' ? 'true' : undefined" :aria-label="resolvedTitle" :aria-expanded="minimized ? 'false' : 'true'" :tabindex="-1" @mouseenter="setHovered(true)" @mouseleave="setHovered(false)" @pointerdown="requestFocus">
     <div class="wf-window-shell__surface">
     <header v-if="showHeader && !windowLocked" class="wf-window-shell__titlebar" :data-window-drag-handle="movable && !maximized ? '' : undefined">
       <div class="wf-window-shell__leading">

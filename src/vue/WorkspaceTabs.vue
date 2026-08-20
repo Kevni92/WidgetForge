@@ -280,6 +280,9 @@ onBeforeUnmount(() => {
         @click="createWorkspace"
       >+</button>
     </div>
+    <div v-if="$slots.actions" class="wf-workspace-tabs__actions" data-workspace-tab-actions>
+      <slot name="actions" />
+    </div>
   </nav>
 
   <ConfirmationDialog
@@ -300,8 +303,7 @@ onBeforeUnmount(() => {
   display: flex;
   min-width: 0;
   min-height: var(--wf-size-tab-height);
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   border-bottom: 1px solid var(--wf-color-border);
   background: var(--wf-color-surface-raised);
   scrollbar-width: thin;
@@ -309,14 +311,28 @@ onBeforeUnmount(() => {
 
 .wf-workspace-tabs__list {
   display: flex;
-  min-width: max-content;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   align-items: center;
   gap: var(--wf-space-2xs);
   padding: var(--wf-space-2xs) var(--wf-space-sm);
 }
 
+.wf-workspace-tabs__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--wf-space-xs);
+  padding: var(--wf-space-2xs) var(--wf-space-sm);
+  border-left: 1px solid var(--wf-color-border);
+  background: var(--wf-color-surface-raised);
+}
+
 .wf-workspace-tabs__item {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   min-width: 0;
 }
@@ -364,6 +380,7 @@ onBeforeUnmount(() => {
 }
 
 .wf-workspace-tabs__add {
+  flex: 0 0 auto;
   width: var(--wf-size-tab-height);
   border-radius: var(--wf-radius-sm);
   font-size: var(--wf-font-size-md);

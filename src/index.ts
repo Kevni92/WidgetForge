@@ -114,7 +114,7 @@ export type { WorkspaceId, WorkspaceRuntime, WorkspaceCollectionEntrySnapshot, W
 export { createWorkspaceHistory, WorkspaceHistory, WorkspaceHistoryError } from './core/workspace-history'
 export type { WorkspaceHistoryOptions, WorkspaceHistoryState, WorkspaceHistoryListener } from './core/workspace-history'
 export { createWorkspaceEditController, WorkspaceEditController, createPaneEditContextMenuItems, removePaneForEdit, retargetWidgetPane } from './core/workspace-edit'
-export type { WorkspaceEditMode, WorkspacePaneOwnerKind, WorkspacePaneOwner, WorkspacePaneSelection, WorkspaceEditSnapshot, WorkspaceEditState, WorkspaceEditListener, PaneEditActionId } from './core/workspace-edit'
+export type { WorkspaceEditMode, WorkspacePaneOwnerKind, WorkspacePaneOwner, WorkspacePaneSelection, WorkspaceWindowSelection, WorkspaceEditSnapshot, WorkspaceEditState, WorkspaceEditListener, PaneEditActionId } from './core/workspace-edit'
 export { DEFAULT_LAUNCHER_WINDOW_SIZE, DEFAULT_LAUNCHER_WINDOW_TITLE, createWindowManager, DuplicateWindowInstanceError, UnknownWindowInstanceError, WindowLayoutLockedError, WindowManager } from './core/window-manager'
 export type { OpenLauncherWindowRequest, OpenPaneWindowRequest, OpenWindowRequest, ReplaceLauncherWindowRequest, WindowInstanceId, WindowManagerChange, WindowManagerChangeKind, WindowManagerListener, WindowMode, WindowOperationOrigin, WindowState } from './core/window-manager'
 export { createWindowGroupManager, getWindowGroupManager, WindowGroupDefinitionError, WindowGroupManager } from './core/window-groups'

@@ -56,6 +56,22 @@ describe('Fullscreen Playground App', () => {
     wrapper.unmount()
   })
 
+  it('keeps New window in the global tabbar and routes it to the active workspace', async () => {
+    const wrapper = mount(App)
+    const action = wrapper.get('[data-workspace-new-window]')
+    expect(wrapper.find('.wf-workspace-host [data-workspace-new-window]').exists()).toBe(false)
+    expect(wrapper.get('[data-workspace-tab-actions]').element.contains(action.element)).toBe(true)
+
+    await wrapper.get('[data-workspace-tab="trading"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    await action.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-active-workspace="trading"] [data-command-launcher]').exists()).toBe(true)
+    expect(wrapper.find('[data-active-workspace="command"] [data-command-launcher]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('renders a cohesive fullscreen simulation workspace with docks, panes, groups, roles and chrome variants', async () => {
     const wrapper = mount(App)
     expect(wrapper.get('[data-fullscreen-workspace-demo]').element).toBeTruthy()

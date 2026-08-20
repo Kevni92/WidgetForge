@@ -86,6 +86,27 @@ describe('WindowShell', () => {
     expect(wrapper.get('.wf-window-shell__content').classes()).toContain('wf-window-shell__content')
   })
 
+  it('keeps the focused state for behavior but suppresses the floating focus border while locked', async () => {
+    const registry = createWidgetRegistry()
+    const wrapper = mount(WindowShell, {
+      props: { registry, widgetId: 'focus.widget', instanceId: 'focus-window', title: 'Focus', focused: true },
+      slots: { default: () => h('button', { class: 'focusable-content' }, 'Content') },
+    })
+
+    expect(wrapper.get('.wf-window-shell').classes()).toContain('wf-window-shell--focused')
+    expect(wrapper.get('.wf-window-shell').attributes('data-window-visual-focused')).toBe('true')
+    expect(wrapper.get('.wf-window-shell').attributes('data-focused')).toBe('true')
+
+    await wrapper.setProps({ windowLocked: true })
+    expect(wrapper.get('.wf-window-shell').classes()).not.toContain('wf-window-shell--focused')
+    expect(wrapper.get('.wf-window-shell').attributes('data-window-visual-focused')).toBe('false')
+    expect(wrapper.get('.wf-window-shell').attributes('data-focused')).toBe('true')
+
+    await wrapper.setProps({ focused: false })
+    expect(wrapper.get('.wf-window-shell').attributes('data-window-visual-focused')).toBe('false')
+    wrapper.unmount()
+  })
+
   it('keeps title and content independently replaceable and multiple shells isolated', async () => {
     const registry = createWidgetRegistry()
     const first = mount(WindowShell, {

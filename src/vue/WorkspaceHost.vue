@@ -3,6 +3,7 @@ import {
   computed,
   onBeforeUnmount,
   onMounted,
+  nextTick,
   ref,
   shallowRef,
   toRaw,
@@ -28,7 +29,7 @@ import {
 import type { CommandRegistry } from "../core/commands";
 import type { WidgetRegistry } from "../core/widget-registry";
 import type { WindowSize } from "../core/window-geometry";
-import type { WindowManager } from "../core/window-manager";
+import type { WindowManager, WindowState } from "../core/window-manager";
 import { createAbsoluteWindowLayoutSpec } from '../core/window-layout'
 import {
   createPaneEditContextMenuItems,
@@ -58,6 +59,7 @@ import { observeElementSize } from "./observe-element-size";
 import { handleWorkspaceHistoryShortcut } from "./workspace-history-shortcuts";
 import WindowManagerHost from "./WindowManagerHost.vue";
 import WindowLayoutDialog, { type WindowLayoutDialogSave } from './WindowLayoutDialog.vue'
+import WorkspaceSelectionActions from './WorkspaceSelectionActions.vue'
 import { provideWidgetDocumentationForHost } from './documentation-context'
 
 interface Props {
@@ -65,7 +67,6 @@ interface Props {
   docks: DockManager;
   registry: WidgetRegistry;
   commands?: CommandRegistry | undefined;
-  newWindowLabel?: string | undefined;
   launcherPlaceholder?: string | undefined;
   launcherSubmitLabel?: string | undefined;
   history?: WorkspaceHistory | undefined;
@@ -145,6 +146,7 @@ const contextMenu = props.contextMenu
   : createContextMenuController();
 const root = ref<HTMLElement | null>(null);
 const size = shallowRef<WindowSize>({ width: 0, height: 0 });
+const windowStates = shallowRef<readonly WindowState[]>(windowManager.list());
 const dockStates = shallowRef<readonly DockState[]>(dockManager.list());
 const editState = shallowRef<WorkspaceEditState>(editController.state);
 const paneDragActive = ref(false);
@@ -160,6 +162,10 @@ let suppressClick = false;
 const unsubscribeDock = dockManager.subscribe((change) => {
   dockStates.value = change.docks;
 });
+const unsubscribeWindow = windowManager.subscribe((change) => {
+  windowStates.value = change.windows;
+  queueMicrotask(syncEditMarkers);
+});
 const unsubscribeEdit = editController.subscribe((state) => {
   editState.value = state;
   queueMicrotask(syncEditMarkers);
@@ -172,17 +178,10 @@ const editMode = computed(
   () => editState.value.editActive || paneDragActive.value,
 );
 const layoutLocked = computed(() => editState.value.locked);
-
-function openNewWindow(): void {
-  if (layoutLocked.value) return;
-  history?.beginTransaction();
-  try {
-    windowManager.openEmptyWindow({}, "user");
-    history?.commitTransaction();
-  } catch {
-    history?.cancelTransaction();
-  }
-}
+const selectedWindow = computed<WindowState | null>(() => {
+  const id = editState.value.windowSelection?.instanceId ?? (editState.value.selection?.owner.kind === 'window' ? editState.value.selection.owner.id : null);
+  return id ? windowStates.value.find((window) => window.instanceId === id) ?? null : null;
+});
 
 function rectStyle(rect: {
   x: number;
@@ -302,10 +301,10 @@ function syncEditMarkers(): void {
   )) {
     element.removeAttribute("data-window-selected");
     const instanceId = element.dataset.windowInstanceId;
+    const selectedWindowId = editState.value.windowSelection?.instanceId ?? (editState.value.selection?.owner.kind === 'window' ? editState.value.selection.owner.id : null);
     if (
       instanceId &&
-      editState.value.selection?.owner.kind === "window" &&
-      editState.value.selection.owner.id === instanceId
+      selectedWindowId === instanceId
     )
       element.dataset.windowSelected = "true";
   }
@@ -907,6 +906,13 @@ function selectFromPointer(event: PointerEvent): void {
   if (!editState.value.editActive || layoutLocked.value) return;
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
+  const frame = target.closest<HTMLElement>('.wf-window-frame[data-window-instance-id]');
+  const windowId = frame?.dataset.windowInstanceId;
+  const windowState = windowId ? windowStates.value.find((window) => window.instanceId === windowId) : undefined;
+  if (windowState?.layoutLocked && windowId) {
+    editController.selectWindow(windowId);
+    return;
+  }
   const pane = target.closest<HTMLElement>(".wf-pane-host[data-pane-id]");
   if (!pane?.dataset.paneId) return;
   const selection = selectionFor(pane, pane.dataset.paneId);
@@ -985,6 +991,31 @@ function openLayoutDialog(instanceId: string): void {
 }
 function closeLayoutDialog(): void {
   layoutDialogWindow.value = null;
+}
+function focusWindowShell(instanceId: string): void {
+  void nextTick(() => {
+    const frame = [...(root.value?.querySelectorAll<HTMLElement>('.wf-window-frame[data-window-instance-id]') ?? [])].find((element) => element.dataset.windowInstanceId === instanceId);
+    frame?.querySelector<HTMLElement>('.wf-window-shell')?.focus();
+  });
+}
+function lockSelectedWindow(instanceId: string): void {
+  if (layoutLocked.value) return;
+  try {
+    windowManager.lockWindow(instanceId, 'user');
+  } catch {
+    return;
+  }
+}
+function unlockSelectedWindow(instanceId: string): void {
+  if (layoutLocked.value) return;
+  try {
+    windowManager.unlockWindow(instanceId, 'user');
+  } catch {
+    return;
+  }
+  editController.selectWindow(null);
+  editController.selectPane(null);
+  focusWindowShell(instanceId);
 }
 function applyLayoutDialog(value: WindowLayoutDialogSave): void {
   const window = layoutDialogWindow.value;
@@ -1138,6 +1169,7 @@ onBeforeUnmount(() => {
   disposeSize?.();
   disposeSize = null;
   unsubscribeDock();
+  unsubscribeWindow();
   unsubscribeEdit();
   root.value?.removeEventListener("keydown", onWorkspaceKeyDown);
   window.removeEventListener("keydown", onGlobalKeyDown);
@@ -1165,20 +1197,14 @@ onBeforeUnmount(() => {
     @click.capture="onWorkspaceClick"
     @contextmenu.capture="openPaneMenu"
   >
-    <div class="wf-workspace-host__actions" data-workspace-actions>
-      <button
-        class="wf-workspace-host__new-window"
-        type="button"
-        data-workspace-new-window
-        :aria-label="props.newWindowLabel ?? 'New window'"
-        :title="props.newWindowLabel ?? 'New window'"
-        :disabled="layoutLocked"
-        @click="openNewWindow"
-      >
-        <span aria-hidden="true">+</span>
-        <span>{{ props.newWindowLabel ?? "New window" }}</span>
-      </button>
-    </div>
+    <WorkspaceSelectionActions
+      v-if="editMode && selectedWindow"
+      :instance-id="selectedWindow.instanceId"
+      :title="selectedWindow.title"
+      :locked="selectedWindow.layoutLocked"
+      @lock="lockSelectedWindow"
+      @unlock="unlockSelectedWindow"
+    />
     <div
       class="wf-workspace-host__floating"
       :style="rectStyle(layout.floating)"
@@ -1253,29 +1279,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: var(--wf-color-canvas);
 }
-.wf-workspace-host__actions {
-  position: absolute;
-  top: var(--wf-space-sm);
-  right: var(--wf-space-sm);
-  z-index: var(--wf-layer-overlay);
-}
-.wf-workspace-host__new-window {
-  display: inline-flex;
-  min-height: var(--wf-size-control-height);
-  align-items: center;
-  gap: var(--wf-space-xs);
-  padding: 0 var(--wf-space-sm);
-  border: 1px solid var(--wf-color-border);
-  border-radius: var(--wf-radius-sm);
-  color: var(--wf-color-text);
-  background: var(--wf-color-surface-floating);
-  box-shadow: var(--wf-shadow-sm);
-  font: inherit;
-  cursor: pointer;
-}
-.wf-workspace-host__new-window:hover:not(:disabled) { background: var(--wf-color-hover); }
-.wf-workspace-host__new-window:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
-.wf-workspace-host__new-window:disabled { cursor: default; opacity: .6; }
 .wf-workspace-host__floating {
   position: absolute;
   min-width: 0;

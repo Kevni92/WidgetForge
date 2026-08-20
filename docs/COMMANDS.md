@@ -56,15 +56,17 @@ Konkrete Commands wie `planet`, `market` oder andere Spielbegriffe gehören auss
 
 ## Launcher-Fenster
 
-`WorkspaceHost` bietet eine generische `New window`-Aktion. Sie öffnet über `WindowManager.openEmptyWindow()` ein normales Floating-Window mit einem framework-eigenen Launcher-Root; Consumer müssen dafür kein Dummy-Widget registrieren. Übergibt der Host eine `CommandRegistry` über `commands`, wird der Launcher automatisch fokussiert.
+Ein Consumer kann die globale `New window`-Aktion über den `actions`-Slot von `WorkspaceTabs` anbieten. Die Aktion öffnet über den aktiven Workspace dessen `WindowManager.openEmptyWindow()` als normales Floating-Window mit einem framework-eigenen Launcher-Root; Consumer müssen dafür kein Dummy-Widget registrieren. Übergibt der aktive `WorkspaceHost` eine `CommandRegistry` über `commands`, wird der Launcher automatisch fokussiert. Die Action-Region gehört zur globalen Chrome und liegt nicht über der Workspace-Fläche.
 
 ```vue
-<WorkspaceHost
-  :windows="windows"
-  :docks="docks"
-  :registry="widgets"
-  :commands="commands"
-/>
+<WorkspaceTabs :manager="workspaces">
+  <template #actions>
+    <button type="button" aria-label="Create new window" @click="workspaces.getActive().windows.openEmptyWindow()">
+      + New window
+    </button>
+  </template>
+</WorkspaceTabs>
+<WorkspaceHost :windows="windows" :docks="docks" :registry="widgets" :commands="commands" />
 ```
 
 Die Navigation des Launcher-Roots nutzt dieselbe `CommandRegistry` und dieselbe Widget-Parameterprüfung wie die normale Widget-Navigation. Der typisierte `WidgetNavigationContext` markiert das aktuelle Launcher-Fenster als Ziel; ein erfolgreicher Command ersetzt nur dessen Root-Pane. Fensterinstanz, Geometrie, Optionen, Fokus und Z-Reihenfolge bleiben erhalten. Ein ungültiger Command verändert den Workspace nicht und lässt die Eingabe für die Korrektur fokussiert.

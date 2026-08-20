@@ -11,7 +11,6 @@ interface Props {
   manager: WorkspaceCollectionManager
   registry: WidgetRegistry
   commands?: CommandRegistry | undefined
-  newWindowLabel?: string | undefined
   launcherPlaceholder?: string | undefined
   launcherSubmitLabel?: string | undefined
   layoutLocked?: boolean
@@ -43,7 +42,6 @@ onBeforeUnmount(unsubscribe)
       :docks="activeWorkspace.docks"
       :registry="registry"
       :commands="commands"
-      :new-window-label="newWindowLabel"
       :launcher-placeholder="launcherPlaceholder"
       :launcher-submit-label="launcherSubmitLabel"
       :layout-locked="layoutLocked"
