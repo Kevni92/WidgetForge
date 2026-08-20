@@ -116,6 +116,16 @@ Der Data Layer stellt reaktive Daten bereit. Provider liefern Snapshots und Änd
 
 Der WebSocket-Adapter ist austauschbar. Die Library darf nicht davon ausgehen, dass jedes Produkt dasselbe Nachrichtenprotokoll verwendet.
 
+Für eine gemeinsame Verbindung stellt WidgetForge den kleinen `RealtimeConnectionTransport` bereit. Ein Consumer-Transport kann zusätzlich `subscribe(...)` und `request(...)` implementieren und dann von beiden Adaptern verwendet werden:
+
+```text
+Consumer Realtime Transport
+        ├── RealtimeDataProvider     -> DataClient
+        └── RealtimeMutationProvider -> MutationClient
+```
+
+Die App/der Consumer besitzt `connect()` und `disconnect()`. Die Adapter öffnen keine eigene Verbindung. Data-Subscriptions werden nach einer neuen `connected`-Phase erneut gebunden. Eine laufende Mutation wird bei Verbindungsverlust mit einem Transportfehler abgeschlossen, aber nach Reconnect niemals automatisch erneut gesendet; neue Mutationen sind dann wieder möglich.
+
 ## Mutation-Prinzip
 
 Serverseitige Zustandsänderungen laufen über eine von Data getrennte Pipeline:

@@ -170,4 +170,6 @@ Widget -> MutationClient -> MutationProvider -> Consumer-Transport -> Server
 
 Die konkrete Netzwerktechnik, das Wire-Format, der Server und fachliche Fehlercodes bleiben vollständig beim Consumer. `MutationProvider` ist deshalb ein kleiner, transport- und domänenunabhängiger Vertrag. WidgetForge führt keine automatische Retry- oder Offline-Queue-Policy ein, weil ein Verbindungsabbruch nicht beweist, dass der Server eine Mutation nicht bereits verarbeitet hat.
 
+Für Realtime-Consumer kann ein einziger Transport die gemeinsamen Verbindungsfähigkeiten sowie `subscribe` für Reads und `request` für Writes anbieten. `RealtimeDataProvider` und `RealtimeMutationProvider` konsumieren diese Fähigkeiten, ohne selbst zu verbinden oder zu trennen. Nach einem Reconnect werden aktive Data-Subscriptions wiederhergestellt; ausstehende Mutationen werden nicht replayed.
+
 `WidgetAction` bleibt davon getrennt: Ein Consumer kann in einem Action-Handler eine Mutation ausführen, aber Mutation und UI-/Navigations-Action sind keine gemeinsamen Framework-Konzepte.
