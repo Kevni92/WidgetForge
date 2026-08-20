@@ -94,8 +94,44 @@ describe('WorkspaceHost edit mode', () => {
     await inspector.get('[data-window-selection-layout]').trigger('click')
     await nextTick()
     expect(wrapper.get('[role="dialog"]').text()).toContain('Layout bearbeiten')
+    const beforePreview = windows.get('window').geometry
+    await wrapper.get('[data-layout-x]').setValue('120')
+    await nextTick()
+    expect(wrapper.find('[data-layout-preview-overlay]').exists()).toBe(true)
+    expect(windows.get('window').geometry).toEqual(beforePreview)
+    await wrapper.get('[role="dialog"] [aria-label="Cancel"]').trigger('click')
+    expect(wrapper.find('[data-layout-preview-overlay]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('updates relationship overlays from the draft target before save', async () => {
+    const { registry, windows, docks, edit } = setup('edit')
+    windows.open({ widgetId: 'edit.widget', instanceId: 'base', position: { x: 20, y: 30 }, size: { width: 240, height: 160 } })
+    windows.setLayoutSpec('window', {
+      horizontal: { start: { target: { kind: 'window', instanceId: 'base', edge: 'right' } }, size: { value: 200, unit: 'px' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, size: { value: 120, unit: 'px' } },
+    }, { width: 800, height: 600 }, 'api')
+    const originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe(target: Element): void { this.callback([{ target, contentRect: { width: 800, height: 600 } } as ResizeObserverEntry], this as unknown as ResizeObserver) }
+      disconnect(): void {}
+      unobserve(): void {}
+    } as unknown as typeof ResizeObserver
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+    await wrapper.get('.wf-window-frame[data-window-instance-id="window"] .wf-pane-host[data-pane-id]').trigger('pointerdown')
+    await nextTick()
+    expect(wrapper.findAll('[data-window-layout-relation]')).toHaveLength(1)
+    await wrapper.get('[data-window-selection-layout]').trigger('click')
+    await nextTick()
+    await wrapper.get('[data-layout-left-target]').setValue('workspace:left')
+    await nextTick()
+    await nextTick()
+    expect(wrapper.findAll('[data-window-layout-relation]')).toHaveLength(0)
+    expect(windows.get('window').layoutSpec?.horizontal.start?.target).toEqual({ kind: 'window', instanceId: 'base', edge: 'right' })
     await wrapper.get('[role="dialog"] [aria-label="Cancel"]').trigger('click')
     wrapper.unmount()
+    globalThis.ResizeObserver = originalResizeObserver
   })
 
   it('locks and unlocks a window through the generic edit context menu', async () => {

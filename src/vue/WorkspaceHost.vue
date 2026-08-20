@@ -58,7 +58,7 @@ import DockingOverlay from "./DockingOverlay.vue";
 import { observeElementSize } from "./observe-element-size";
 import { handleWorkspaceHistoryShortcut } from "./workspace-history-shortcuts";
 import WindowManagerHost from "./WindowManagerHost.vue";
-import WindowLayoutDialog, { type WindowLayoutDialogSave } from './WindowLayoutDialog.vue'
+import WindowLayoutDialog, { type WindowLayoutDialogPreview, type WindowLayoutDialogSave } from './WindowLayoutDialog.vue'
 import WorkspaceSelectionActions from './WorkspaceSelectionActions.vue'
 import { provideWidgetDocumentationForHost } from './documentation-context'
 
@@ -153,6 +153,7 @@ const paneDragActive = ref(false);
 const paneDropPreview = shallowRef<PaneDropPreview | null>(null);
 const tabReorderPreview = shallowRef<TabReorderPreview | null>(null);
 const layoutDialogWindow = shallowRef<ReturnType<WindowManager['get']> | null>(null);
+const layoutPreview = shallowRef<WindowLayoutDialogPreview | null>(null);
 let disposeSize: (() => void) | null = null;
 let disposePaneDrag: (() => void) | null = null;
 let disposeTabReorder: (() => void) | null = null;
@@ -193,12 +194,16 @@ function edgePoint(geometry: WindowGeometry, edge: WindowLayoutEdge): { x: numbe
 const layoutRelations = computed<readonly LayoutRelation[]>(() => {
   const byId = new Map(windowStates.value.map((window) => [window.instanceId, window]))
   return windowStates.value.flatMap((source) => {
-    if (!source.layoutSpec) return []
-    return [source.layoutSpec.horizontal.start, source.layoutSpec.horizontal.end, source.layoutSpec.vertical.start, source.layoutSpec.vertical.end].flatMap((anchor) => {
+    const previewSource = layoutPreview.value?.sourceInstanceId === source.instanceId ? layoutPreview.value : null
+    const spec = previewSource?.layoutSpec ?? source.layoutSpec
+    if (!spec) return []
+    const sourceGeometry = previewSource?.geometry ?? source.geometry
+    return [spec.horizontal.start, spec.horizontal.end, spec.vertical.start, spec.vertical.end].flatMap((anchor) => {
       if (!anchor || anchor.target.kind !== 'window') return []
       const target = byId.get(anchor.target.instanceId)
       if (!target) return []
-      const sourcePoint = edgePoint(source.geometry, anchor.target.edge), targetPoint = edgePoint(target.geometry, anchor.target.edge)
+      const targetGeometry = layoutPreview.value?.sourceInstanceId === target.instanceId ? layoutPreview.value.geometry : target.geometry
+      const sourcePoint = edgePoint(sourceGeometry, anchor.target.edge), targetPoint = edgePoint(targetGeometry, anchor.target.edge)
       return [{ sourceId: source.instanceId, targetId: target.instanceId, x1: layout.value.floating.x + sourcePoint.x, y1: layout.value.floating.y + sourcePoint.y, x2: layout.value.floating.x + targetPoint.x, y2: layout.value.floating.y + targetPoint.y }]
     })
   })
@@ -1015,7 +1020,19 @@ function toggleEditMode(): void {
   editController.setMode(editState.value.mode === 'edit' ? 'normal' : 'edit')
 }
 function closeLayoutDialog(): void {
+  layoutPreview.value = null;
   layoutDialogWindow.value = null;
+}
+function previewRectStyle(preview: WindowLayoutDialogPreview): Record<string, string> {
+  return {
+    left: `${layout.value.floating.x + preview.geometry.position.x}px`,
+    top: `${layout.value.floating.y + preview.geometry.position.y}px`,
+    width: `${preview.geometry.size.width}px`,
+    height: `${preview.geometry.size.height}px`,
+  };
+}
+function updateLayoutPreview(preview: WindowLayoutDialogPreview | null): void {
+  layoutPreview.value = preview;
 }
 function focusWindowShell(instanceId: string): void {
   void nextTick(() => {
@@ -1045,6 +1062,7 @@ function unlockSelectedWindow(instanceId: string): void {
 function applyLayoutDialog(value: WindowLayoutDialogSave): void {
   const window = layoutDialogWindow.value;
   if (!window) return;
+  layoutPreview.value = null;
   if (value.layoutSpec) windowManager.setLayoutSpec(window.instanceId, value.layoutSpec, floatingSize.value, 'user');
   else if (window.layoutLocked) windowManager.setLayoutSpec(window.instanceId, createAbsoluteWindowLayoutSpec(value.geometry), floatingSize.value, 'user', 'materialized');
   else windowManager.setGeometry(window.instanceId, value.geometry, 'user');
@@ -1258,6 +1276,13 @@ onBeforeUnmount(() => {
         :anchor-window="anchorWindow"
       />
     </div>
+    <div
+      v-if="layoutPreview"
+      class="wf-window-layout-preview"
+      data-layout-preview-overlay
+      :style="previewRectStyle(layoutPreview)"
+      aria-hidden="true"
+    />
     <DockHost
       v-for="dock in dockStates"
       :key="dock.id"
@@ -1301,6 +1326,7 @@ onBeforeUnmount(() => {
       :windows="windowManager.list()"
       :container="floatingSize"
       @cancel="closeLayoutDialog"
+      @preview="updateLayoutPreview"
       @save="applyLayoutDialog"
     />
   </div>
@@ -1321,6 +1347,7 @@ onBeforeUnmount(() => {
 .wf-workspace-edit-toggle:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
 .wf-window-layout-relations { position: absolute; inset: 0; z-index: 1; overflow: visible; pointer-events: none; }
 .wf-window-layout-relations line { stroke: var(--wf-color-accent); stroke-width: 2; stroke-dasharray: 5 4; opacity: .8; }
+.wf-window-layout-preview { position: absolute; z-index: var(--wf-layer-overlay); border: 2px dashed var(--wf-color-success); border-radius: var(--wf-radius-sm); background: color-mix(in srgb, var(--wf-color-success) 12%, transparent); box-shadow: 0 0 0 1px var(--wf-color-border); pointer-events: none; }
 .wf-workspace-host :deep([data-layout-picker-source]) { outline: 3px solid var(--wf-color-focus); outline-offset: 3px; }
 .wf-workspace-host :deep([data-layout-picker-target]) { outline: 3px solid var(--wf-color-success); outline-offset: 3px; }
 .wf-workspace-host__floating {

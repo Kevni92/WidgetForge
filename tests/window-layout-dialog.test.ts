@@ -166,6 +166,29 @@ describe('WindowLayoutDialog', () => {
     wrapper.unmount()
   })
 
+  it('emits a non-persisting draft preview and disables save for invalid drafts', async () => {
+    const { windows, selected } = setup()
+    const wrapper = mount(WindowLayoutDialog, { attachTo: document.body, props: { open: true, window: selected, windows: windows.list(), container: { width: 800, height: 600 } } })
+    await nextTick()
+    const initialPreview = wrapper.emitted('preview')?.at(-1)?.[0] as { geometry: { position: { x: number } } }
+    expect(initialPreview.geometry.position.x).toBe(300)
+
+    await wrapper.get('[data-layout-x]').setValue('120')
+    await nextTick()
+    const changedPreview = wrapper.emitted('preview')?.at(-1)?.[0] as { geometry: { position: { x: number } } }
+    expect(changedPreview.geometry.position.x).toBe(120)
+    expect(selected.geometry.position.x).toBe(300)
+
+    await wrapper.find('input[type="radio"][value="responsive"]').setValue(true)
+    await wrapper.get('[data-layout-left-target]').setValue('none')
+    await nextTick()
+    expect(wrapper.find('[data-layout-preview-error]').exists()).toBe(true)
+    expect(wrapper.get('[data-layout-save]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[role="dialog"] [aria-label="Cancel"]').trigger('click')
+    expect(wrapper.emitted('preview')?.at(-1)?.[0]).toBeNull()
+    wrapper.unmount()
+  })
+
   it('cancels with Escape and keeps focus inside the dialog while open', async () => {
     const { windows, selected } = setup()
     const wrapper = mount(WindowLayoutDialog, { attachTo: document.body, props: { open: true, window: selected, windows: windows.list(), container: { width: 800, height: 600 } } })

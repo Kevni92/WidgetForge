@@ -168,34 +168,52 @@ describe('Fullscreen Playground App', () => {
   })
 
   it('shows the responsive inspector and directional canvas picker in edit mode', async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe(target: Element): void {
+        if (!target.classList.contains('wf-workspace-host')) return
+        this.callback([{ target, contentRect: { width: 800, height: 600 } } as ResizeObserverEntry], this as unknown as ResizeObserver)
+      }
+      disconnect(): void {}
+      unobserve(): void {}
+    } as unknown as typeof ResizeObserver
     const wrapper = mount(App, { attachTo: document.body })
-    await wrapper.get('[data-demo-action="edit"]').trigger('click')
-    await wrapper.vm.$nextTick()
-    await wrapper.get('[data-window-instance-id="market-main"] .wf-pane-host[data-pane-id]').trigger('pointerdown')
-    await wrapper.vm.$nextTick()
+    try {
+      await wrapper.get('[data-demo-action="edit"]').trigger('click')
+      await wrapper.vm.$nextTick()
+      await wrapper.get('[data-window-instance-id="market-main"] .wf-pane-host[data-pane-id]').trigger('pointerdown')
+      await wrapper.vm.$nextTick()
 
-    const inspector = wrapper.get('[data-workspace-selection-actions]')
-    expect(inspector.get('[data-selected-window-id]').text()).toBe('market-main')
-    expect(inspector.get('[data-window-layout-status]').text()).toContain('Snapped')
-    await inspector.get('[data-window-selection-layout]').trigger('click')
-    await wrapper.vm.$nextTick()
-    await wrapper.get('[role="dialog"] input[type="radio"][value="responsive"]').setValue(true)
-    expect(wrapper.get('[data-layout-horizontal-mode="start-size"]')).toBeTruthy()
-    expect(wrapper.get('[data-layout-vertical-mode="stretch"]')).toBeTruthy()
-    const widthBeforeUnitChange = (wrapper.get('[data-layout-width]').element as HTMLInputElement).value
-    await wrapper.get('[aria-label="Width unit"]').setValue('percent')
-    await wrapper.get('[aria-label="Width unit"]').setValue('px')
-    expect((wrapper.get('[data-layout-width]').element as HTMLInputElement).value).toBe(widthBeforeUnitChange)
-    await wrapper.get('[data-layout-horizontal-mode="stretch"]').trigger('change')
-    expect(wrapper.get('[data-layout-calculated-width]').text()).toContain('calculated')
-    await wrapper.get('[data-layout-horizontal-mode="start-size"]').trigger('change')
-    expect(wrapper.get('[data-layout-left-target]')).toBeTruthy()
-    await wrapper.get('[data-layout-pick="horizontal:left"]').trigger('click')
-    expect(wrapper.get('[data-layout-picker-state]').text()).toContain('click a highlighted window')
-    await wrapper.get('[data-window-instance-id="operations-main"]').trigger('pointerdown')
-    await wrapper.vm.$nextTick()
-    expect((wrapper.get('[data-layout-left-target]').element as HTMLSelectElement).value).toBe('window:operations-main:right')
-    wrapper.unmount()
+      const inspector = wrapper.get('[data-workspace-selection-actions]')
+      expect(inspector.get('[data-selected-window-id]').text()).toBe('market-main')
+      expect(inspector.get('[data-window-layout-status]').text()).toContain('Snapped')
+      await inspector.get('[data-window-selection-layout]').trigger('click')
+      await wrapper.vm.$nextTick()
+      await wrapper.get('[role="dialog"] input[type="radio"][value="responsive"]').setValue(true)
+      expect(wrapper.get('[data-layout-horizontal-mode="start-size"]')).toBeTruthy()
+      expect(wrapper.get('[data-layout-vertical-mode="stretch"]')).toBeTruthy()
+      const widthBeforeUnitChange = (wrapper.get('[data-layout-width]').element as HTMLInputElement).value
+      await wrapper.get('[aria-label="Width unit"]').setValue('percent')
+      await wrapper.get('[aria-label="Width unit"]').setValue('px')
+      expect((wrapper.get('[data-layout-width]').element as HTMLInputElement).value).toBe(widthBeforeUnitChange)
+      await wrapper.get('[data-layout-width]').setValue('25')
+      await wrapper.vm.$nextTick()
+      expect(wrapper.get('[data-layout-preview]').text()).toContain('Preview:')
+      expect(wrapper.find('[data-layout-preview-overlay]').exists()).toBe(true)
+      await wrapper.get('[data-layout-horizontal-mode="stretch"]').trigger('change')
+      expect(wrapper.get('[data-layout-calculated-width]').text()).toContain('calculated')
+      await wrapper.get('[data-layout-horizontal-mode="start-size"]').trigger('change')
+      expect(wrapper.get('[data-layout-left-target]')).toBeTruthy()
+      await wrapper.get('[data-layout-pick="horizontal:left"]').trigger('click')
+      expect(wrapper.get('[data-layout-picker-state]').text()).toContain('click a highlighted window')
+      await wrapper.get('[data-window-instance-id="operations-main"]').trigger('pointerdown')
+      await wrapper.vm.$nextTick()
+      expect((wrapper.get('[data-layout-left-target]').element as HTMLSelectElement).value).toBe('window:operations-main:right')
+    } finally {
+      wrapper.unmount()
+      globalThis.ResizeObserver = originalResizeObserver
+    }
   })
 
   it('switches Default, Trading and Operations presets without resetting shared domain data', async () => {
