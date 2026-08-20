@@ -88,6 +88,9 @@ describe('Fullscreen Playground App', () => {
     expect(wrapper.get('[data-pane-id="operations-metrics"]').attributes('data-pane-kind')).toBe('tabs')
     expect(wrapper.findAll('[data-pane-id="operations-metrics"] [role="tab"]')).toHaveLength(2)
     expect(wrapper.findAll('[data-window-instance-id="market-main"] .wf-data-table__row')).toHaveLength(14)
+    const lockedOperations = wrapper.get('[data-window-instance-id="operations-main"]')
+    expect(lockedOperations.attributes('data-window-layout-locked')).toBe('true')
+    expect(lockedOperations.find('.wf-window-shell__titlebar').exists()).toBe(false)
 
     const layoutSelect = wrapper.get('select[aria-label="Workspace layout"]')
     expect((layoutSelect.element as HTMLSelectElement).value).toBe('Default')
@@ -127,6 +130,24 @@ describe('Fullscreen Playground App', () => {
 
     await wrapper.get('select[aria-label="Theme"]').setValue('forge-light')
     expect(wrapper.get('.wf-theme').attributes('style')).toContain(`--wf-color-canvas: ${forgeLightTheme.color.canvas}`)
+    wrapper.unmount()
+  })
+
+  it('unlocks a locked window through the generic edit-mode context menu', async () => {
+    const wrapper = mount(App)
+    await wrapper.get('[data-demo-action="edit"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    const lockedOperations = wrapper.get('[data-window-instance-id="operations-main"]')
+    await lockedOperations.get('[data-pane-id="operations-root"]').trigger('contextmenu', { clientX: 120, clientY: 120 })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('.wf-context-menu__item')).toHaveLength(1)
+    expect(wrapper.get('.wf-context-menu__item').text()).toBe('Unlock window')
+
+    await wrapper.get('.wf-context-menu__item').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(lockedOperations.attributes('data-window-layout-locked')).toBeUndefined()
+    expect(lockedOperations.find('.wf-window-shell__titlebar').exists()).toBe(true)
     wrapper.unmount()
   })
 

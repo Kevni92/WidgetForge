@@ -30,6 +30,7 @@ export interface DevToolsWindowDiagnostic {
   readonly layer: WindowLayer
   readonly role: WindowRole
   readonly mode: WindowMode
+  readonly layoutLocked: boolean
   readonly geometry: WindowGeometry
   readonly rootPaneId: string
 }
@@ -101,6 +102,7 @@ export function captureWidgetForgeDevToolsSnapshot(
       layer: window.options.layer,
       role: window.options.role,
       mode: window.mode,
+      layoutLocked: window.layoutLocked === true,
       geometry: {
         position: { ...window.geometry.position },
         size: { ...window.geometry.size },

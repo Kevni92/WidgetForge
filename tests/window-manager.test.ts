@@ -7,6 +7,7 @@ import {
   createWindowManager,
   DuplicateWindowInstanceError,
   UnknownWindowInstanceError,
+  WindowLayoutLockedError,
 } from '../src/core/window-manager'
 import { createWidgetNavigator } from '../src/core/navigation'
 
@@ -119,6 +120,32 @@ describe('WindowManager', () => {
 
     manager.focus(first.instanceId)
     expect(manager.list().map((window) => window.zIndex)).toEqual([0, 1, 2])
+  })
+
+  it('keeps locked windows geometrically fixed in a dedicated lower layer', () => {
+    const manager = createWindowManager(createRegistry())
+    const lockedCandidate = manager.open({ widgetId: 'test.market', instanceId: 'locked', position: { x: 40, y: 50 }, size: { width: 280, height: 180 } })
+    const normal = manager.open({ widgetId: 'test.market', instanceId: 'normal' })
+    manager.snapWindow(lockedCandidate.instanceId, 'left', { width: 1000, height: 700 }, 'api')
+    const before = manager.get(lockedCandidate.instanceId)
+
+    manager.lockWindow(lockedCandidate.instanceId, 'user')
+    manager.focus(normal.instanceId, 'user')
+    manager.focus(lockedCandidate.instanceId, 'user')
+
+    expect(manager.list().map((window) => window.instanceId)).toEqual(['locked', 'normal'])
+    expect(manager.get('locked')).toMatchObject({ layoutLocked: true, geometry: before.geometry, snap: before.snap, rootPane: before.rootPane })
+    expect(manager.get('locked').focused).toBe(true)
+    expect(manager.get('normal').focused).toBe(false)
+    expect(() => manager.setGeometry('locked', { position: { x: 500, y: 500 }, size: { width: 400, height: 300 } }, 'user')).toThrow(WindowLayoutLockedError)
+    expect(() => manager.snapWindow('locked', 'right', { width: 1000, height: 700 }, 'user')).toThrow(WindowLayoutLockedError)
+    expect(() => manager.unsnapWindow('locked', undefined, undefined, 'user')).toThrow(WindowLayoutLockedError)
+    expect(() => manager.maximizeWindow('locked', { width: 1000, height: 700 }, 'user')).toThrow(WindowLayoutLockedError)
+
+    manager.unlockWindow('locked', 'user')
+    expect(manager.get('locked').layoutLocked).toBe(false)
+    manager.setGeometry('locked', { position: { x: 500, y: 500 }, size: before.geometry.size }, 'user')
+    expect(manager.get('locked').geometry.position).toEqual({ x: 500, y: 500 })
   })
 
   it('closes only the requested instance and restores focus consistently', () => {

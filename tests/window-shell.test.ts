@@ -67,6 +67,25 @@ describe('WindowShell', () => {
     expect(wrapper.emitted('close')?.[0]?.[0]).toEqual({ instanceId: 'window-events' })
   })
 
+  it('offers a generic edit-mode lock action and renders locked content chrome-less', async () => {
+    const registry = createWidgetRegistry()
+    const wrapper = mount(WindowShell, {
+      props: { registry, widgetId: 'locked.widget', instanceId: 'locked-window', title: 'Locked', editMode: true },
+      slots: { default: () => h('button', { class: 'interactive-content' }, 'Interactive') },
+    })
+
+    expect(wrapper.get('[data-window-lock]').attributes('aria-label')).toBe('Lock window')
+    await wrapper.get('[data-window-lock]').trigger('click')
+    expect(wrapper.emitted('lock')?.[0]?.[0]).toEqual({ instanceId: 'locked-window' })
+
+    await wrapper.setProps({ windowLocked: true })
+    expect(wrapper.get('.wf-window-shell').attributes('data-window-locked')).toBe('true')
+    expect(wrapper.find('.wf-window-shell__titlebar').exists()).toBe(false)
+    expect(wrapper.find('[data-window-lock]').exists()).toBe(false)
+    expect(wrapper.get('.interactive-content').text()).toBe('Interactive')
+    expect(wrapper.get('.wf-window-shell__content').classes()).toContain('wf-window-shell__content')
+  })
+
   it('keeps title and content independently replaceable and multiple shells isolated', async () => {
     const registry = createWidgetRegistry()
     const first = mount(WindowShell, {

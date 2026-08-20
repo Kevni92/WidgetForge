@@ -29,3 +29,7 @@ Bei einer Änderung der Floating-Fläche – etwa durch Viewport- oder Dock-Resi
 ## Persistenz
 
 Workspace-Snapshots speichern Snap-Zone und Floating-Geometrie. Ältere Snapshots ohne `snap` werden als unsnapped interpretiert. `restoreWorkspace(..., { container })` kann die gespeicherte Geometrie direkt gegen die aktuelle Floating-Fläche wiederherstellen; zusätzlich passt der Host beim ersten realen Größenwert gesnappte und freie Windows deterministisch an.
+
+## Lock-Abgrenzung
+
+Ein Per-Window-Lock ist kein Snap, Dock oder Anchor. Ein Fenster darf vor dem Lock gesnappt sein; Zone und Floating-/Restore-Geometrie bleiben unverändert erhalten. Während des Locks werden Move, Resize, Snap, Unsnap, Anchor und Window-Docking nicht angeboten bzw. abgelehnt. Nach dem Unlock bleibt derselbe Snap-Zustand mit denselben IDs bestehen.

@@ -27,7 +27,7 @@ Das ursprüngliche v1-Format enthielt nur Widget-ID, Parameter, Geometrie, Modus
 
 ### v2 → v3
 
-v3 ergänzt die mit #85 eingeführten Pane-Fähigkeiten, bleibt für bestehende v2-Pane-Dokumente strukturell kompatibel und normalisiert einen fehlenden Dock-Bereich auf `docks: []`.
+v3 ergänzt die mit #85 eingeführten Pane-Fähigkeiten, bleibt für bestehende v2-Pane-Dokumente strukturell kompatibel und normalisiert einen fehlenden Dock-Bereich auf `docks: []`. `layoutLocked` ist in v3 ein optionales, rückwärtskompatibles Window-Feld. Eine fehlende Eigenschaft wird beim Parsen als `false` interpretiert; dafür ist keine zusätzliche Versionsmigration erforderlich.
 
 ## Fehlercodes
 

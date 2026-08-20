@@ -27,13 +27,14 @@ Jede Fensterinstanz besitzt serialisierbar:
 - `constraints.minSize`
 - `constraints.maxSize`
 - Fokus und Z-Reihenfolge
+- `layoutLocked` als unabhängiger Per-Window-Layout-Lock
 - den vollständigen Root-Pane-Baum
 
 Koordinaten sind relativ zum Container des `WindowManagerHost`.
 
 ## Workspace-Persistenz
 
-Workspace-Format v2 speichert den Root-Pane-Baum, Titel, Geometrie, Constraints, Window-Mode, Fokus und Z-Reihenfolge. Das alte Format v1 wird beim Restore weiterhin gelesen und als einzelner Widget-Root-Pane migriert. Runtime-Lifecycle-Objekte bleiben ausdrücklich außerhalb des serialisierten States.
+Workspace-Format v3 speichert den Root-Pane-Baum, Titel, Geometrie, Constraints, Window-Mode, Fokus, Z-Reihenfolge und den Per-Window-Lock. Das alte Format v1 wird beim Restore weiterhin gelesen und als einzelner Widget-Root-Pane migriert. Fehlt `layoutLocked` in älteren Dokumenten, wird `false` verwendet. Runtime-Lifecycle-Objekte bleiben ausdrücklich außerhalb des serialisierten States.
 
 Ein Launcher-Root ist Teil desselben serialisierbaren Pane-Modells. Dadurch können sowohl ein noch leerer Launcher als auch der nachfolgende Widget-Zustand ohne Sonderformat gespeichert und wiederhergestellt werden.
 
@@ -74,6 +75,8 @@ Der `WindowManagerHost` beobachtet ausschließlich seine Containergröße. Messu
 ## Fokus und Z-Reihenfolge
 
 Drag oder Resize fokussieren die betroffene Instanz über den `WindowManager`. Der Manager hält die Z-Reihenfolge deterministisch und normalisiert sie nach Fokus- oder Close-Operationen.
+
+Gelockte Fenster werden vor normalen Floating- und Always-on-top-Fenstern gestapelt. Fokus kann die Reihenfolge innerhalb der gelockten Gruppe deterministisch ändern, hebt ein gelocktes Fenster aber niemals über ein normales Floating-Fenster.
 
 ## Folgende Erweiterungen
 
