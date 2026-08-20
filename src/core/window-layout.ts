@@ -8,6 +8,14 @@ export type WindowLayoutEdge = 'left' | 'right' | 'top' | 'bottom'
 /** The mutually exclusive sizing models exposed by the responsive editor. */
 export type WindowLayoutAxisMode = 'start-size' | 'end-size' | 'stretch'
 
+/** Convert a layout value without changing the represented physical length. */
+export function convertWindowLayoutValue(value: number, fromUnit: WindowLayoutUnit, toUnit: WindowLayoutUnit, available: number): number {
+  if (!Number.isFinite(value)) throw new Error('layout value must be finite')
+  if (!Number.isFinite(available) || available <= 0) throw new Error('layout conversion requires a positive available size')
+  if (fromUnit === toUnit) return value
+  return fromUnit === 'px' ? value * 100 / available : value * available / 100
+}
+
 /**
  * Map the durable start/end/size contract to the safe, directional editor
  * model. Legacy over-defined specs intentionally prefer their start anchor so

@@ -182,6 +182,10 @@ describe('Fullscreen Playground App', () => {
     await wrapper.get('[role="dialog"] input[type="radio"][value="responsive"]').setValue(true)
     expect(wrapper.get('[data-layout-horizontal-mode="start-size"]')).toBeTruthy()
     expect(wrapper.get('[data-layout-vertical-mode="stretch"]')).toBeTruthy()
+    const widthBeforeUnitChange = (wrapper.get('[data-layout-width]').element as HTMLInputElement).value
+    await wrapper.get('[aria-label="Width unit"]').setValue('percent')
+    await wrapper.get('[aria-label="Width unit"]').setValue('px')
+    expect((wrapper.get('[data-layout-width]').element as HTMLInputElement).value).toBe(widthBeforeUnitChange)
     await wrapper.get('[data-layout-horizontal-mode="stretch"]').trigger('change')
     expect(wrapper.get('[data-layout-calculated-width]').text()).toContain('calculated')
     await wrapper.get('[data-layout-horizontal-mode="start-size"]').trigger('change')

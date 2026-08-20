@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { deriveWindowLayoutAxisMode, resolveWindowLayoutSpecs, validateWindowLayoutSpec, type WindowLayoutAnchor, type WindowLayoutAxis, type WindowLayoutAxisMode, type WindowLayoutAxisSpec, type WindowLayoutLength, type WindowLayoutSpec } from '../core/window-layout'
+import { convertWindowLayoutValue, deriveWindowLayoutAxisMode, resolveWindowLayoutSpecs, validateWindowLayoutSpec, type WindowLayoutAnchor, type WindowLayoutAxis, type WindowLayoutAxisMode, type WindowLayoutAxisSpec, type WindowLayoutLength, type WindowLayoutSpec } from '../core/window-layout'
 import type { WindowGeometry, WindowSize } from '../core/window-geometry'
 import type { WindowState } from '../core/window-manager'
 import { focusModal, trapFocus } from './modal-focus'
@@ -21,6 +21,7 @@ const dialog = ref<HTMLElement | null>(null)
 const mode = ref<LayoutMode>('absolute')
 const errorMessage = ref('')
 const noticeMessage = ref('')
+const retainedChoice = ref<'retained' | 'current' | null>(null)
 const pickerRequest = ref<PickerRequest | null>(null)
 const absolute = reactive({ x: 0 as number | string, y: 0 as number | string, width: 0 as number | string, height: 0 as number | string, xUnit: 'px' as 'px' | 'percent', yUnit: 'px' as 'px' | 'percent', widthUnit: 'px' as 'px' | 'percent', heightUnit: 'px' as 'px' | 'percent' })
 const horizontal = reactive<AxisDraft>({ mode: 'start-size', startTarget: 'workspace:left', startOffset: 0, startOffsetUnit: 'px', endTarget: 'none', endOffset: 0, endOffsetUnit: 'px', size: 0, sizeUnit: 'px' })
@@ -31,6 +32,7 @@ const otherWindows = computed(() => props.windows.filter((window) => window.inst
 const titleId = computed(() => `wf-window-layout-title-${props.window.instanceId}`)
 const errorId = computed(() => `wf-window-layout-error-${props.window.instanceId}`)
 const pickerLabel = computed(() => pickerRequest.value ? `Choose a window for ${pickerRequest.value.side} anchor` : '')
+const retainedRuleAvailable = computed(() => Boolean(props.window.layoutSpec && props.window.layoutSpecState === 'dormant'))
 
 function targetOptions(axis: WindowLayoutAxis): readonly TargetOption[] {
   const edges = axis === 'horizontal' ? ['left', 'right'] : ['top', 'bottom']
@@ -61,7 +63,7 @@ function applyAxis(draft: AxisDraft, axisSpec: WindowLayoutAxisSpec | undefined,
 }
 function initialize(): void {
   const geometry = props.window.geometry
-  mode.value = props.window.layoutSpec ? 'responsive' : 'absolute'; errorMessage.value = ''; noticeMessage.value = ''; pickerRequest.value = null
+  mode.value = props.window.layoutSpec ? 'responsive' : 'absolute'; errorMessage.value = ''; noticeMessage.value = ''; retainedChoice.value = retainedRuleAvailable.value ? 'retained' : null; pickerRequest.value = null
   absolute.x = geometry.position.x; absolute.y = geometry.position.y; absolute.width = geometry.size.width; absolute.height = geometry.size.height; absolute.xUnit = 'px'; absolute.yUnit = 'px'; absolute.widthUnit = 'px'; absolute.heightUnit = 'px'
   applyAxis(horizontal, props.window.layoutSpec?.horizontal, geometry.position.x, geometry.size.width); applyAxis(vertical, props.window.layoutSpec?.vertical, geometry.position.y, geometry.size.height)
   if (!props.window.layoutSpec) { horizontal.mode = 'start-size'; horizontal.startTarget = 'workspace:left'; horizontal.endTarget = 'none'; vertical.mode = 'start-size'; vertical.startTarget = 'workspace:top'; vertical.endTarget = 'none' }
@@ -87,6 +89,73 @@ function axisGeometry(axis: WindowLayoutAxis): { position: number; size: number;
   return axis === 'horizontal'
     ? { position: props.window.geometry.position.x, size: props.window.geometry.size.width, available: props.container.width }
     : { position: props.window.geometry.position.y, size: props.window.geometry.size.height, available: props.container.height }
+}
+function roundedInputValue(value: number): number { return Math.round(value * 1000) / 1000 }
+function unitFromEvent(event: Event): 'px' | 'percent' {
+  const value = (event.target as HTMLSelectElement | null)?.value
+  if (value !== 'px' && value !== 'percent') throw new Error('Unsupported layout unit')
+  return value
+}
+function setAbsoluteUnit(field: 'x' | 'y' | 'width' | 'height', event: Event): void {
+  try {
+    const nextUnit = unitFromEvent(event)
+    const unitField = `${field}Unit` as 'xUnit' | 'yUnit' | 'widthUnit' | 'heightUnit'
+    const available = field === 'x' || field === 'width' ? props.container.width : props.container.height
+    const converted = convertWindowLayoutValue(numeric(absolute[field], field), absolute[unitField], nextUnit, available)
+    absolute[field] = roundedInputValue(converted)
+    absolute[unitField] = nextUnit
+    errorMessage.value = ''
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Could not convert layout unit.'
+  }
+}
+function setAxisUnit(axis: WindowLayoutAxis, field: 'startOffset' | 'endOffset' | 'size', event: Event): void {
+  try {
+    const nextUnit = unitFromEvent(event)
+    const draft = draftFor(axis)
+    const unitField = `${field}Unit` as 'startOffsetUnit' | 'endOffsetUnit' | 'sizeUnit'
+    const converted = convertWindowLayoutValue(numeric(draft[field], `${axis} ${field}`), draft[unitField], nextUnit, axisGeometry(axis).available)
+    draft[field] = roundedInputValue(converted)
+    draft[unitField] = nextUnit
+    errorMessage.value = ''
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Could not convert layout unit.'
+  }
+}
+function setAbsoluteFromGeometry(geometry: WindowGeometry): void {
+  absolute.x = geometry.position.x; absolute.y = geometry.position.y; absolute.width = geometry.size.width; absolute.height = geometry.size.height
+  absolute.xUnit = 'px'; absolute.yUnit = 'px'; absolute.widthUnit = 'px'; absolute.heightUnit = 'px'
+}
+function setResponsiveFromGeometry(geometry: WindowGeometry): void {
+  applyAxis(horizontal, undefined, geometry.position.x, geometry.size.width); applyAxis(vertical, undefined, geometry.position.y, geometry.size.height)
+  horizontal.startTarget = 'workspace:left'; horizontal.endTarget = 'none'; vertical.startTarget = 'workspace:top'; vertical.endTarget = 'none'
+  retainedChoice.value = 'current'
+}
+function useRetainedRule(): void {
+  if (!props.window.layoutSpec) return
+  applyAxis(horizontal, props.window.layoutSpec.horizontal, props.window.geometry.position.x, props.window.geometry.size.width)
+  applyAxis(vertical, props.window.layoutSpec.vertical, props.window.geometry.position.y, props.window.geometry.size.height)
+  retainedChoice.value = 'retained'
+  errorMessage.value = ''
+}
+function startFromCurrentGeometry(): void {
+  setResponsiveFromGeometry(props.window.geometry)
+  noticeMessage.value = 'Starting from current geometry. The retained responsive rule will be replaced when you save.'
+  errorMessage.value = ''
+}
+function setLayoutMode(nextMode: LayoutMode): void {
+  if (mode.value === nextMode) return
+  if (nextMode === 'responsive') {
+    try {
+      if (retainedRuleAvailable.value && retainedChoice.value === 'retained') useRetainedRule()
+      else setResponsiveFromGeometry(mode.value === 'absolute' ? absoluteGeometry() : props.window.geometry)
+    } catch {
+      setResponsiveFromGeometry(props.window.geometry)
+    }
+  } else {
+    setAbsoluteFromGeometry(props.window.geometry)
+  }
+  mode.value = nextMode
 }
 function workspaceTarget(axis: WindowLayoutAxis, side: 'start' | 'end'): TargetValue { return `workspace:${axisEdge(axis, side)}` }
 function setAxisMode(axis: WindowLayoutAxis, nextMode: WindowLayoutAxisMode): void {
@@ -162,14 +231,20 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPo
       </header>
       <form class="wf-window-layout-dialog__body" @submit.prevent="save">
         <p class="wf-window-layout-dialog__resolved" data-layout-resolved>Current: X {{ Math.round(props.window.geometry.position.x) }} · Y {{ Math.round(props.window.geometry.position.y) }} · {{ Math.round(props.window.geometry.size.width) }} × {{ Math.round(props.window.geometry.size.height) }} px</p>
-        <fieldset><legend>Layout type</legend><label><input v-model="mode" type="radio" value="absolute" /> Free geometry</label><label><input v-model="mode" type="radio" value="responsive" /> Anchored / responsive layout</label></fieldset>
+        <fieldset><legend>Layout type</legend><label><input type="radio" :checked="mode === 'absolute'" value="absolute" @change="setLayoutMode('absolute')" /> Free geometry</label><label><input type="radio" :checked="mode === 'responsive'" value="responsive" @change="setLayoutMode('responsive')" /> Anchored / responsive layout</label></fieldset>
         <div v-if="mode === 'absolute'" class="wf-window-layout-dialog__grid">
-          <label>X <input v-model="absolute.x" type="number" step="any" inputmode="decimal" data-layout-x /><select v-model="absolute.xUnit" aria-label="X unit"><option value="px">px</option><option value="percent">%</option></select></label>
-          <label>Y <input v-model="absolute.y" type="number" step="any" inputmode="decimal" data-layout-y /><select v-model="absolute.yUnit" aria-label="Y unit"><option value="px">px</option><option value="percent">%</option></select></label>
-          <label>Width <input v-model="absolute.width" type="number" step="any" min="0" inputmode="decimal" data-layout-width /><select v-model="absolute.widthUnit" aria-label="Width unit"><option value="px">px</option><option value="percent">%</option></select></label>
-          <label>Height <input v-model="absolute.height" type="number" step="any" min="0" inputmode="decimal" data-layout-height /><select v-model="absolute.heightUnit" aria-label="Height unit"><option value="px">px</option><option value="percent">%</option></select></label>
+          <label>X <input v-model="absolute.x" type="number" step="any" inputmode="decimal" data-layout-x /><select :value="absolute.xUnit" aria-label="X unit" @change="setAbsoluteUnit('x', $event)"><option value="px">px</option><option value="percent">%</option></select></label>
+          <label>Y <input v-model="absolute.y" type="number" step="any" inputmode="decimal" data-layout-y /><select :value="absolute.yUnit" aria-label="Y unit" @change="setAbsoluteUnit('y', $event)"><option value="px">px</option><option value="percent">%</option></select></label>
+          <label>Width <input v-model="absolute.width" type="number" step="any" min="0" inputmode="decimal" data-layout-width /><select :value="absolute.widthUnit" aria-label="Width unit" @change="setAbsoluteUnit('width', $event)"><option value="px">px</option><option value="percent">%</option></select></label>
+          <label>Height <input v-model="absolute.height" type="number" step="any" min="0" inputmode="decimal" data-layout-height /><select :value="absolute.heightUnit" aria-label="Height unit" @change="setAbsoluteUnit('height', $event)"><option value="px">px</option><option value="percent">%</option></select></label>
         </div>
         <template v-else>
+          <div v-if="retainedRuleAvailable" class="wf-window-layout-dialog__retained" data-layout-retained-choice>
+            <strong>Responsive rule retained</strong>
+            <span v-if="retainedChoice === 'retained'">Continue editing the saved responsive rule or start from the current free geometry.</span>
+            <span v-else>Starting from the current geometry; the retained rule will not be reused.</span>
+            <div class="wf-window-layout-dialog__retained-actions"><button type="button" :disabled="retainedChoice === 'retained'" data-layout-use-retained @click="useRetainedRule">Continue editing retained rule</button><button type="button" :disabled="retainedChoice === 'current'" data-layout-start-current @click="startFromCurrentGeometry">Start from current geometry</button></div>
+          </div>
           <fieldset>
             <legend>Horizontal</legend>
             <div class="wf-window-layout-dialog__modes" role="radiogroup" aria-label="Horizontal sizing mode">
@@ -179,13 +254,13 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPo
             </div>
             <template v-if="horizontal.mode !== 'end-size'">
               <label>Left <select v-model="horizontal.startTarget" data-layout-left-target data-layout-horizontal-start><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="horizontal:left" @click="startPicker('horizontal', 'left')">Auf Canvas wählen</button></label>
-              <label>Left offset <input v-model="horizontal.startOffset" type="number" step="any" data-layout-left-offset /><select v-model="horizontal.startOffsetUnit" aria-label="Left offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
+              <label>Left offset <input v-model="horizontal.startOffset" type="number" step="any" data-layout-left-offset /><select :value="horizontal.startOffsetUnit" aria-label="Left offset unit" @change="setAxisUnit('horizontal', 'startOffset', $event)"><option value="px">px</option><option value="percent">%</option></select></label>
             </template>
             <template v-if="horizontal.mode !== 'start-size'">
               <label>Right <select v-model="horizontal.endTarget" data-layout-right-target data-layout-horizontal-end><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="horizontal:right" @click="startPicker('horizontal', 'right')">Auf Canvas wählen</button></label>
-              <label>Right offset <input v-model="horizontal.endOffset" type="number" step="any" data-layout-right-offset /><select v-model="horizontal.endOffsetUnit" aria-label="Right offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
+              <label>Right offset <input v-model="horizontal.endOffset" type="number" step="any" data-layout-right-offset /><select :value="horizontal.endOffsetUnit" aria-label="Right offset unit" @change="setAxisUnit('horizontal', 'endOffset', $event)"><option value="px">px</option><option value="percent">%</option></select></label>
             </template>
-            <label v-if="horizontal.mode !== 'stretch'">Width <input v-model="horizontal.size" type="number" step="any" data-layout-width /><select v-model="horizontal.sizeUnit" aria-label="Width unit"><option value="px">px</option><option value="percent">%</option></select></label>
+            <label v-if="horizontal.mode !== 'stretch'">Width <input v-model="horizontal.size" type="number" step="any" data-layout-width /><select :value="horizontal.sizeUnit" aria-label="Width unit" @change="setAxisUnit('horizontal', 'size', $event)"><option value="px">px</option><option value="percent">%</option></select></label>
             <p v-else class="wf-window-layout-dialog__calculated" data-layout-calculated-width>Width: <output data-layout-width>{{ formatCalculatedSize(props.window.geometry.size.width) }}</output> px (calculated from both anchors)</p>
           </fieldset>
           <fieldset>
@@ -197,13 +272,13 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPo
             </div>
             <template v-if="vertical.mode !== 'end-size'">
               <label>Top <select v-model="vertical.startTarget" data-layout-top-target data-layout-vertical-start><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in verticalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in verticalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="vertical:top" @click="startPicker('vertical', 'top')">Auf Canvas wählen</button></label>
-              <label>Top offset <input v-model="vertical.startOffset" type="number" step="any" data-layout-top-offset /><select v-model="vertical.startOffsetUnit" aria-label="Top offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
+              <label>Top offset <input v-model="vertical.startOffset" type="number" step="any" data-layout-top-offset /><select :value="vertical.startOffsetUnit" aria-label="Top offset unit" @change="setAxisUnit('vertical', 'startOffset', $event)"><option value="px">px</option><option value="percent">%</option></select></label>
             </template>
             <template v-if="vertical.mode !== 'start-size'">
               <label>Bottom <select v-model="vertical.endTarget" data-layout-bottom-target data-layout-vertical-end><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in verticalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in verticalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="vertical:bottom" @click="startPicker('vertical', 'bottom')">Auf Canvas wählen</button></label>
-              <label>Bottom offset <input v-model="vertical.endOffset" type="number" step="any" data-layout-bottom-offset /><select v-model="vertical.endOffsetUnit" aria-label="Bottom offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
+              <label>Bottom offset <input v-model="vertical.endOffset" type="number" step="any" data-layout-bottom-offset /><select :value="vertical.endOffsetUnit" aria-label="Bottom offset unit" @change="setAxisUnit('vertical', 'endOffset', $event)"><option value="px">px</option><option value="percent">%</option></select></label>
             </template>
-            <label v-if="vertical.mode !== 'stretch'">Height <input v-model="vertical.size" type="number" step="any" data-layout-height /><select v-model="vertical.sizeUnit" aria-label="Height unit"><option value="px">px</option><option value="percent">%</option></select></label>
+            <label v-if="vertical.mode !== 'stretch'">Height <input v-model="vertical.size" type="number" step="any" data-layout-height /><select :value="vertical.sizeUnit" aria-label="Height unit" @change="setAxisUnit('vertical', 'size', $event)"><option value="px">px</option><option value="percent">%</option></select></label>
             <p v-else class="wf-window-layout-dialog__calculated" data-layout-calculated-height>Height: <output data-layout-height>{{ formatCalculatedSize(props.window.geometry.size.height) }}</output> px (calculated from both anchors)</p>
           </fieldset>
           <p class="wf-window-layout-dialog__summary" data-layout-relationship-summary>Horizontal: {{ horizontal.mode }} · Vertical: {{ vertical.mode }} · Left {{ horizontal.startTarget === 'none' ? 'free' : horizontal.startTarget }} · Right {{ horizontal.endTarget === 'none' ? 'free' : horizontal.endTarget }} · Top {{ vertical.startTarget === 'none' ? 'free' : vertical.startTarget }} · Bottom {{ vertical.endTarget === 'none' ? 'free' : vertical.endTarget }}</p>
@@ -241,6 +316,10 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPo
 .wf-window-layout-dialog__grid label { grid-template-columns: auto minmax(0, 1fr) auto; }
 .wf-window-layout-dialog__hint, .wf-window-layout-dialog__summary, .wf-window-layout-dialog__picker, .wf-window-layout-dialog__calculated, .wf-window-layout-dialog__notice { margin: 0; color: var(--wf-color-text-muted); font-size: var(--wf-font-size-sm); }
 .wf-window-layout-dialog__notice { padding: var(--wf-space-sm); border-left: 3px solid var(--wf-color-accent); }
+.wf-window-layout-dialog__retained { display: grid; gap: var(--wf-space-xs); padding: var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface); font-size: var(--wf-font-size-sm); }
+.wf-window-layout-dialog__retained > span { color: var(--wf-color-text-muted); }
+.wf-window-layout-dialog__retained-actions { display: flex; flex-wrap: wrap; gap: var(--wf-space-sm); }
+.wf-window-layout-dialog__retained-actions button { padding: 0 var(--wf-space-sm); }
 .wf-window-layout-dialog__picker { padding: var(--wf-space-sm); border-left: 3px solid var(--wf-color-focus); color: var(--wf-color-accent); }
 .wf-window-layout-dialog__error { margin: 0; padding: var(--wf-space-sm); border-left: 3px solid var(--wf-color-danger); color: var(--wf-color-danger); }
 .wf-window-layout-dialog__actions { display: flex; justify-content: flex-end; gap: var(--wf-space-sm); }

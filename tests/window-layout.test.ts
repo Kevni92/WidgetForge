@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createAbsoluteWindowLayoutSpec, createWindowLayoutSpecFromSnap, deriveWindowLayoutAxisMode, deriveWindowLayoutStatus, findWindowLayoutDependents, resolveWindowLayoutSpecs, validateWindowLayoutReferences, WindowLayoutValidationError, type ResponsiveLayoutWindow } from '../src/core/window-layout'
+import { convertWindowLayoutValue, createAbsoluteWindowLayoutSpec, createWindowLayoutSpecFromSnap, deriveWindowLayoutAxisMode, deriveWindowLayoutStatus, findWindowLayoutDependents, resolveWindowLayoutSpecs, validateWindowLayoutReferences, WindowLayoutValidationError, type ResponsiveLayoutWindow } from '../src/core/window-layout'
 import type { WindowGeometry } from '../src/core/window-geometry'
 
 function windowState(instanceId: string, geometry: WindowGeometry, layoutSpec?: ResponsiveLayoutWindow['layoutSpec']): ResponsiveLayoutWindow {
@@ -7,6 +7,14 @@ function windowState(instanceId: string, geometry: WindowGeometry, layoutSpec?: 
 }
 
 describe('responsive window layout resolver', () => {
+  it('converts px and percent values against the active axis dimension', () => {
+    expect(convertWindowLayoutValue(353, 'px', 'percent', 1450)).toBeCloseTo(24.3448, 3)
+    expect(convertWindowLayoutValue(24.344827586, 'percent', 'px', 1450)).toBeCloseTo(353, 6)
+    expect(convertWindowLayoutValue(-200, 'px', 'percent', 800)).toBeCloseTo(-25, 6)
+    expect(convertWindowLayoutValue(0, 'px', 'percent', 800)).toBe(0)
+    expect(() => convertWindowLayoutValue(10, 'px', 'percent', 0)).toThrow(/positive available size/)
+  })
+
   it('maps durable axis constraints to exclusive editor modes', () => {
     const startSize = { start: { target: { kind: 'workspace' as const, edge: 'left' as const } }, size: { value: 25, unit: 'percent' as const } }
     const endSize = { end: { target: { kind: 'workspace' as const, edge: 'right' as const } }, size: { value: 200, unit: 'px' as const } }

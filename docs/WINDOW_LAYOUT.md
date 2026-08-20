@@ -52,4 +52,8 @@ Jede Achse wird im Dialog über genau einen `WindowLayoutAxisMode` bearbeitet:
 
 `stretch` ersetzt den früheren unabhängigen `Fill between ...`-Schalter. Beim Moduswechsel werden fehlende Gegenanker deterministisch aus der aktuellen Geometrie vorbelegt; beim Wechsel von `stretch` zu einer festen Größe wird die aktuell aufgelöste Dimension in Pixel materialisiert. Berechnete Größen werden nur für die Darstellung sinnvoll gerundet, nicht im Vertrag.
 
+Ein Wechsel zwischen `px` und `percent` ist eine geometrieerhaltende Konvertierung. Breiten und horizontale Offsets verwenden die aktuelle Workspace-Breite, Höhen und vertikale Offsets die aktuelle Workspace-Höhe. Die öffentliche Core-Funktion `convertWindowLayoutValue()` behandelt dabei auch negative Werte und 0; die UI rundet nur die Eingabeanzeige auf höchstens drei Nachkommastellen. Der reine Unit-Wechsel verändert die aufgelöste Pixelgeometrie nicht.
+
+Beim Wechsel von freier Geometrie zu Responsive wird zunächst `Left + Width` sowie `Top + Height` mit Workspace-Ankern und den aktuellen Pixelwerten erzeugt. Existiert nach einem Unlock noch eine dormante Regel, bietet der Dialog explizit die Wahl zwischen der retained Regel und einem Neustart aus der aktuellen Geometrie.
+
 Responsive Fensterreferenzen werden im Edit-Mode als gestrichelte, nicht interaktive Beziehungen dargestellt. `findWindowLayoutDependents()` liefert für Resize-Feedback den direkten und transitiven Abhängigkeitsgraphen deterministisch sortiert.
