@@ -15,6 +15,8 @@
 
 Für globale Workspace-Chrome kann `createActiveWorkspaceNavigator(registry, collection)` verwendet werden. Der Navigator liest den aktiven Workspace bei jedem `navigate()`-Aufruf neu und hält daher keine statische Manager-Referenz. Widget-interne Navigation erhält weiterhin den vom jeweiligen `WindowManagerHost` bereitgestellten workspace-lokalen Navigator. Fenster-IDs, Singleton-Instanzen, Fokus und Z-Reihenfolge bleiben dadurch pro Workspace isoliert.
 
+Für die sichtbare Verwaltung der Collection steht die generische `WorkspaceTabs`-Komponente zur Verfügung. Sie rendert globale Tabs sowie den Add-Button und bindet Rename, Edit-/Ctrl-Edit-Delete, Confirmation und Keyboard-Navigation direkt an den `WorkspaceCollectionManager`. Die vollständige UI-Semantik ist in `docs/WORKSPACE_TABS.md` beschrieben.
+
 Ein Collection-Snapshot enthält ausschließlich UI-/Workspace-State: Workspace-ID und Name, aktive Workspace-ID sowie den jeweiligen serialisierbaren `WorkspaceSnapshot`. Domain-/Game-Daten und ein geteilter `DataClient` sind ausdrücklich nicht Bestandteil der Persistenz.
 
 Für Browser-Consumer steht `createLocalStorageWorkspaceCollectionStorage(storage, key?)` als optionaler Adapter bereit. Andere Persistenzbackends implementieren lediglich `WorkspaceCollectionStorage.read()` und `write(snapshot)`.

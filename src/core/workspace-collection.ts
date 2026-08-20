@@ -161,9 +161,14 @@ export class WorkspaceCollectionManager {
     const normalized = normalizeId(id), record = this.records.get(normalized)
     if (!record) throw new WorkspaceCollectionError('not-found', `unknown workspace "${normalized}"`)
     if (this.records.size === 1) throw new WorkspaceCollectionError('last-workspace', 'the last workspace cannot be deleted')
-    record.unsubscribeWindows(); record.unsubscribeDocks()
+    const ids = [...this.records.keys()]
+    const activeIndex = ids.indexOf(normalized)
+    const fallback = this.activeId === normalized
+      ? ids[activeIndex > 0 ? activeIndex - 1 : activeIndex + 1]
+      : this.activeId
+    this.disposeRecord(normalized, record)
     this.records.delete(normalized)
-    if (this.activeId === normalized) this.activeId = this.records.keys().next().value as WorkspaceId
+    this.activeId = fallback ?? null
     this.persist()
     this.emit('delete', normalized)
   }
@@ -192,7 +197,9 @@ export class WorkspaceCollectionManager {
   }
 
   dispose(): void {
-    for (const record of this.records.values()) { record.unsubscribeWindows(); record.unsubscribeDocks() }
+    for (const [id, record] of this.records) this.disposeRecord(id, record)
+    this.records.clear()
+    this.activeId = null
     this.listeners.clear()
   }
 
@@ -217,6 +224,14 @@ export class WorkspaceCollectionManager {
       this.emit('workspace', id)
     }
     return { name, windows, docks, unsubscribeWindows: windows.subscribe(onWorkspaceChange), unsubscribeDocks: docks.subscribe(onWorkspaceChange) }
+  }
+
+  private disposeRecord(id: WorkspaceId, record: RuntimeRecord): void {
+    this.workspacePersistQueued.delete(id)
+    record.unsubscribeWindows()
+    record.unsubscribeDocks()
+    for (const window of [...record.windows.list()]) record.windows.close(window.instanceId, 'api')
+    for (const dock of [...record.docks.list()]) record.docks.remove(dock.id)
   }
 
   private readStorage(): unknown | null {

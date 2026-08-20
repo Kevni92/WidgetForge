@@ -22,6 +22,7 @@ export { createLocalStorageWorkspaceCollectionStorage, DEFAULT_WORKSPACE_COLLECT
 export { default as DockHost } from './vue/DockHost.vue'
 export { default as WorkspaceHost } from './vue/WorkspaceHost.vue'
 export { default as WorkspaceCollectionHost } from './vue/WorkspaceCollectionHost.vue'
+export { default as WorkspaceTabs } from './vue/WorkspaceTabs.vue'
 export { default as DockingOverlay } from './vue/DockingOverlay.vue'
 export { default as WindowSnapLayoutPicker } from './vue/WindowSnapLayoutPicker.vue'
 export { default as DevToolsOverlay } from './vue/DevToolsOverlay.vue'
