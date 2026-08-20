@@ -1,4 +1,4 @@
-import { defineComponent, h, onMounted, onUnmounted } from 'vue'
+import { defineComponent, h, nextTick, onMounted, onUnmounted } from 'vue'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { createDataClient, createDataKey, type DataProvider } from '../src/data/data-client'
@@ -57,6 +57,38 @@ describe('WorkspaceCollectionHost', () => {
     expect(mounted).toEqual(['first', 'second', 'first'])
     expect(subscribe).toHaveBeenCalledTimes(3)
     expect(unsubscribed).toContain('second')
+    wrapper.unmount()
+  })
+
+  it('unmounts widgets and destroys their runtime when the active workspace is deleted', async () => {
+    const mounted: string[] = [], unmounted: string[] = []
+    const Probe = defineComponent({
+      setup() {
+        const context = useWidgetContext()
+        const marker = () => String(context.parameters.value.marker)
+        onMounted(() => mounted.push(marker()))
+        onUnmounted(() => unmounted.push(marker()))
+        return () => h('span', marker())
+      },
+    })
+    const widgets = createWidgetRegistry([defineWidget({ id: 'test.probe', title: 'Probe', component: Probe, parameters: { marker: { type: 'string', required: true } } })])
+    const collection = createWorkspaceCollection({ registry: widgets })
+    const first = collection.createWorkspace({ id: 'first', name: 'First', activate: true })
+    const second = collection.createWorkspace({ id: 'second', name: 'Second' })
+    first.windows.open({ widgetId: 'test.probe', instanceId: 'first-widget', parameters: { marker: 'first' } })
+    second.windows.open({ widgetId: 'test.probe', instanceId: 'second-widget', parameters: { marker: 'second' } })
+    const lifecycle = first.windows.getLifecycle('first-widget')
+    const Root = defineComponent({ setup: () => () => h(WorkspaceCollectionHost, { manager: collection, registry: widgets }) })
+
+    const wrapper = mount(Root)
+    await nextTick()
+    expect(mounted).toEqual(['first'])
+
+    collection.deleteWorkspace('first')
+    await nextTick()
+    expect(collection.getActiveWorkspaceId()).toBe('second')
+    expect(unmounted).toEqual(['first'])
+    expect(lifecycle.state).toBe('destroyed')
     wrapper.unmount()
   })
 })

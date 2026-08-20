@@ -49,11 +49,46 @@ describe('WorkspaceCollectionManager', () => {
     expect(collection.getActiveWorkspaceId()).toBe('copy')
     expect(collection.renameWorkspace('copy', 'Operations').name).toBe('Operations')
     collection.deleteWorkspace('copy')
-    expect(collection.getActiveWorkspaceId()).toBe('primary')
+    expect(collection.getActiveWorkspaceId()).toBe('secondary')
     expect(() => collection.createWorkspace({ id: 'primary', name: 'Again' })).toThrowError(expect.objectContaining({ code: 'duplicate-id' }))
 
     collection.deleteWorkspace('secondary')
     expect(() => collection.deleteWorkspace('primary')).toThrowError(expect.objectContaining({ code: 'last-workspace' }))
+  })
+
+  it('prefers the previous workspace when deleting the active one and destroys deleted runtimes', () => {
+    const collection = createWorkspaceCollection({ registry: registry() })
+    const first = collection.createWorkspace({ id: 'first', name: 'First', activate: true })
+    const second = collection.createWorkspace({ id: 'second', name: 'Second' })
+    const third = collection.createWorkspace({ id: 'third', name: 'Third' })
+    first.windows.open({ widgetId: 'test.probe', instanceId: 'first-window' })
+    const deletedWindow = second.windows.open({ widgetId: 'test.probe', instanceId: 'second-window' })
+    const deletedLifecycle = second.windows.getLifecycle(deletedWindow.instanceId)
+    third.windows.open({ widgetId: 'test.probe', instanceId: 'third-window' })
+
+    collection.activateWorkspace('second')
+    collection.deleteWorkspace('second')
+
+    expect(collection.getActiveWorkspaceId()).toBe('first')
+    expect(() => collection.get('second')).toThrowError(expect.objectContaining({ code: 'not-found' }))
+    expect(deletedWindow.instanceId).toBe('second-window')
+    expect(() => second.windows.get('second-window')).toThrow()
+    expect(deletedLifecycle.state).toBe('destroyed')
+
+    collection.activateWorkspace('third')
+    collection.deleteWorkspace('third')
+    expect(collection.getActiveWorkspaceId()).toBe('first')
+  })
+
+  it('uses the next workspace when deleting the first active workspace', () => {
+    const collection = createWorkspaceCollection({ registry: registry() })
+    collection.createWorkspace({ id: 'first', name: 'First', activate: true })
+    collection.createWorkspace({ id: 'second', name: 'Second' })
+    collection.createWorkspace({ id: 'third', name: 'Third' })
+
+    collection.deleteWorkspace('first')
+
+    expect(collection.getActiveWorkspaceId()).toBe('second')
   })
 
   it('persists all workspace snapshots plus active id and restores them with separate managers', () => {

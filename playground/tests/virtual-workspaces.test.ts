@@ -45,4 +45,45 @@ describe('virtual desktop playground', () => {
     expect(restored.find('[data-window-instance-id="telemetry-power"]').exists()).toBe(true)
     restored.unmount()
   })
+
+  it('demonstrates public tab management for rename, add and confirmed delete', async () => {
+    const wrapper = mount(App)
+
+    await wrapper.get('[data-workspace-tab="trading"]').trigger('dblclick')
+    await wrapper.get('input[aria-label="Rename workspace Trading"]').setValue('Markets')
+    await wrapper.get('input[aria-label="Rename workspace Trading"]').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.get('[data-workspace-tab="trading"]').text()).toBe('Markets')
+
+    await wrapper.get('[data-workspace-add]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[data-active-workspace]').attributes('data-active-workspace')).toBe('workspace-4')
+    expect(wrapper.findAll('.wf-window-frame')).toHaveLength(0)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control' }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('[data-workspace-delete]')).toHaveLength(4)
+    await wrapper.get('[data-workspace-delete="workspace-4"]').trigger('click')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Workspace 4')
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }))
+    await wrapper.get('.wf-confirmation-dialog__confirm').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-workspace-tab="workspace-4"]').exists()).toBe(false)
+    expect(wrapper.get('[data-active-workspace]').attributes('data-active-workspace')).toBe('operations')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control' }))
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-workspace-delete="operations"]').trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }))
+    await wrapper.get('.wf-confirmation-dialog__confirm').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-workspace-tab="operations"]').exists()).toBe(false)
+    const persisted = JSON.parse(window.localStorage.getItem(COLLECTION_STORAGE_KEY) ?? '{}') as { workspaces?: Array<{ id: string; name: string }> }
+    expect(persisted.workspaces?.map((workspace) => workspace.name)).toEqual(['Command', 'Markets'])
+    wrapper.unmount()
+
+    const restored = mount(App)
+    expect(restored.find('[data-workspace-tab="operations"]').exists()).toBe(false)
+    expect(restored.get('[data-workspace-tab="trading"]').text()).toBe('Markets')
+    restored.unmount()
+  })
 })
