@@ -77,6 +77,25 @@ describe('workspace persistence', () => {
     expect(legacy.get('locked').layoutLocked).toBe(false)
   })
 
+  it('persists responsive layout contracts and resolves them against the restore workspace', () => {
+    const registry = createRegistry(), source = createWindowManager(registry)
+    source.open({ widgetId: 'test.alpha', instanceId: 'responsive', parameters: { name: 'responsive' }, position: { x: 20, y: 30 }, size: { width: 200, height: 120 } })
+    source.setLayoutSpec('responsive', {
+      horizontal: { start: { target: { kind: 'workspace', edge: 'left' } }, size: { value: 50, unit: 'percent' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, end: { target: { kind: 'workspace', edge: 'bottom' } } },
+    }, { width: 800, height: 600 }, 'user')
+    source.lockWindow('responsive', 'user')
+    const serialized = serializeWorkspace(source)
+    expect(serialized).toContain('layoutSpec')
+
+    const small = createWindowManager(registry)
+    expect(restoreWorkspace(small, serialized, undefined, undefined, { container: { width: 400, height: 300 } }).issues).toEqual([])
+    expect(small.get('responsive')).toMatchObject({ layoutLocked: true, geometry: { position: { x: 0, y: 0 }, size: { width: 200, height: 300 } } })
+    const large = createWindowManager(registry)
+    expect(restoreWorkspace(large, serialized, undefined, undefined, { container: { width: 1000, height: 700 } }).issues).toEqual([])
+    expect(large.get('responsive').geometry.size).toEqual({ width: 500, height: 700 })
+  })
+
   it('normalizes persisted geometry against the current workspace during restore', () => {
     const registry=createRegistry(),source=createWindowManager(registry)
     source.open({widgetId:'test.alpha',instanceId:'large',parameters:{name:'large'},position:{x:860,y:620},size:{width:420,height:280}})

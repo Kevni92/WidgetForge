@@ -51,6 +51,23 @@ describe('WorkspaceHistory', () => {
     history.dispose()
   })
 
+  it('does not add history entries for responsive workspace resize but does for contract edits', () => {
+    const { windows } = setup()
+    windows.open({ widgetId: 'history.a', instanceId: 'sidebar', position: { x: 10, y: 10 }, size: { width: 200, height: 100 } })
+    const history = createWorkspaceHistory(windows)
+    windows.setLayoutSpec('sidebar', {
+      horizontal: { start: { target: { kind: 'workspace', edge: 'left' } }, size: { value: 25, unit: 'percent' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, end: { target: { kind: 'workspace', edge: 'bottom' } } },
+    }, { width: 800, height: 600 }, 'user')
+    expect(history.state.undoDepth).toBe(1)
+    windows.resolveResponsiveLayouts({ width: 1200, height: 700 }, 'api')
+    expect(history.state.undoDepth).toBe(1)
+    expect(windows.get('sidebar').geometry.size.width).toBe(300)
+    expect(history.undo()).toBe(true)
+    expect(windows.get('sidebar').layoutSpec).toBeUndefined()
+    history.dispose()
+  })
+
   it('commits many geometry changes in one transaction as one undo entry', () => {
     const { windows, docks } = setup()
     windows.open({ widgetId: 'history.a', instanceId: 'a', position: { x: 10, y: 20 }, size: { width: 300, height: 200 } })

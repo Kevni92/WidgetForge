@@ -29,6 +29,7 @@ import type { CommandRegistry } from "../core/commands";
 import type { WidgetRegistry } from "../core/widget-registry";
 import type { WindowSize } from "../core/window-geometry";
 import type { WindowManager } from "../core/window-manager";
+import { createAbsoluteWindowLayoutSpec } from '../core/window-layout'
 import {
   createPaneEditContextMenuItems,
   createWorkspaceEditController,
@@ -56,6 +57,7 @@ import DockingOverlay from "./DockingOverlay.vue";
 import { observeElementSize } from "./observe-element-size";
 import { handleWorkspaceHistoryShortcut } from "./workspace-history-shortcuts";
 import WindowManagerHost from "./WindowManagerHost.vue";
+import WindowLayoutDialog, { type WindowLayoutDialogSave } from './WindowLayoutDialog.vue'
 import { provideWidgetDocumentationForHost } from './documentation-context'
 
 interface Props {
@@ -148,6 +150,7 @@ const editState = shallowRef<WorkspaceEditState>(editController.state);
 const paneDragActive = ref(false);
 const paneDropPreview = shallowRef<PaneDropPreview | null>(null);
 const tabReorderPreview = shallowRef<TabReorderPreview | null>(null);
+const layoutDialogWindow = shallowRef<ReturnType<WindowManager['get']> | null>(null);
 let disposeSize: (() => void) | null = null;
 let disposePaneDrag: (() => void) | null = null;
 let disposeTabReorder: (() => void) | null = null;
@@ -164,6 +167,7 @@ const unsubscribeEdit = editController.subscribe((state) => {
 const layout = computed(() =>
   calculateWorkspaceDockLayout(size.value, dockStates.value),
 );
+const floatingSize = computed<WindowSize>(() => ({ width: layout.value.floating.width, height: layout.value.floating.height }));
 const editMode = computed(
   () => editState.value.editActive || paneDragActive.value,
 );
@@ -975,11 +979,31 @@ function finishHistoryPointer(
   const activeHistory = history;
   queueMicrotask(() => activeHistory?.commitTransaction());
 }
+function openLayoutDialog(instanceId: string): void {
+  layoutDialogWindow.value = windowManager.get(instanceId);
+  contextMenu.close();
+}
+function closeLayoutDialog(): void {
+  layoutDialogWindow.value = null;
+}
+function applyLayoutDialog(value: WindowLayoutDialogSave): void {
+  const window = layoutDialogWindow.value;
+  if (!window) return;
+  if (value.layoutSpec) windowManager.setLayoutSpec(window.instanceId, value.layoutSpec, floatingSize.value, 'user');
+  else if (window.layoutLocked) windowManager.setLayoutSpec(window.instanceId, createAbsoluteWindowLayoutSpec(value.geometry), floatingSize.value, 'user');
+  else windowManager.setGeometry(window.instanceId, value.geometry, 'user');
+  layoutDialogWindow.value = null;
+  editController.selectPane(null);
+}
 function executePaneMenu(
   item: ContextMenuItem,
   selection: WorkspacePaneSelection,
 ): void {
   if (layoutLocked.value) return;
+  if (item.id === "layout-window" && selection.owner.kind === "window") {
+    openLayoutDialog(selection.owner.id);
+    return;
+  }
   if (item.id === "lock-window" && selection.owner.kind === "window") {
     windowManager.lockWindow(selection.owner.id, "user");
     editController.selectPane(null);
@@ -1028,8 +1052,8 @@ function openPaneMenu(event: MouseEvent): void {
   if (!selection) return;
   const windowState = selection.owner.kind === "window" ? windowManager.get(selection.owner.id) : null;
   const items = windowState?.layoutLocked
-    ? [{ id: "unlock-window", label: "Unlock window" }]
-    : [...(windowState?.mode === "normal" ? [{ id: "lock-window", label: "Lock window" }] : []), ...createPaneEditContextMenuItems(
+    ? [{ id: "unlock-window", label: "Unlock window" }, { id: "layout-window", label: "Layout…" }]
+    : [...(windowState?.mode === "normal" ? [{ id: "lock-window", label: "Lock window" }] : []), ...(windowState ? [{ id: "layout-window", label: "Layout…" }] : []), ...createPaneEditContextMenuItems(
       ownerRoot(selection.owner),
       selection.paneId,
       editController.isPaneLocked(selection),
@@ -1208,6 +1232,15 @@ onBeforeUnmount(() => {
       New window
     </div>
     <ContextMenuHost :controller="contextMenu" />
+    <WindowLayoutDialog
+      v-if="layoutDialogWindow"
+      :open="true"
+      :window="layoutDialogWindow"
+      :windows="windowManager.list()"
+      :container="floatingSize"
+      @cancel="closeLayoutDialog"
+      @save="applyLayoutDialog"
+    />
   </div>
 </template>
 <style scoped>

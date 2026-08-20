@@ -4,11 +4,13 @@ WidgetForge berechnet Snap-Zonen ausschließlich relativ zur nutzbaren Floating-
 
 ## Zonen
 
-Die erste Version unterstützt:
+Die aktuelle Core-Implementierung unterstützt:
 
 - `left` – linke Hälfte
 - `right` – rechte Hälfte
-- `top` – gesamte Floating-Fläche
+- `top` – obere Hälfte
+- `bottom` – untere Hälfte
+- Quarter- und Drittel-Zonen (`top-left`, `right-two-thirds` usw.)
 
 Die Edge-Erkennung ist pure Core-Logik. Außerhalb des konfigurierten Randbereichs wird kein Snap vorgeschlagen. An oberen Ecken hat `top` Vorrang; Corner-/Quarter-Snap bleibt damit bewusst außerhalb dieses Issues.
 
@@ -32,4 +34,4 @@ Workspace-Snapshots speichern Snap-Zone und Floating-Geometrie. Ältere Snapshot
 
 ## Lock-Abgrenzung
 
-Ein Per-Window-Lock ist kein Snap, Dock oder Anchor. Ein Fenster darf vor dem Lock gesnappt sein; Zone und Floating-/Restore-Geometrie bleiben unverändert erhalten. Während des Locks werden Move, Resize, Snap, Unsnap, Anchor und Window-Docking nicht angeboten bzw. abgelehnt. Nach dem Unlock bleibt derselbe Snap-Zustand mit denselben IDs bestehen.
+Ein Per-Window-Lock ist kein Dock. Ein Fenster darf vor dem Lock gesnappt sein; beim Lock wird die Zone in einen responsiven `layoutSpec` mit Workspace-Kanten und Prozentgrößen übersetzt. Während des Locks werden Move, Resize, Snap, Unsnap, Anchor und Window-Docking nicht angeboten bzw. abgelehnt. Nach dem Unlock bleibt derselbe responsive Vertrag bestehen, bis die erste manuelle Geometrieänderung ihn materialisiert. Siehe [Responsive Window Layout](./WINDOW_LAYOUT.md).

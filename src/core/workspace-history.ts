@@ -170,7 +170,8 @@ export class WorkspaceHistory {
     try {
       for (const window of [...this.windows.list()]) this.windows.close(window.instanceId, 'api')
       if (this.docks) for (const dock of [...this.docks.list()]) this.docks.remove(dock.id)
-      const restored = restoreWorkspace(this.windows, snapshot, this.docks, undefined, { atomic: true })
+      const container = this.windows.getResponsiveContainer()
+      const restored = restoreWorkspace(this.windows, snapshot, this.docks, undefined, { atomic: true, ...(container ? { container } : {}) })
       if (!restored.valid || restored.issues.length > 0) {
         throw new WorkspaceHistoryError(`history snapshot restore failed: ${restored.issues.map((issue) => issue.message).join('; ')}`)
       }
@@ -179,7 +180,8 @@ export class WorkspaceHistory {
       try {
         for (const window of [...this.windows.list()]) this.windows.close(window.instanceId, 'api')
         if (this.docks) for (const dock of [...this.docks.list()]) this.docks.remove(dock.id)
-        const restored = restoreWorkspace(this.windows, previous, this.docks, undefined, { atomic: true })
+        const container = this.windows.getResponsiveContainer()
+        const restored = restoreWorkspace(this.windows, previous, this.docks, undefined, { atomic: true, ...(container ? { container } : {}) })
         if (!restored.valid || restored.issues.length > 0) throw new WorkspaceHistoryError('history rollback restore reported issues')
         this.current = this.capture()
       } catch (rollbackError) {

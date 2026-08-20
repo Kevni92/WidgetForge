@@ -28,13 +28,14 @@ Jede Fensterinstanz besitzt serialisierbar:
 - `constraints.maxSize`
 - Fokus und Z-Reihenfolge
 - `layoutLocked` als unabhängiger Per-Window-Layout-Lock
+- optionales `layoutSpec` als serialisierbarer responsiver Layout-Vertrag; `geometry` bleibt die aktuell aufgelöste Pixelgeometrie
 - den vollständigen Root-Pane-Baum
 
 Koordinaten sind relativ zum Container des `WindowManagerHost`.
 
 ## Workspace-Persistenz
 
-Workspace-Format v3 speichert den Root-Pane-Baum, Titel, Geometrie, Constraints, Window-Mode, Fokus, Z-Reihenfolge und den Per-Window-Lock. Das alte Format v1 wird beim Restore weiterhin gelesen und als einzelner Widget-Root-Pane migriert. Fehlt `layoutLocked` in älteren Dokumenten, wird `false` verwendet. Runtime-Lifecycle-Objekte bleiben ausdrücklich außerhalb des serialisierten States.
+Workspace-Format v3 speichert den Root-Pane-Baum, Titel, Geometrie, Constraints, Window-Mode, Fokus, Z-Reihenfolge, den Per-Window-Lock und optional den responsiven `layoutSpec`. Das alte Format v1 wird beim Restore weiterhin gelesen und als einzelner Widget-Root-Pane migriert. Fehlen `layoutLocked` oder `layoutSpec` in älteren Dokumenten, bleiben pixelbasierte Fenster gültig. Runtime-Lifecycle-Objekte bleiben ausdrücklich außerhalb des serialisierten States. Details stehen in [Responsive Window Layout](./WINDOW_LAYOUT.md).
 
 Ein Launcher-Root ist Teil desselben serialisierbaren Pane-Modells. Dadurch können sowohl ein noch leerer Launcher als auch der nachfolgende Widget-Zustand ohne Sonderformat gespeichert und wiederhergestellt werden.
 
