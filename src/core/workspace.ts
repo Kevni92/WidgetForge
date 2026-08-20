@@ -435,7 +435,7 @@ export function restoreWorkspace(
       open: (target) => {
         target.openPane({ pane: entry.rootPane, instanceId: entry.instanceId, title: entry.title, titleIsCustom: entry.titleIsCustom === true, position: entry.geometry.position, size: entry.geometry.size, minSize: entry.constraints.minSize, ...(entry.constraints.maxSize ? { maxSize: entry.constraints.maxSize } : {}), options: entry.options, snap: entry.snap, restoreGeometry: entry.restoreGeometry, layoutLocked: entry.layoutLocked === true, ...(entry.layoutSpec !== undefined ? { layoutSpec: entry.layoutSpec } : {}) })
         if (entry.mode === 'maximized') target.maximizeWindow(entry.instanceId, options.container ?? entry.geometry.size, 'api')
-        else if (options.container && !entry.layoutSpec) target.constrainToContainer(entry.instanceId, options.container, 'api')
+        else if (options.container && !(entry.layoutLocked === true && entry.layoutSpec)) target.constrainToContainer(entry.instanceId, options.container, 'api')
         return target.get(entry.instanceId)
       },
     })

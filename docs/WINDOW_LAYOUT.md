@@ -2,7 +2,7 @@
 
 ## Kanonischer Zustand
 
-`WindowState.geometry` ist immer die aktuell aufgelöste Pixel-Geometrie. Wenn `layoutSpec` vorhanden ist, beschreibt dieser serialisierbare Vertrag die gewünschte responsive Geometrie und ist die Quelle für die nächste Auflösung. DOMRects und Browserfenster sind keine State-Wahrheit; der Resolver erhält ausschließlich die Floating-Workspace-Größe.
+`WindowState.geometry` ist immer die aktuell aufgelöste Pixel-Geometrie. Ein `layoutSpec` kann dabei aktiv oder dormant sein: Nur die Kombination aus `layoutLocked: true` und `layoutSpec` ist ein aktiver responsive Vertrag. Bei `layoutLocked: false` bleibt der Vertrag als gespeicherte Vorlage erhalten, während die aktuelle Pixel-Geometrie maßgeblich ist. DOMRects und Browserfenster sind keine State-Wahrheit; der Resolver erhält ausschließlich die Floating-Workspace-Größe.
 
 `layoutSpec` besteht aus einer horizontalen und einer vertikalen Achse. Jede Achse verwendet genau eine der folgenden Formen:
 
@@ -22,7 +22,9 @@ Ein Fenster ohne `layoutSpec` behält das bestehende pixelbasierte Verhalten. `c
 
 ## Lock, Unlock und Referenzen
 
-Ein Lock friert bei einem freien Fenster weiterhin nur dann Pixel ein, wenn kein Layout-Vertrag vorhanden ist. Wird ein gesnapptes Fenster gelockt, wird die Snap-Zone in semantische Kanten und Prozentgrößen übersetzt. Ein Unlock verändert die aktuelle aufgelöste Geometrie nicht; der Vertrag darf bestehen bleiben. Die erste manuelle Bewegung oder Größenänderung materialisiert den aktuellen Zustand und entfernt den Vertrag. Ein abhängiges Fenster kann ein entsperrtes Referenzfenster weiterhin verwenden und folgt dessen aktueller Geometrie.
+Ein Lock friert bei einem freien Fenster weiterhin nur dann Pixel ein, wenn kein Layout-Vertrag vorhanden ist. Wird ein Fenster mit dormantem Vertrag erneut gelockt, wird dieser sofort gegen die bekannte Workspace-Größe aufgelöst. Wird ein gesnapptes Fenster gelockt, wird die Snap-Zone in semantische Kanten und Prozentgrößen übersetzt. Ein Unlock verändert die aktuelle aufgelöste Geometrie nicht; der Vertrag wird dormant. Die erste manuelle Bewegung oder Größenänderung materialisiert den aktuellen Zustand und entfernt den Vertrag. Ein abhängiges, gelocktes Fenster kann ein entsperrtes Referenzfenster weiterhin verwenden und folgt dessen aktueller Geometrie.
+
+Workspace-Resizes und Änderungen an einem Fenster lösen nur aktive Verträge sowie deren echte abhängige Teilgraphen neu auf. Dormante Verträge werden weder durch fremde Fensterbewegungen, Fokusänderungen noch durch einen Workspace-Resize reaktiviert; ihre Pixel-Geometrie kann aber weiterhin als Referenz für aktive abhängige Fenster dienen.
 
 Wird ein referenziertes Fenster geschlossen, materialisiert der `WindowManager` alle direkten abhängigen Verträge vor dem Entfernen in äquivalente absolute Pixelanker. Dadurch entstehen keine dangling references und die abhängigen Fenster bleiben an derselben Stelle.
 

@@ -167,6 +167,47 @@ describe('WindowManager', () => {
     expect(manager.get('sidebar').geometry.position).toEqual({ x: 40, y: 50 })
   })
 
+  it('does not reapply a dormant layout when an unrelated window changes', () => {
+    const manager = createWindowManager(createRegistry())
+    manager.open({ widgetId: 'test.market', instanceId: 'a', position: { x: 40, y: 50 }, size: { width: 280, height: 180 } })
+    manager.setLayoutSpec('a', {
+      horizontal: { start: { target: { kind: 'workspace', edge: 'left' } }, size: { value: 50, unit: 'percent' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, end: { target: { kind: 'workspace', edge: 'bottom' } } },
+    }, { width: 1000, height: 600 }, 'user')
+    manager.lockWindow('a', 'user')
+    manager.unlockWindow('a', 'user')
+    manager.snapWindow('a', 'right', { width: 1000, height: 600 }, 'user')
+    const before = manager.get('a')
+
+    manager.open({ widgetId: 'test.market', instanceId: 'b', position: { x: 20, y: 20 }, size: { width: 240, height: 160 } })
+    manager.focus('b', 'user')
+    manager.setGeometry('b', { position: { x: 180, y: 120 }, size: { width: 260, height: 180 } }, 'user')
+
+    expect(manager.get('a').geometry).toEqual(before.geometry)
+    expect(manager.get('a').layoutSpec).toEqual(before.layoutSpec)
+  })
+
+  it('keeps dormant geometry on workspace resize while active layouts recompute', () => {
+    const manager = createWindowManager(createRegistry())
+    manager.open({ widgetId: 'test.market', instanceId: 'dormant', position: { x: 40, y: 50 }, size: { width: 280, height: 180 } })
+    manager.setLayoutSpec('dormant', {
+      horizontal: { start: { target: { kind: 'workspace', edge: 'left' } }, size: { value: 25, unit: 'percent' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, end: { target: { kind: 'workspace', edge: 'bottom' } } },
+    }, { width: 800, height: 600 }, 'user')
+    const dormantGeometry = manager.get('dormant').geometry
+
+    manager.open({ widgetId: 'test.market', instanceId: 'active', position: { x: 10, y: 10 }, size: { width: 180, height: 120 } })
+    manager.setLayoutSpec('active', {
+      horizontal: { start: { target: { kind: 'workspace', edge: 'left' } }, size: { value: 25, unit: 'percent' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, end: { target: { kind: 'workspace', edge: 'bottom' } } },
+    }, { width: 800, height: 600 }, 'user')
+    manager.lockWindow('active', 'user')
+    manager.resolveResponsiveLayouts({ width: 1200, height: 700 }, 'api')
+
+    expect(manager.get('dormant').geometry).toEqual(dormantGeometry)
+    expect(manager.get('active').geometry).toEqual({ position: { x: 0, y: 0 }, size: { width: 300, height: 700 } })
+  })
+
   it('converts snap zones to semantic specs and materializes dependents on delete', () => {
     const manager = createWindowManager(createRegistry())
     manager.open({ widgetId: 'test.market', instanceId: 'base', position: { x: 10, y: 20 }, size: { width: 200, height: 100 } })
