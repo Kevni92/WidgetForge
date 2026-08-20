@@ -66,4 +66,40 @@ describe('WindowManager snap and maximize state', () => {
     manager.maximizeWindow('snap', { width: 800, height: 600 }); manager.constrainToContainer('snap', { width: 620, height: 480 })
     expect(manager.get('snap').geometry).toEqual({ position: { x: 0, y: 0 }, size: { width: 620, height: 480 } })
   })
+
+  it('materializes a manual geometry change after snap and does not reapply the old zone', () => {
+    const manager = createWindowManager(registry)
+    manager.open({ widgetId: 'test.snap', instanceId: 'snap', position: { x: 120, y: 90 }, size: { width: 420, height: 280 } })
+    manager.snapWindow('snap', 'left', { width: 1000, height: 700 })
+    expect(manager.get('snap').geometry).toEqual({ position: { x: 0, y: 0 }, size: { width: 500, height: 700 } })
+
+    manager.setGeometry('snap', { position: { x: 0, y: 0 }, size: { width: 320, height: 500 } }, 'user')
+    expect(manager.get('snap')).toMatchObject({ snap: null, geometry: { position: { x: 0, y: 0 }, size: { width: 320, height: 500 } } })
+
+    manager.constrainToContainer('snap', { width: 1400, height: 900 }, 'api')
+    expect(manager.get('snap').geometry).toEqual({ position: { x: 0, y: 0 }, size: { width: 320, height: 500 } })
+  })
+
+  it('can snap again after a manual resize and follows the new zone on resize', () => {
+    const manager = createWindowManager(registry)
+    manager.open({ widgetId: 'test.snap', instanceId: 'snap' })
+    manager.snapWindow('snap', 'left', { width: 1000, height: 700 })
+    manager.setGeometry('snap', { position: { x: 0, y: 0 }, size: { width: 320, height: 500 } }, 'user')
+    manager.snapWindow('snap', 'right', { width: 1000, height: 700 })
+
+    expect(manager.get('snap').snap?.zone).toBe('right')
+    manager.constrainToContainer('snap', { width: 800, height: 600 }, 'api')
+    expect(manager.get('snap').geometry).toEqual({ position: { x: 400, y: 0 }, size: { width: 400, height: 600 } })
+  })
+
+  it('locks the free geometry after snap followed by a manual resize', () => {
+    const manager = createWindowManager(registry)
+    manager.open({ widgetId: 'test.snap', instanceId: 'snap' })
+    manager.snapWindow('snap', 'left', { width: 1000, height: 700 })
+    manager.setGeometry('snap', { position: { x: 20, y: 30 }, size: { width: 320, height: 500 } }, 'user')
+
+    const locked = manager.lockWindow('snap', 'user')
+    expect(locked).toMatchObject({ layoutLocked: true, snap: null, geometry: { position: { x: 20, y: 30 }, size: { width: 320, height: 500 } } })
+    expect(locked.layoutSpec).toBeUndefined()
+  })
 })

@@ -193,8 +193,16 @@ export class WindowManager {
     if (current.layoutLocked && origin === 'user') throw new WindowLayoutLockedError(instanceId, 'changing geometry')
     const normalized: WindowGeometry = { position: { x: Number.isFinite(geometry.position.x) ? geometry.position.x : current.geometry.position.x, y: Number.isFinite(geometry.position.y) ? geometry.position.y : current.geometry.position.y }, size: constrainSize(geometry.size, current.constraints) }
     const materialized = origin === 'user' && current.layoutSpec !== undefined && current.layoutSpec !== null
-    if (sameGeometry(current.geometry, normalized) && !materialized) return cloneWindow(current)
-    const updated: WindowState = { ...current, geometry: normalized, ...(materialized ? { layoutSpec: null } : {}) }
+    const unsnapped = origin === 'user' && current.snap !== null
+    const clearedRestoreGeometry = origin === 'user' && current.mode === 'normal' && current.restoreGeometry !== null
+    if (sameGeometry(current.geometry, normalized) && !materialized && !unsnapped && !clearedRestoreGeometry) return cloneWindow(current)
+    const updated: WindowState = {
+      ...current,
+      geometry: normalized,
+      ...(materialized ? { layoutSpec: null } : {}),
+      ...(unsnapped ? { snap: null } : {}),
+      ...(clearedRestoreGeometry ? { restoreGeometry: null } : {}),
+    }
     const candidates = this.windows.map((window) => window.instanceId === instanceId ? updated : window)
     const nextWindows = this.responsiveContainer && candidates.some((window) => window.layoutLocked && window.layoutSpec)
       ? resolveActiveWindowLayouts(candidates, this.responsiveContainer, [instanceId])

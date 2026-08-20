@@ -111,4 +111,26 @@ describe('window snap pointer lifecycle', () => {
     expect(manager.get('snap-window').geometry.size).toEqual({ width: 360, height: 240 })
     wrapper.unmount()
   })
+
+  it('clears snap state through the real resize-handle interaction', async () => {
+    const { registry, manager } = setup()
+    manager.snapWindow('snap-window', 'left', { width: 800, height: 500 })
+    const wrapper = mount(WindowFrame, {
+      props: {
+        window: manager.get('snap-window'),
+        manager,
+        registry,
+        containerSize: { width: 800, height: 500 },
+      },
+    })
+
+    pointer(wrapper.get('[data-window-resize-handle="bottom-right"]').element, 'pointerdown', 400, 500)
+    pointer(globalThis.window, 'pointermove', 480, 460)
+    await nextTick()
+
+    expect(manager.get('snap-window').snap).toBeNull()
+    expect(manager.get('snap-window').geometry.size).toEqual({ width: 480, height: 460 })
+    pointer(globalThis.window, 'pointerup', 480, 460)
+    wrapper.unmount()
+  })
 })

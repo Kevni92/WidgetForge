@@ -26,7 +26,7 @@ Beim ersten Snap wird die vorherige Floating-Geometrie in `WindowState.snap.floa
 
 ## Resize
 
-Bei einer Änderung der Floating-Fläche – etwa durch Viewport- oder Dock-Resize – berechnet `WindowManager.constrainToContainer()` die Geometrie gesnappter Windows deterministisch aus ihrer Zone neu. Gleichzeitig werden die gespeicherte Floating-Geometrie und maximierte Restore-Geometrien gegen die neue Fläche normalisiert. Manuelles Resize eines gesnappten Windows führt zuerst zurück in den Floating-Zustand.
+Bei einer Änderung der Floating-Fläche – etwa durch Viewport- oder Dock-Resize – berechnet `WindowManager.constrainToContainer()` die Geometrie gesnappter Windows deterministisch aus ihrer Zone neu. Gleichzeitig werden die gespeicherte Floating-Geometrie und maximierte Restore-Geometrien gegen die neue Fläche normalisiert. Manuelles Resize eines gesnappten Windows materialisiert dagegen die neue freie Pixel-Geometrie und setzt `snap` auf `null`; spätere Container-Resizes verwenden dann nur noch die normale Geometrie-Normalisierung. Ein Titlebar-Drag aus einem Snap führt weiterhin über die bestehende pointer-relative Restore-Logik in den Floating-Zustand.
 
 ## Persistenz
 
