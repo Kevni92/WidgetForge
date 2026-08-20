@@ -247,9 +247,13 @@ export class MutationClient {
     input: Input,
     context?: MutationInvocationContext,
   ): Promise<Result> {
-    return Promise.resolve().then(() => this.provider.execute(definition, input, context)).catch((error: unknown) => {
+    try {
+      return Promise.resolve(this.provider.execute(definition, input, context)).catch((error: unknown) => {
+        return Promise.reject(normalizeMutationError(error))
+      })
+    } catch (error) {
       return Promise.reject(normalizeMutationError(error))
-    })
+    }
   }
 
   private resetHandle(record: MutationHandleRecord): void {
