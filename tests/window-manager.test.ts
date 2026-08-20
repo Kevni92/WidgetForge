@@ -167,6 +167,19 @@ describe('WindowManager', () => {
     expect(manager.get('sidebar').geometry.position).toEqual({ x: 40, y: 50 })
   })
 
+  it('tracks snap adoption, dormant rules and materialized free geometry', () => {
+    const manager = createWindowManager(createRegistry())
+    manager.open({ widgetId: 'test.market', instanceId: 'stateful', position: { x: 40, y: 40 }, size: { width: 240, height: 160 } })
+    manager.snapWindow('stateful', 'left', { width: 800, height: 600 }, 'user')
+    expect(manager.get('stateful')).toMatchObject({ snap: { zone: 'left' } })
+    manager.lockWindow('stateful', 'user')
+    expect(manager.get('stateful')).toMatchObject({ layoutLocked: true, layoutSpecState: 'active', layoutSpec: { horizontal: { size: { value: 50, unit: 'percent' } } } })
+    manager.unlockWindow('stateful', 'user')
+    expect(manager.get('stateful').layoutSpecState).toBe('dormant')
+    manager.setGeometry('stateful', { position: { x: 120, y: 80 }, size: { width: 240, height: 160 } }, 'user')
+    expect(manager.get('stateful')).toMatchObject({ layoutSpec: null, layoutSpecState: 'materialized', snap: null })
+  })
+
   it('does not reapply a dormant layout when an unrelated window changes', () => {
     const manager = createWindowManager(createRegistry())
     manager.open({ widgetId: 'test.market', instanceId: 'a', position: { x: 40, y: 50 }, size: { width: 280, height: 180 } })

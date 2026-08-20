@@ -5,7 +5,7 @@ import type { WidgetRegistry } from './widget-registry'
 import { createWindowOptions, type WindowOptions, type WindowOptionsOverride } from './window-options'
 import { maximizeWindowGeometry, restoreFloatingWindowGeometry, snapWindowGeometry, type WindowSnapState, type WindowSnapZone } from './window-snap'
 import { DEFAULT_MIN_WINDOW_SIZE, DEFAULT_WINDOW_SIZE, normalizeWindowGeometry, constrainSize, sameGeometry, type WindowGeometry, type WindowPosition, type WindowSize, type WindowSizeConstraints } from './window-geometry'
-import { cloneWindowLayoutSpec, createAbsoluteWindowLayoutSpec, createWindowLayoutSpecFromSnap, layoutSpecReferencesWindow, resolveWindowLayoutSpecs, validateWindowLayoutReferences, validateWindowLayoutSpec, type WindowLayoutSpec } from './window-layout'
+import { cloneWindowLayoutSpec, createAbsoluteWindowLayoutSpec, createWindowLayoutSpecFromSnap, layoutSpecReferencesWindow, resolveWindowLayoutSpecs, validateWindowLayoutReferences, validateWindowLayoutSpec, type WindowLayoutRuleState, type WindowLayoutSpec } from './window-layout'
 
 export type WindowInstanceId = string
 export type WindowOperationOrigin = 'api' | 'user'
@@ -25,15 +25,16 @@ export interface WindowState {
   readonly restoreGeometry: WindowGeometry | null
   readonly layoutLocked: boolean
   readonly layoutSpec?: WindowLayoutSpec | null
+  readonly layoutSpecState?: WindowLayoutRuleState
   readonly focused: boolean
   readonly zIndex: number
   readonly mode: WindowMode
   readonly geometry: WindowGeometry
   readonly constraints: WindowSizeConstraints
 }
-export interface OpenWindowRequest { widgetId: WidgetId; parameters?: Readonly<Record<string, unknown>>; instanceId?: WindowInstanceId; title?: string; position?: WindowPosition; size?: WindowSize; options?: WindowOptionsOverride; layoutSpec?: WindowLayoutSpec | null }
-export interface OpenPaneWindowRequest { pane: PaneNode; instanceId?: WindowInstanceId; title?: string; /** Used by workspace restore to retain auto-title semantics for older snapshots. */ titleIsCustom?: boolean; position?: WindowPosition; size?: WindowSize; minSize?: WindowSize; maxSize?: WindowSize; options?: WindowOptionsOverride; snap?: WindowSnapState | null; restoreGeometry?: WindowGeometry | null; layoutLocked?: boolean; layoutSpec?: WindowLayoutSpec | null }
-export interface OpenLauncherWindowRequest { instanceId?: WindowInstanceId; title?: string; position?: WindowPosition; size?: WindowSize; minSize?: WindowSize; maxSize?: WindowSize; options?: WindowOptionsOverride; snap?: WindowSnapState | null; restoreGeometry?: WindowGeometry | null; layoutLocked?: boolean; layoutSpec?: WindowLayoutSpec | null }
+export interface OpenWindowRequest { widgetId: WidgetId; parameters?: Readonly<Record<string, unknown>>; instanceId?: WindowInstanceId; title?: string; position?: WindowPosition; size?: WindowSize; options?: WindowOptionsOverride; layoutSpec?: WindowLayoutSpec | null; layoutSpecState?: WindowLayoutRuleState }
+export interface OpenPaneWindowRequest { pane: PaneNode; instanceId?: WindowInstanceId; title?: string; /** Used by workspace restore to retain auto-title semantics for older snapshots. */ titleIsCustom?: boolean; position?: WindowPosition; size?: WindowSize; minSize?: WindowSize; maxSize?: WindowSize; options?: WindowOptionsOverride; snap?: WindowSnapState | null; restoreGeometry?: WindowGeometry | null; layoutLocked?: boolean; layoutSpec?: WindowLayoutSpec | null; layoutSpecState?: WindowLayoutRuleState }
+export interface OpenLauncherWindowRequest { instanceId?: WindowInstanceId; title?: string; position?: WindowPosition; size?: WindowSize; minSize?: WindowSize; maxSize?: WindowSize; options?: WindowOptionsOverride; snap?: WindowSnapState | null; restoreGeometry?: WindowGeometry | null; layoutLocked?: boolean; layoutSpec?: WindowLayoutSpec | null; layoutSpecState?: WindowLayoutRuleState }
 export interface ReplaceLauncherWindowRequest { widgetId: WidgetId; parameters?: Readonly<Record<string, unknown>> }
 export interface WindowManagerChange { readonly kind: WindowManagerChangeKind; readonly origin: WindowOperationOrigin; readonly instanceId: WindowInstanceId; readonly windows: readonly WindowState[] }
 export type WindowManagerListener = (change: WindowManagerChange) => void
@@ -97,13 +98,13 @@ export class WindowManager {
     if (manifestWindow?.singleton) { const existing = this.windows.find((window) => rootWidgetId(window) === request.widgetId); if (existing) return existing.mode === 'minimized' ? this.restore(existing.instanceId, origin) : this.focus(existing.instanceId, origin) }
     const instanceId = request.instanceId ?? this.createInstanceId()
     const pane = createWidgetPane({ id: `${instanceId}.root`, widgetId: request.widgetId, instanceId, parameters: paneParameters(resolved.parameters) })
-    return this.openPaneState({ pane, instanceId, title: request.title ?? resolved.manifest.title, titleIsCustom: request.title !== undefined, position: request.position, size: request.size, minSize: manifestWindow?.minSize, maxSize: manifestWindow?.maxSize, defaultSize: manifestWindow?.defaultSize, options: createWindowOptions({ ...(manifestWindow?.options ?? {}), ...(request.options ?? {}) }), snap: null, restoreGeometry: null, layoutLocked: false, ...(request.layoutSpec !== undefined ? { layoutSpec: request.layoutSpec } : {}) }, origin)
+    return this.openPaneState({ pane, instanceId, title: request.title ?? resolved.manifest.title, titleIsCustom: request.title !== undefined, position: request.position, size: request.size, minSize: manifestWindow?.minSize, maxSize: manifestWindow?.maxSize, defaultSize: manifestWindow?.defaultSize, options: createWindowOptions({ ...(manifestWindow?.options ?? {}), ...(request.options ?? {}) }), snap: null, restoreGeometry: null, layoutLocked: false, ...(request.layoutSpec !== undefined ? { layoutSpec: request.layoutSpec } : {}), ...(request.layoutSpecState ? { layoutSpecState: request.layoutSpecState } : {}) }, origin)
   }
-  openPane(request: OpenPaneWindowRequest, origin: WindowOperationOrigin = 'api'): WindowState { const instanceId = request.instanceId ?? this.createInstanceId(), pane = normalizePane(this.registry, request.pane); return this.openPaneState({ pane, instanceId, title: request.title ?? defaultPaneTitle(this.registry, pane), titleIsCustom: request.titleIsCustom ?? request.title !== undefined, position: request.position, size: request.size, minSize: request.minSize, maxSize: request.maxSize, options: createWindowOptions(request.options), snap: request.snap ?? null, restoreGeometry: request.restoreGeometry ?? null, layoutLocked: request.layoutLocked ?? false, ...(request.layoutSpec !== undefined ? { layoutSpec: request.layoutSpec } : {}) }, origin) }
+  openPane(request: OpenPaneWindowRequest, origin: WindowOperationOrigin = 'api'): WindowState { const instanceId = request.instanceId ?? this.createInstanceId(), pane = normalizePane(this.registry, request.pane); return this.openPaneState({ pane, instanceId, title: request.title ?? defaultPaneTitle(this.registry, pane), titleIsCustom: request.titleIsCustom ?? request.title !== undefined, position: request.position, size: request.size, minSize: request.minSize, maxSize: request.maxSize, options: createWindowOptions(request.options), snap: request.snap ?? null, restoreGeometry: request.restoreGeometry ?? null, layoutLocked: request.layoutLocked ?? false, ...(request.layoutSpec !== undefined ? { layoutSpec: request.layoutSpec } : {}), ...(request.layoutSpecState ? { layoutSpecState: request.layoutSpecState } : {}) }, origin) }
   openEmptyWindow(request: OpenLauncherWindowRequest = {}, origin: WindowOperationOrigin = 'api'): WindowState {
     const instanceId = request.instanceId ?? this.createInstanceId()
     const pane = createCommandLauncherPane({ id: `${instanceId}.root`, instanceId: `${instanceId}.launcher` })
-    return this.openPaneState({ pane, instanceId, title: request.title ?? DEFAULT_LAUNCHER_WINDOW_TITLE, titleIsCustom: request.title !== undefined, position: request.position, size: request.size, defaultSize: DEFAULT_LAUNCHER_WINDOW_SIZE, minSize: request.minSize, maxSize: request.maxSize, options: createWindowOptions(request.options), snap: request.snap ?? null, restoreGeometry: request.restoreGeometry ?? null, layoutLocked: request.layoutLocked ?? false, ...(request.layoutSpec !== undefined ? { layoutSpec: request.layoutSpec } : {}) }, origin)
+    return this.openPaneState({ pane, instanceId, title: request.title ?? DEFAULT_LAUNCHER_WINDOW_TITLE, titleIsCustom: request.title !== undefined, position: request.position, size: request.size, defaultSize: DEFAULT_LAUNCHER_WINDOW_SIZE, minSize: request.minSize, maxSize: request.maxSize, options: createWindowOptions(request.options), snap: request.snap ?? null, restoreGeometry: request.restoreGeometry ?? null, layoutLocked: request.layoutLocked ?? false, ...(request.layoutSpec !== undefined ? { layoutSpec: request.layoutSpec } : {}), ...(request.layoutSpecState ? { layoutSpecState: request.layoutSpecState } : {}) }, origin)
   }
   openLauncherWindow(request: OpenLauncherWindowRequest = {}, origin: WindowOperationOrigin = 'api'): WindowState { return this.openEmptyWindow(request, origin) }
   focus(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'api'): WindowState { const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (current.mode === 'minimized') return this.restore(instanceId, origin); const sameLayer = this.windows.filter((window) => window.layoutLocked === current.layoutLocked && (current.layoutLocked || window.options.layer === current.options.layer)); if (sameLayer.at(-1)?.instanceId === instanceId && current.focused) { this.setActiveLifecycle(instanceId); return cloneWindow(current) } this.windows = focusWithinLayer(this.windows, current); this.setActiveLifecycle(instanceId); this.emit('focus', origin, instanceId); return this.get(instanceId) }
@@ -141,7 +142,7 @@ export class WindowManager {
     const current = this.windows[index]
     const remaining = this.windows
       .filter((window) => window.instanceId !== instanceId)
-      .map((window) => window.layoutSpec && layoutSpecReferencesWindow(window.layoutSpec, instanceId) ? { ...window, layoutSpec: createAbsoluteWindowLayoutSpec(window.geometry) } : window)
+      .map((window) => window.layoutSpec && layoutSpecReferencesWindow(window.layoutSpec, instanceId) ? { ...window, layoutSpec: createAbsoluteWindowLayoutSpec(window.geometry), layoutSpecState: 'materialized' as const } : window)
     const nextFocusedId = current?.focused ? topVisibleWindowId(remaining) : remaining.find((window) => window.focused && window.mode !== 'minimized')?.instanceId
     this.windows = stackWindows(remaining, nextFocusedId)
     this.setActiveLifecycle(nextFocusedId)
@@ -184,7 +185,7 @@ export class WindowManager {
     const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (current.layoutLocked && origin === 'user') throw new WindowLayoutLockedError(instanceId, 'unsnapping'); if (!current.snap) return cloneWindow(current)
     const restored = pointer && container ? restoreFloatingWindowGeometry(current.snap.floatingGeometry, pointer, container) : cloneGeometry(current.snap.floatingGeometry)
     const geometry = container ? normalizeWindowGeometry(restored, current.constraints, container) : restored
-    const updated: WindowState = { ...current, geometry, snap: null, restoreGeometry: null, mode: 'normal', layoutSpec: null }
+    const updated: WindowState = { ...current, geometry, snap: null, restoreGeometry: null, mode: 'normal', layoutSpec: null, ...(current.layoutSpec ? { layoutSpecState: 'materialized' as const } : {}) }
     this.windows = this.windows.map((window) => window.instanceId === instanceId ? updated : window); this.emit('snap', origin, instanceId); return cloneWindow(updated)
   }
   setGeometry(instanceId: WindowInstanceId, geometry: WindowGeometry, origin: WindowOperationOrigin = 'api'): WindowState {
@@ -199,7 +200,7 @@ export class WindowManager {
     const updated: WindowState = {
       ...current,
       geometry: normalized,
-      ...(materialized ? { layoutSpec: null } : {}),
+      ...(materialized ? { layoutSpec: null, layoutSpecState: 'materialized' as const } : {}),
       ...(unsnapped ? { snap: null } : {}),
       ...(clearedRestoreGeometry ? { restoreGeometry: null } : {}),
     }
@@ -212,11 +213,12 @@ export class WindowManager {
     return this.get(instanceId)
   }
 
-  setLayoutSpec(instanceId: WindowInstanceId, layoutSpec: WindowLayoutSpec | null, container?: WindowSize, origin: WindowOperationOrigin = 'user'): WindowState {
+  setLayoutSpec(instanceId: WindowInstanceId, layoutSpec: WindowLayoutSpec | null, container?: WindowSize, origin: WindowOperationOrigin = 'user', layoutSpecState?: WindowLayoutRuleState): WindowState {
     const current = this.windows.find((window) => window.instanceId === instanceId)
     if (!current) throw new UnknownWindowInstanceError(instanceId)
     if (layoutSpec !== null) validateWindowLayoutSpec(layoutSpec, instanceId)
-    const candidates = this.windows.map((window) => window.instanceId === instanceId ? { ...window, layoutSpec: layoutSpec ? cloneWindowLayoutSpec(layoutSpec) : layoutSpec } : window)
+    const nextRuleState: WindowLayoutRuleState = layoutSpecState ?? (layoutSpec ? (current.layoutLocked ? 'active' : 'dormant') : current.layoutSpec ? 'materialized' : (current.layoutSpecState ?? 'none'))
+    const candidates = this.windows.map((window) => window.instanceId === instanceId ? { ...window, layoutSpec: layoutSpec ? cloneWindowLayoutSpec(layoutSpec) : layoutSpec, layoutSpecState: nextRuleState } : window)
     validateWindowLayoutReferences(candidates)
     if (container) this.responsiveContainer = { ...container }
     const updatedWindows = this.responsiveContainer
@@ -245,8 +247,8 @@ export class WindowManager {
     return this.list()
   }
 
-  lockWindow(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'user'): WindowState { const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (current.layoutLocked) return cloneWindow(current); if (current.mode !== 'normal') throw new WindowLayoutLockedError(instanceId, 'locking a non-normal window'); const updated: WindowState = { ...current, layoutLocked: true, ...(current.layoutSpec ? {} : current.snap ? { layoutSpec: createWindowLayoutSpecFromSnap(current.snap.zone) } : {}) }; const candidates = this.windows.map((window) => window.instanceId === instanceId ? updated : window); validateWindowLayoutReferences(candidates); const resolved = this.responsiveContainer ? resolveActiveWindowLayouts(candidates, this.responsiveContainer, [instanceId]) : candidates; const target = resolved.find((window) => window.instanceId === instanceId) ?? updated; this.windows = focusWithinLayer(resolved, target); this.emit('lock', origin, instanceId); return this.get(instanceId) }
-  unlockWindow(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'user'): WindowState { const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (!current.layoutLocked) return cloneWindow(current); const updated: WindowState = { ...current, layoutLocked: false }; this.windows = focusWithinLayer(this.windows, updated); this.emit('unlock', origin, instanceId); return this.get(instanceId) }
+  lockWindow(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'user'): WindowState { const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (current.layoutLocked) return cloneWindow(current); if (current.mode !== 'normal') throw new WindowLayoutLockedError(instanceId, 'locking a non-normal window'); const updated: WindowState = { ...current, layoutLocked: true, ...(current.layoutSpec ? { layoutSpecState: 'active' as const } : current.snap ? { layoutSpec: createWindowLayoutSpecFromSnap(current.snap.zone), layoutSpecState: 'active' as const } : { layoutSpecState: 'materialized' as const }) }; const candidates = this.windows.map((window) => window.instanceId === instanceId ? updated : window); validateWindowLayoutReferences(candidates); const resolved = this.responsiveContainer ? resolveActiveWindowLayouts(candidates, this.responsiveContainer, [instanceId]) : candidates; const target = resolved.find((window) => window.instanceId === instanceId) ?? updated; this.windows = focusWithinLayer(resolved, target); this.emit('lock', origin, instanceId); return this.get(instanceId) }
+  unlockWindow(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'user'): WindowState { const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (!current.layoutLocked) return cloneWindow(current); const updated: WindowState = { ...current, layoutLocked: false, ...(current.layoutSpec ? { layoutSpecState: 'dormant' as const } : {}) }; this.windows = focusWithinLayer(this.windows, updated); this.emit('unlock', origin, instanceId); return this.get(instanceId) }
   constrainToContainer(instanceId: WindowInstanceId, container: WindowSize, origin: WindowOperationOrigin = 'api'): WindowState {
     this.responsiveContainer = { ...container }
     const current = this.get(instanceId)
@@ -274,11 +276,11 @@ export class WindowManager {
   subscribe(listener: WindowManagerListener): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
   snapshot(): { windows: readonly WindowState[] } { return { windows: this.list() } }
 
-  private openPaneState(request: { pane: PaneNode; instanceId: WindowInstanceId; title: string; titleIsCustom: boolean; options: WindowOptions; snap: WindowSnapState | null; restoreGeometry: WindowGeometry | null; layoutLocked: boolean; layoutSpec?: WindowLayoutSpec | null; position?: WindowPosition | undefined; size?: WindowSize | undefined; minSize?: WindowSize | undefined; maxSize?: WindowSize | undefined; defaultSize?: WindowSize | undefined }, origin: WindowOperationOrigin): WindowState {
+  private openPaneState(request: { pane: PaneNode; instanceId: WindowInstanceId; title: string; titleIsCustom: boolean; options: WindowOptions; snap: WindowSnapState | null; restoreGeometry: WindowGeometry | null; layoutLocked: boolean; layoutSpec?: WindowLayoutSpec | null; layoutSpecState?: WindowLayoutRuleState; position?: WindowPosition | undefined; size?: WindowSize | undefined; minSize?: WindowSize | undefined; maxSize?: WindowSize | undefined; defaultSize?: WindowSize | undefined }, origin: WindowOperationOrigin): WindowState {
     if (this.windows.some((window) => window.instanceId === request.instanceId)) throw new DuplicateWindowInstanceError(request.instanceId)
     if (request.layoutSpec !== undefined && request.layoutSpec !== null) validateWindowLayoutSpec(request.layoutSpec, request.instanceId)
     const constraints: WindowSizeConstraints = { minSize: cloneSize(request.minSize ?? DEFAULT_MIN_WINDOW_SIZE), maxSize: request.maxSize ? cloneSize(request.maxSize) : null }, size = constrainSize(request.size ?? request.defaultSize ?? DEFAULT_WINDOW_SIZE, constraints), cascade = 24 + this.windows.length * 24, position = request.position ?? { x: cascade, y: cascade }
-    const opened: WindowState = { instanceId: request.instanceId, title: request.title, titleIsCustom: request.titleIsCustom, rootPane: clonePaneTree(request.pane), options: { ...request.options }, snap: request.snap ? { zone: request.snap.zone, floatingGeometry: cloneGeometry(request.snap.floatingGeometry) } : null, restoreGeometry: request.restoreGeometry ? cloneGeometry(request.restoreGeometry) : null, layoutLocked: request.layoutLocked, ...(request.layoutSpec !== undefined ? { layoutSpec: request.layoutSpec ? cloneWindowLayoutSpec(request.layoutSpec) : null } : {}), focused: true, zIndex: 0, mode: 'normal', geometry: { position: { x: Number.isFinite(position.x) ? position.x : cascade, y: Number.isFinite(position.y) ? position.y : cascade }, size }, constraints }
+    const opened: WindowState = { instanceId: request.instanceId, title: request.title, titleIsCustom: request.titleIsCustom, rootPane: clonePaneTree(request.pane), options: { ...request.options }, snap: request.snap ? { zone: request.snap.zone, floatingGeometry: cloneGeometry(request.snap.floatingGeometry) } : null, restoreGeometry: request.restoreGeometry ? cloneGeometry(request.restoreGeometry) : null, layoutLocked: request.layoutLocked, ...(request.layoutSpec !== undefined ? { layoutSpec: request.layoutSpec ? cloneWindowLayoutSpec(request.layoutSpec) : null } : {}), ...(request.layoutSpecState ? { layoutSpecState: request.layoutSpecState } : request.layoutSpec ? { layoutSpecState: request.layoutLocked ? 'active' as const : 'dormant' as const } : request.layoutLocked ? { layoutSpecState: 'materialized' as const } : {}), focused: true, zIndex: 0, mode: 'normal', geometry: { position: { x: Number.isFinite(position.x) ? position.x : cascade, y: Number.isFinite(position.y) ? position.y : cascade }, size }, constraints }
     this.createLifecycle(request.instanceId); this.windows = focusWithinLayer([...this.windows.map((window) => ({ ...window, focused: false })), opened], opened); this.setActiveLifecycle(request.instanceId); this.emit('open', origin, request.instanceId); return this.get(request.instanceId)
   }
   private createInstanceId(): WindowInstanceId { let instanceId: WindowInstanceId; do { this.nextInstanceNumber += 1; instanceId = `wf-window-${this.nextInstanceNumber}` } while (this.windows.some((window) => window.instanceId === instanceId)); return instanceId }

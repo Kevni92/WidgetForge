@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createAbsoluteWindowLayoutSpec, createWindowLayoutSpecFromSnap, resolveWindowLayoutSpecs, validateWindowLayoutReferences, WindowLayoutValidationError, type ResponsiveLayoutWindow } from '../src/core/window-layout'
+import { createAbsoluteWindowLayoutSpec, createWindowLayoutSpecFromSnap, deriveWindowLayoutStatus, findWindowLayoutDependents, resolveWindowLayoutSpecs, validateWindowLayoutReferences, WindowLayoutValidationError, type ResponsiveLayoutWindow } from '../src/core/window-layout'
 import type { WindowGeometry } from '../src/core/window-geometry'
 
 function windowState(instanceId: string, geometry: WindowGeometry, layoutSpec?: ResponsiveLayoutWindow['layoutSpec']): ResponsiveLayoutWindow {
@@ -7,6 +7,20 @@ function windowState(instanceId: string, geometry: WindowGeometry, layoutSpec?: 
 }
 
 describe('responsive window layout resolver', () => {
+  it('derives floating, snapped, active, dormant and materialized states', () => {
+    const responsive = { horizontal: { start: { target: { kind: 'workspace' as const, edge: 'left' as const } }, size: { value: 50, unit: 'percent' as const } }, vertical: { start: { target: { kind: 'workspace' as const, edge: 'top' as const } }, size: { value: 50, unit: 'percent' as const } } }
+    expect(deriveWindowLayoutStatus({ layoutLocked: false })).toEqual({ surface: 'floating', rule: 'none', hasResponsiveSpec: false })
+    expect(deriveWindowLayoutStatus({ layoutLocked: false, snap: { zone: 'left' } })).toMatchObject({ surface: 'snapped', rule: 'none' })
+    expect(deriveWindowLayoutStatus({ layoutLocked: true, layoutSpec: responsive })).toMatchObject({ surface: 'locked', rule: 'active', hasResponsiveSpec: true })
+    expect(deriveWindowLayoutStatus({ layoutLocked: false, layoutSpec: responsive })).toMatchObject({ surface: 'floating', rule: 'dormant' })
+    expect(deriveWindowLayoutStatus({ layoutLocked: false, layoutSpecState: 'materialized' })).toMatchObject({ surface: 'floating', rule: 'materialized' })
+  })
+
+  it('finds direct and transitive responsive dependents deterministically', () => {
+    const spec = (instanceId: string) => ({ horizontal: { start: { target: { kind: 'window' as const, instanceId, edge: 'right' as const } }, size: { value: 100, unit: 'px' as const } }, vertical: { start: { target: { kind: 'workspace' as const, edge: 'top' as const } }, size: { value: 100, unit: 'px' as const } } })
+    expect(findWindowLayoutDependents([{ instanceId: 'base', layoutSpec: null }, { instanceId: 'middle', layoutSpec: spec('base') }, { instanceId: 'last', layoutSpec: spec('middle') }], 'base')).toEqual(['last', 'middle'])
+  })
+
   it('resolves workspace edge constraints in pixels and percentages', () => {
     const result = resolveWindowLayoutSpecs([
       windowState('sidebar', { position: { x: 0, y: 0 }, size: { width: 100, height: 100 } }, {

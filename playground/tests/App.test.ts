@@ -167,6 +167,28 @@ describe('Fullscreen Playground App', () => {
     wrapper.unmount()
   })
 
+  it('shows the responsive inspector and directional canvas picker in edit mode', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    await wrapper.get('[data-demo-action="edit"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-window-instance-id="market-main"] .wf-pane-host[data-pane-id]').trigger('pointerdown')
+    await wrapper.vm.$nextTick()
+
+    const inspector = wrapper.get('[data-workspace-selection-actions]')
+    expect(inspector.get('[data-selected-window-id]').text()).toBe('market-main')
+    expect(inspector.get('[data-window-layout-status]').text()).toContain('Snapped')
+    await inspector.get('[data-window-selection-layout]').trigger('click')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[role="dialog"] input[type="radio"][value="responsive"]').setValue(true)
+    expect(wrapper.get('[data-layout-left-target]')).toBeTruthy()
+    await wrapper.get('[data-layout-pick="horizontal:left"]').trigger('click')
+    expect(wrapper.get('[data-layout-picker-state]').text()).toContain('click a highlighted window')
+    await wrapper.get('[data-window-instance-id="operations-main"]').trigger('pointerdown')
+    await wrapper.vm.$nextTick()
+    expect((wrapper.get('[data-layout-left-target]').element as HTMLSelectElement).value).toBe('window:operations-main:right')
+    wrapper.unmount()
+  })
+
   it('switches Default, Trading and Operations presets without resetting shared domain data', async () => {
     const wrapper = mount(App)
     vi.advanceTimersByTime(1_200)

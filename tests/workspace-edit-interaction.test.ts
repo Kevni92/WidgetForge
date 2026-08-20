@@ -82,6 +82,22 @@ describe('WorkspaceHost edit mode', () => {
     wrapper.unmount()
   })
 
+  it('shows a window inspector with identity, geometry, state and a direct layout action', async () => {
+    const { registry, windows, docks, edit } = setup('edit')
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+    await wrapper.get('.wf-window-frame[data-window-instance-id="window"] .wf-pane-host[data-pane-id]').trigger('pointerdown')
+    await nextTick()
+    const inspector = wrapper.get('[data-workspace-selection-actions]')
+    expect(inspector.get('[data-selected-window-id]').text()).toBe('window')
+    expect(inspector.get('[data-window-geometry]').text()).toContain('300 px')
+    expect(inspector.get('[data-window-layout-status]').text()).toContain('Floating')
+    await inspector.get('[data-window-selection-layout]').trigger('click')
+    await nextTick()
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Layout bearbeiten')
+    await wrapper.get('[role="dialog"] [aria-label="Cancel"]').trigger('click')
+    wrapper.unmount()
+  })
+
   it('locks and unlocks a window through the generic edit context menu', async () => {
     const { registry, windows, docks, edit } = setup('edit')
     const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })

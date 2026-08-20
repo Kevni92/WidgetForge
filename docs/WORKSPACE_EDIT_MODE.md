@@ -37,3 +37,5 @@ Die Drag-Griffe haben eine eindeutige, modusabhängige Bedeutung:
 - `locked`: Normales Tab-Aktivieren bleibt möglich; Layout-Mutationen einschließlich Reordering und strukturellem Pane-Drag werden abgelehnt.
 
 Tab-Reorder und Pane-Drag sind getrennte Pointer-Sessions. Ein Reorder verlässt die aktuelle Tabbar nicht in einen Docking-Preview. Eine kleine Bewegungsschwelle verhindert, dass ein einfacher Grip-Klick als Reorder-Commit interpretiert wird. Gültige Reorder- und Pane-Move-Operationen werden jeweils als eine Workspace-History-Transaktion geführt.
+
+Der sichtbare Selection-Inspector ist der primäre Layout-Einstieg neben dem Context Menu. Er stellt Geometrie, Snap-/Lock-Zustand und den Status einer responsive Regel gemeinsam dar und bietet `Layout bearbeiten` sowie `Lock`/`Unlock` mit zugänglichem `aria-pressed`-Zustand. Der Window-Host stellt außerdem eine benannte `Edit layout`-Aktion bereit; Escape schließt Dialoge bzw. aktive Picker-Zustände, während Tab innerhalb des Dialogs bleibt.

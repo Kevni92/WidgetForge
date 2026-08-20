@@ -28,9 +28,9 @@ import {
 } from "../core/pane";
 import type { CommandRegistry } from "../core/commands";
 import type { WidgetRegistry } from "../core/widget-registry";
-import type { WindowSize } from "../core/window-geometry";
+import type { WindowGeometry, WindowSize } from "../core/window-geometry";
 import type { WindowManager, WindowState } from "../core/window-manager";
-import { createAbsoluteWindowLayoutSpec } from '../core/window-layout'
+import { createAbsoluteWindowLayoutSpec, deriveWindowLayoutStatus, type WindowLayoutEdge, type WindowLayoutStatus } from '../core/window-layout'
 import {
   createPaneEditContextMenuItems,
   createWorkspaceEditController,
@@ -182,6 +182,27 @@ const selectedWindow = computed<WindowState | null>(() => {
   const id = editState.value.windowSelection?.instanceId ?? (editState.value.selection?.owner.kind === 'window' ? editState.value.selection.owner.id : null);
   return id ? windowStates.value.find((window) => window.instanceId === id) ?? null : null;
 });
+const selectedWindowStatus = computed<WindowLayoutStatus | null>(() => selectedWindow.value ? deriveWindowLayoutStatus(selectedWindow.value) : null)
+interface LayoutRelation { readonly sourceId: string; readonly targetId: string; readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number }
+function edgePoint(geometry: WindowGeometry, edge: WindowLayoutEdge): { x: number; y: number } {
+  if (edge === 'left') return { x: geometry.position.x, y: geometry.position.y + geometry.size.height / 2 }
+  if (edge === 'right') return { x: geometry.position.x + geometry.size.width, y: geometry.position.y + geometry.size.height / 2 }
+  if (edge === 'top') return { x: geometry.position.x + geometry.size.width / 2, y: geometry.position.y }
+  return { x: geometry.position.x + geometry.size.width / 2, y: geometry.position.y + geometry.size.height }
+}
+const layoutRelations = computed<readonly LayoutRelation[]>(() => {
+  const byId = new Map(windowStates.value.map((window) => [window.instanceId, window]))
+  return windowStates.value.flatMap((source) => {
+    if (!source.layoutSpec) return []
+    return [source.layoutSpec.horizontal.start, source.layoutSpec.horizontal.end, source.layoutSpec.vertical.start, source.layoutSpec.vertical.end].flatMap((anchor) => {
+      if (!anchor || anchor.target.kind !== 'window') return []
+      const target = byId.get(anchor.target.instanceId)
+      if (!target) return []
+      const sourcePoint = edgePoint(source.geometry, anchor.target.edge), targetPoint = edgePoint(target.geometry, anchor.target.edge)
+      return [{ sourceId: source.instanceId, targetId: target.instanceId, x1: layout.value.floating.x + sourcePoint.x, y1: layout.value.floating.y + sourcePoint.y, x2: layout.value.floating.x + targetPoint.x, y2: layout.value.floating.y + targetPoint.y }]
+    })
+  })
+})
 
 function rectStyle(rect: {
   x: number;
@@ -989,6 +1010,10 @@ function openLayoutDialog(instanceId: string): void {
   layoutDialogWindow.value = windowManager.get(instanceId);
   contextMenu.close();
 }
+function toggleEditMode(): void {
+  if (editState.value.mode === 'locked') return
+  editController.setMode(editState.value.mode === 'edit' ? 'normal' : 'edit')
+}
 function closeLayoutDialog(): void {
   layoutDialogWindow.value = null;
 }
@@ -1021,7 +1046,7 @@ function applyLayoutDialog(value: WindowLayoutDialogSave): void {
   const window = layoutDialogWindow.value;
   if (!window) return;
   if (value.layoutSpec) windowManager.setLayoutSpec(window.instanceId, value.layoutSpec, floatingSize.value, 'user');
-  else if (window.layoutLocked) windowManager.setLayoutSpec(window.instanceId, createAbsoluteWindowLayoutSpec(value.geometry), floatingSize.value, 'user');
+  else if (window.layoutLocked) windowManager.setLayoutSpec(window.instanceId, createAbsoluteWindowLayoutSpec(value.geometry), floatingSize.value, 'user', 'materialized');
   else windowManager.setGeometry(window.instanceId, value.geometry, 'user');
   layoutDialogWindow.value = null;
   editController.selectPane(null);
@@ -1197,13 +1222,24 @@ onBeforeUnmount(() => {
     @click.capture="onWorkspaceClick"
     @contextmenu.capture="openPaneMenu"
   >
+    <button class="wf-workspace-edit-toggle" type="button" data-workspace-edit-toggle :aria-pressed="editState.mode === 'edit' ? 'true' : 'false'" @click="toggleEditMode">
+      {{ editState.mode === 'edit' ? 'Exit layout edit mode' : 'Edit layout' }}
+    </button>
+    <svg v-if="editMode && layoutRelations.length" class="wf-window-layout-relations" :width="size.width" :height="size.height" :viewBox="`0 0 ${Math.max(1, size.width)} ${Math.max(1, size.height)}`" data-window-layout-relations aria-hidden="true">
+      <line v-for="(relation, index) in layoutRelations" :key="`${relation.sourceId}-${relation.targetId}-${index}`" :x1="relation.x1" :y1="relation.y1" :x2="relation.x2" :y2="relation.y2" data-window-layout-relation />
+    </svg>
     <WorkspaceSelectionActions
       v-if="editMode && selectedWindow"
       :instance-id="selectedWindow.instanceId"
       :title="selectedWindow.title"
       :locked="selectedWindow.layoutLocked"
+      :geometry="selectedWindow.geometry"
+      :surface="selectedWindowStatus?.surface"
+      :rule="selectedWindowStatus?.rule"
+      :snap-zone="selectedWindow.snap?.zone"
       @lock="lockSelectedWindow"
       @unlock="unlockSelectedWindow"
+      @layout="openLayoutDialog"
     />
     <div
       class="wf-workspace-host__floating"
@@ -1279,6 +1315,14 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: var(--wf-color-canvas);
 }
+.wf-workspace-edit-toggle { position: absolute; top: var(--wf-space-sm); right: var(--wf-space-sm); z-index: var(--wf-layer-overlay); min-height: var(--wf-size-control-height); padding: 0 var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-floating); color: var(--wf-color-text); font: inherit; font-size: var(--wf-font-size-xs); cursor: pointer; box-shadow: var(--wf-shadow-sm); }
+.wf-workspace-edit-toggle:hover { background: var(--wf-color-hover); }
+.wf-workspace-edit-toggle[aria-pressed="true"] { border-color: var(--wf-color-focus); background: var(--wf-color-selected); color: var(--wf-color-accent); }
+.wf-workspace-edit-toggle:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
+.wf-window-layout-relations { position: absolute; inset: 0; z-index: 1; overflow: visible; pointer-events: none; }
+.wf-window-layout-relations line { stroke: var(--wf-color-accent); stroke-width: 2; stroke-dasharray: 5 4; opacity: .8; }
+.wf-workspace-host :deep([data-layout-picker-source]) { outline: 3px solid var(--wf-color-focus); outline-offset: 3px; }
+.wf-workspace-host :deep([data-layout-picker-target]) { outline: 3px solid var(--wf-color-success); outline-offset: 3px; }
 .wf-workspace-host__floating {
   position: absolute;
   min-width: 0;

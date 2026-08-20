@@ -52,6 +52,31 @@ describe('WindowLayoutDialog', () => {
     wrapper.unmount()
   })
 
+  it('uses directional labels, grouped targets, fill feedback and canvas picking', async () => {
+    const { windows, selected } = setup()
+    const target = document.createElement('div')
+    target.dataset.windowInstanceId = 'base'
+    document.body.append(target)
+    const wrapper = mount(WindowLayoutDialog, { attachTo: document.body, props: { open: true, window: selected, windows: windows.list(), container: { width: 800, height: 600 } } })
+    await wrapper.find('input[type="radio"][value="responsive"]').setValue(true)
+    expect(wrapper.text()).toContain('Left')
+    expect(wrapper.text()).toContain('Right')
+    expect(wrapper.find('[data-layout-left-target]').exists()).toBe(true)
+    expect(wrapper.find('optgroup[label="Windows"]').exists()).toBe(true)
+
+    await wrapper.get('[data-layout-pick="horizontal:left"]').trigger('click')
+    expect(wrapper.get('[data-layout-picker-state]').text()).toContain('left')
+    target.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }))
+    await nextTick()
+    expect((wrapper.get('[data-layout-left-target]').element as HTMLSelectElement).value).toBe('window:base:right')
+
+    await wrapper.get('[data-layout-horizontal-fill]').setValue(true)
+    expect(wrapper.get('[data-layout-width]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-layout-fill-hint]').text()).toContain('calculated')
+    wrapper.unmount()
+    target.remove()
+  })
+
   it('cancels with Escape and keeps focus inside the dialog while open', async () => {
     const { windows, selected } = setup()
     const wrapper = mount(WindowLayoutDialog, { attachTo: document.body, props: { open: true, window: selected, windows: windows.list(), container: { width: 800, height: 600 } } })
