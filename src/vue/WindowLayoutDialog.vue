@@ -14,14 +14,17 @@ interface TargetOption { readonly value: string; readonly label: string; readonl
 interface PickerRequest { readonly axis: PickerAxis; readonly side: PickerSide }
 
 export interface WindowLayoutDialogSave { readonly layoutSpec: WindowLayoutSpec | null; readonly geometry: WindowGeometry }
+export interface WindowLayoutDialogPreview { readonly sourceInstanceId: string; readonly layoutSpec: WindowLayoutSpec | null; readonly geometry: WindowGeometry }
 
 const props = defineProps<{ open: boolean; window: WindowState; windows: readonly WindowState[]; container: WindowSize }>()
-const emit = defineEmits<{ cancel: []; save: [value: WindowLayoutDialogSave] }>()
+const emit = defineEmits<{ cancel: []; preview: [value: WindowLayoutDialogPreview | null]; save: [value: WindowLayoutDialogSave] }>()
 const dialog = ref<HTMLElement | null>(null)
 const mode = ref<LayoutMode>('absolute')
 const errorMessage = ref('')
 const noticeMessage = ref('')
 const retainedChoice = ref<'retained' | 'current' | null>(null)
+const previewGeometry = ref<WindowGeometry | null>(null)
+const previewError = ref('')
 const pickerRequest = ref<PickerRequest | null>(null)
 const absolute = reactive({ x: 0 as number | string, y: 0 as number | string, width: 0 as number | string, height: 0 as number | string, xUnit: 'px' as 'px' | 'percent', yUnit: 'px' as 'px' | 'percent', widthUnit: 'px' as 'px' | 'percent', heightUnit: 'px' as 'px' | 'percent' })
 const horizontal = reactive<AxisDraft>({ mode: 'start-size', startTarget: 'workspace:left', startOffset: 0, startOffsetUnit: 'px', endTarget: 'none', endOffset: 0, endOffsetUnit: 'px', size: 0, sizeUnit: 'px' })
@@ -63,7 +66,7 @@ function applyAxis(draft: AxisDraft, axisSpec: WindowLayoutAxisSpec | undefined,
 }
 function initialize(): void {
   const geometry = props.window.geometry
-  mode.value = props.window.layoutSpec ? 'responsive' : 'absolute'; errorMessage.value = ''; noticeMessage.value = ''; retainedChoice.value = retainedRuleAvailable.value ? 'retained' : null; pickerRequest.value = null
+  mode.value = props.window.layoutSpec ? 'responsive' : 'absolute'; errorMessage.value = ''; noticeMessage.value = ''; retainedChoice.value = retainedRuleAvailable.value ? 'retained' : null; previewGeometry.value = null; previewError.value = ''; pickerRequest.value = null
   absolute.x = geometry.position.x; absolute.y = geometry.position.y; absolute.width = geometry.size.width; absolute.height = geometry.size.height; absolute.xUnit = 'px'; absolute.yUnit = 'px'; absolute.widthUnit = 'px'; absolute.heightUnit = 'px'
   applyAxis(horizontal, props.window.layoutSpec?.horizontal, geometry.position.x, geometry.size.width); applyAxis(vertical, props.window.layoutSpec?.vertical, geometry.position.y, geometry.size.height)
   if (!props.window.layoutSpec) { horizontal.mode = 'start-size'; horizontal.startTarget = 'workspace:left'; horizontal.endTarget = 'none'; vertical.mode = 'start-size'; vertical.startTarget = 'workspace:top'; vertical.endTarget = 'none' }
@@ -193,8 +196,32 @@ function responsiveSpec(): WindowLayoutSpec {
   resolveWindowLayoutSpecs(props.windows.map((window) => window.instanceId === props.window.instanceId ? { ...window, layoutSpec: spec } : window), props.container)
   return spec
 }
+function previewDraft(): void {
+  if (!props.open) return
+  try {
+    if (mode.value === 'absolute') {
+      const geometry = absoluteGeometry()
+      previewGeometry.value = geometry
+      previewError.value = ''
+      emit('preview', { sourceInstanceId: props.window.instanceId, layoutSpec: null, geometry })
+      return
+    }
+    const layoutSpec = responsiveSpec()
+    const geometry = resolveWindowLayoutSpecs(props.windows.map((window) => window.instanceId === props.window.instanceId ? { ...window, layoutSpec } : window), props.container).get(props.window.instanceId)
+    if (!geometry) throw new Error('Window geometry could not be resolved')
+    previewGeometry.value = geometry
+    previewError.value = ''
+    emit('preview', { sourceInstanceId: props.window.instanceId, layoutSpec, geometry })
+  } catch (error) {
+    previewGeometry.value = null
+    previewError.value = error instanceof Error ? 'Preview unavailable until the layout is valid.' : 'Preview unavailable.'
+    emit('preview', null)
+  }
+}
 function save(): void {
   try {
+    if (!previewGeometry.value) throw new Error('Preview is not valid')
+    emit('preview', null)
     if (mode.value === 'absolute') emit('save', { layoutSpec: null, geometry: absoluteGeometry() })
     else { const spec = responsiveSpec(), geometry = resolveWindowLayoutSpecs(props.windows.map((window) => window.instanceId === props.window.instanceId ? { ...window, layoutSpec: spec } : window), props.container).get(props.window.instanceId); if (!geometry) throw new Error('Window geometry could not be resolved'); emit('save', { layoutSpec: spec, geometry }) }
   } catch (error) {
@@ -204,7 +231,7 @@ function save(): void {
 }
 function clearPickerMarkers(): void { for (const element of document.querySelectorAll<HTMLElement>('[data-layout-picker-source], [data-layout-picker-target]')) { delete element.dataset.layoutPickerSource; delete element.dataset.layoutPickerTarget } }
 function markPickerSource(): void { clearPickerMarkers(); const source = [...document.querySelectorAll<HTMLElement>('[data-window-instance-id]')].find((element) => element.dataset.windowInstanceId === props.window.instanceId); if (source) source.dataset.layoutPickerSource = 'true' }
-function cancel(): void { pickerRequest.value = null; clearPickerMarkers(); emit('cancel') }
+function cancel(): void { pickerRequest.value = null; clearPickerMarkers(); previewGeometry.value = null; emit('preview', null); emit('cancel') }
 function handleBackdrop(event: MouseEvent): void { if (event.target === event.currentTarget && !pickerRequest.value) cancel() }
 function handleKeydown(event: KeyboardEvent): void { if (event.key === 'Escape') { event.preventDefault(); if (pickerRequest.value) { pickerRequest.value = null; clearPickerMarkers() } else cancel(); return } if (event.key === 'Tab' && dialog.value) { event.preventDefault(); trapFocus(dialog.value, event.shiftKey) } }
 function startPicker(axis: PickerAxis, side: PickerSide): void { pickerRequest.value = { axis, side }; errorMessage.value = ''; markPickerSource() }
@@ -216,10 +243,11 @@ function onDocumentPointerDown(event: PointerEvent): void {
   const edge = request.side === 'left' ? 'right' : request.side === 'right' ? 'left' : request.side === 'top' ? 'bottom' : 'top'
   setTargetValue(request.axis, request.side, `window:${instanceId}:${edge}`); clearPickerMarkers(); element.dataset.layoutPickerTarget = 'true'; pickerRequest.value = null; event.preventDefault()
 }
-watch(() => props.open, async (open) => { if (open) { previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null; initialize(); await nextTick(); if (dialog.value) focusModal(dialog.value) } else { const restore = previousFocus; previousFocus = null; await nextTick(); restore?.focus() } }, { immediate: true })
+watch(() => props.open, async (open) => { if (open) { previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null; initialize(); previewDraft(); await nextTick(); if (dialog.value) focusModal(dialog.value) } else { previewGeometry.value = null; emit('preview', null); const restore = previousFocus; previousFocus = null; await nextTick(); restore?.focus() } }, { immediate: true })
 watch(() => props.window.instanceId, () => { if (props.open) initialize() })
+watch([mode, absolute, horizontal, vertical, retainedChoice], () => { previewDraft() }, { deep: true, flush: 'post' })
 onMounted(() => document.addEventListener('pointerdown', onDocumentPointerDown, true))
-onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPointerDown, true); clearPickerMarkers(); const restore = previousFocus; previousFocus = null; restore?.focus() })
+onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPointerDown, true); clearPickerMarkers(); previewGeometry.value = null; emit('preview', null); const restore = previousFocus; previousFocus = null; restore?.focus() })
 </script>
 
 <template>
@@ -231,6 +259,8 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPo
       </header>
       <form class="wf-window-layout-dialog__body" @submit.prevent="save">
         <p class="wf-window-layout-dialog__resolved" data-layout-resolved>Current: X {{ Math.round(props.window.geometry.position.x) }} · Y {{ Math.round(props.window.geometry.position.y) }} · {{ Math.round(props.window.geometry.size.width) }} × {{ Math.round(props.window.geometry.size.height) }} px</p>
+        <p v-if="previewGeometry" class="wf-window-layout-dialog__preview" data-layout-preview>Preview: X {{ Math.round(previewGeometry.position.x) }} · Y {{ Math.round(previewGeometry.position.y) }} · {{ Math.round(previewGeometry.size.width) }} × {{ Math.round(previewGeometry.size.height) }} px</p>
+        <p v-else-if="previewError" class="wf-window-layout-dialog__preview-error" data-layout-preview-error role="status">{{ previewError }}</p>
         <fieldset><legend>Layout type</legend><label><input type="radio" :checked="mode === 'absolute'" value="absolute" @change="setLayoutMode('absolute')" /> Free geometry</label><label><input type="radio" :checked="mode === 'responsive'" value="responsive" @change="setLayoutMode('responsive')" /> Anchored / responsive layout</label></fieldset>
         <div v-if="mode === 'absolute'" class="wf-window-layout-dialog__grid">
           <label>X <input v-model="absolute.x" type="number" step="any" inputmode="decimal" data-layout-x /><select :value="absolute.xUnit" aria-label="X unit" @change="setAbsoluteUnit('x', $event)"><option value="px">px</option><option value="percent">%</option></select></label>
@@ -286,7 +316,7 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPo
         </template>
         <p v-if="noticeMessage" class="wf-window-layout-dialog__notice" role="status">{{ noticeMessage }}</p>
         <p v-if="errorMessage" :id="errorId" class="wf-window-layout-dialog__error" role="alert">{{ errorMessage }}</p>
-        <footer class="wf-window-layout-dialog__actions"><button type="button" @click="cancel">Cancel</button><button type="submit" data-layout-save>Save layout</button></footer>
+        <footer class="wf-window-layout-dialog__actions"><button type="button" @click="cancel">Cancel</button><button type="submit" data-layout-save :disabled="!previewGeometry">Save layout</button></footer>
       </form>
     </section>
   </div>
@@ -298,7 +328,7 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPo
 .wf-window-layout-dialog { width: min(860px, 100%); max-height: min(820px, 100%); overflow: auto; pointer-events: auto; border: 1px solid var(--wf-color-border-modal); border-radius: var(--wf-radius-md); background: var(--wf-color-surface-modal); color: var(--wf-color-text); box-shadow: var(--wf-shadow-lg); }
 .wf-window-layout-dialog__header { display: flex; justify-content: space-between; gap: var(--wf-space-md); padding: var(--wf-space-md) var(--wf-space-lg); border-bottom: 1px solid var(--wf-color-border-modal); }
 .wf-window-layout-dialog__header div { display: grid; gap: var(--wf-space-xs); }
-.wf-window-layout-dialog__header small, .wf-window-layout-dialog__resolved { color: var(--wf-color-text-muted); font-size: var(--wf-font-size-sm); }
+.wf-window-layout-dialog__header small, .wf-window-layout-dialog__resolved, .wf-window-layout-dialog__preview, .wf-window-layout-dialog__preview-error { color: var(--wf-color-text-muted); font-size: var(--wf-font-size-sm); }
 .wf-window-layout-dialog__close { border: 0; background: transparent; color: var(--wf-color-text); font: inherit; font-size: 1.4em; cursor: pointer; }
 .wf-window-layout-dialog__body { display: grid; gap: var(--wf-space-md); padding: var(--wf-space-lg); }
 .wf-window-layout-dialog fieldset { display: grid; gap: var(--wf-space-sm); min-width: 0; padding: var(--wf-space-md); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); }
@@ -316,6 +346,8 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPo
 .wf-window-layout-dialog__grid label { grid-template-columns: auto minmax(0, 1fr) auto; }
 .wf-window-layout-dialog__hint, .wf-window-layout-dialog__summary, .wf-window-layout-dialog__picker, .wf-window-layout-dialog__calculated, .wf-window-layout-dialog__notice { margin: 0; color: var(--wf-color-text-muted); font-size: var(--wf-font-size-sm); }
 .wf-window-layout-dialog__notice { padding: var(--wf-space-sm); border-left: 3px solid var(--wf-color-accent); }
+.wf-window-layout-dialog__preview { margin: 0; padding: var(--wf-space-sm); border-left: 3px solid var(--wf-color-success); color: var(--wf-color-success); }
+.wf-window-layout-dialog__preview-error { margin: 0; padding: var(--wf-space-sm); border-left: 3px solid var(--wf-color-warning); color: var(--wf-color-warning); }
 .wf-window-layout-dialog__retained { display: grid; gap: var(--wf-space-xs); padding: var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface); font-size: var(--wf-font-size-sm); }
 .wf-window-layout-dialog__retained > span { color: var(--wf-color-text-muted); }
 .wf-window-layout-dialog__retained-actions { display: flex; flex-wrap: wrap; gap: var(--wf-space-sm); }
