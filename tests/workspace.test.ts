@@ -58,6 +58,25 @@ describe('workspace persistence', () => {
     target.restore('max');expect(target.get('max').geometry).toEqual({position:{x:90,y:70},size:{width:420,height:280}})
   })
 
+  it('persists per-window layout locks and defaults missing locks to false', () => {
+    const registry = createRegistry(), source = createWindowManager(registry)
+    source.open({ widgetId: 'test.alpha', instanceId: 'locked', parameters: { name: 'locked' }, position: { x: 70, y: 80 }, size: { width: 360, height: 240 } })
+    const geometry = source.get('locked').geometry
+    source.lockWindow('locked', 'user')
+    const snapshot = captureWorkspace(source)
+    expect(snapshot.windows[0]).toMatchObject({ layoutLocked: true, geometry })
+
+    const restored = createWindowManager(registry)
+    expect(restoreWorkspace(restored, serializeWorkspace(source)).issues).toEqual([])
+    expect(restored.get('locked')).toMatchObject({ layoutLocked: true, geometry })
+
+    const legacy = createWindowManager(registry)
+    const withoutLock = JSON.parse(serializeWorkspace(source)) as { windows: Array<Record<string, unknown>> }
+    delete withoutLock.windows[0]?.layoutLocked
+    expect(restoreWorkspace(legacy, withoutLock).issues).toEqual([])
+    expect(legacy.get('locked').layoutLocked).toBe(false)
+  })
+
   it('normalizes persisted geometry against the current workspace during restore', () => {
     const registry=createRegistry(),source=createWindowManager(registry)
     source.open({widgetId:'test.alpha',instanceId:'large',parameters:{name:'large'},position:{x:860,y:620},size:{width:420,height:280}})

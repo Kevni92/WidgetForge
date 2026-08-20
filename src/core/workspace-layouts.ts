@@ -167,6 +167,7 @@ function patchWindow(windows: WindowManager, target: WorkspaceWindowSnapshot): v
     windows.snapWindow(target.instanceId, target.snap.zone, snapContainer(target), 'api')
     windows.setGeometry(target.instanceId, target.geometry, 'api')
     if (target.mode === 'minimized') windows.minimize(target.instanceId, 'api')
+    applyLayoutLock(windows, target)
     return
   }
 
@@ -174,11 +175,19 @@ function patchWindow(windows: WindowManager, target: WorkspaceWindowSnapshot): v
     windows.setGeometry(target.instanceId, target.restoreGeometry ?? target.geometry, 'api')
     windows.maximizeWindow(target.instanceId, target.geometry.size, 'api')
     if (target.mode === 'minimized') windows.minimize(target.instanceId, 'api')
+    applyLayoutLock(windows, target)
     return
   }
 
   windows.setGeometry(target.instanceId, target.geometry, 'api')
   if (target.mode === 'minimized') windows.minimize(target.instanceId, 'api')
+  applyLayoutLock(windows, target)
+}
+
+function applyLayoutLock(windows: WindowManager, target: WorkspaceWindowSnapshot): void {
+  const current = windows.get(target.instanceId)
+  if (target.layoutLocked === true && !current.layoutLocked) windows.lockWindow(target.instanceId, 'api')
+  if (target.layoutLocked !== true && current.layoutLocked) windows.unlockWindow(target.instanceId, 'api')
 }
 
 function openWindow(windows: WindowManager, target: WorkspaceWindowSnapshot): void {
@@ -194,6 +203,7 @@ function openWindow(windows: WindowManager, target: WorkspaceWindowSnapshot): vo
     options: target.options,
     snap: target.snap,
     restoreGeometry: target.restoreGeometry,
+    layoutLocked: target.layoutLocked === true,
   }, 'api')
   if (target.mode === 'maximized') windows.maximizeWindow(target.instanceId, target.geometry.size, 'api')
   else if (target.mode === 'minimized') windows.minimize(target.instanceId, 'api')

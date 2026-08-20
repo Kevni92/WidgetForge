@@ -35,6 +35,22 @@ describe('WorkspaceHistory', () => {
     history.dispose()
   })
 
+  it('undoes and redoes a per-window layout lock without changing geometry', () => {
+    const { windows } = setup()
+    windows.open({ widgetId: 'history.a', instanceId: 'window', position: { x: 20, y: 30 }, size: { width: 280, height: 180 } })
+    const history = createWorkspaceHistory(windows)
+    const geometry = windows.get('window').geometry
+
+    windows.lockWindow('window', 'user')
+    expect(history.state.undoDepth).toBe(1)
+    expect(windows.get('window')).toMatchObject({ layoutLocked: true, geometry })
+    expect(history.undo()).toBe(true)
+    expect(windows.get('window')).toMatchObject({ layoutLocked: false, geometry })
+    expect(history.redo()).toBe(true)
+    expect(windows.get('window')).toMatchObject({ layoutLocked: true, geometry })
+    history.dispose()
+  })
+
   it('commits many geometry changes in one transaction as one undo entry', () => {
     const { windows, docks } = setup()
     windows.open({ widgetId: 'history.a', instanceId: 'a', position: { x: 10, y: 20 }, size: { width: 300, height: 200 } })

@@ -76,6 +76,22 @@ describe('WindowFrame', () => {
     dispatchPointer('pointerup', 400, 400)
   })
 
+  it('renders locked windows without geometry chrome while keeping content interactive', async () => {
+    const { registry, manager } = createSetup()
+    const locked = manager.lockWindow('frame-1', 'user')
+    const wrapper = mount(WindowFrame, {
+      props: { window: locked, manager, registry, containerSize: { width: 800, height: 600 } },
+    })
+
+    expect(wrapper.attributes('data-window-layout-locked')).toBe('true')
+    expect(wrapper.find('.wf-window-shell__titlebar').exists()).toBe(false)
+    expect(wrapper.find('[data-window-resize-handle]').exists()).toBe(false)
+    expect(wrapper.find('.wf-window-shell__content').text()).toContain('content')
+    dispatchPointerOn(wrapper.get('.wf-window-shell__content').element, 'pointerdown', 100, 100)
+    await nextTick()
+    expect(manager.get('frame-1').geometry).toEqual(locked.geometry)
+  })
+
   it('removes active global interaction listeners when the frame is unmounted or closed', async () => {
     const first = createSetup()
     const frame = mount(WindowFrame, {

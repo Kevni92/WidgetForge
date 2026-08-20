@@ -22,6 +22,7 @@ export interface WorkspaceWindowSnapshot {
   readonly options: WindowOptions
   readonly snap: WindowSnapState | null
   readonly restoreGeometry: WindowGeometry | null
+  readonly layoutLocked?: boolean
   readonly mode: WindowMode
   readonly focused: boolean
   readonly zIndex: number
@@ -155,6 +156,7 @@ export function validateWorkspaceSnapshot(snapshot: WorkspaceSnapshot): void {
     if (zIndexes.has(window.zIndex)) throw new WorkspaceInvariantError(`duplicate window z-index "${window.zIndex}" in workspace`)
     zIndexes.add(window.zIndex)
     if (window.focused) focusedCount += 1
+    if (window.layoutLocked !== undefined && typeof window.layoutLocked !== 'boolean') throw new WorkspaceInvariantError(`invalid layout lock state for window "${window.instanceId}"`)
     if (!Number.isInteger(window.zIndex) || window.zIndex < 0) throw new WorkspaceInvariantError(`invalid z-index for window "${window.instanceId}"`)
     validateGeometry(window.geometry, `window "${window.instanceId}" geometry`)
     if (window.restoreGeometry) validateGeometry(window.restoreGeometry, `window "${window.instanceId}" restore geometry`)
@@ -192,6 +194,7 @@ export function captureWorkspace(manager: WindowManager, dockManager?: DockManag
     options: { ...window.options },
     snap: cloneSnap(window.snap),
     restoreGeometry: window.restoreGeometry ? cloneGeometry(window.restoreGeometry) : null,
+    layoutLocked: window.layoutLocked,
     mode: window.mode,
     focused: window.focused,
     zIndex: window.zIndex,
@@ -347,7 +350,8 @@ function readWindow(value: unknown): WorkspaceWindowSnapshot | null {
   if (!rootPane || !geometry || !constraints || !options || snap === undefined || (value.restoreGeometry !== undefined && value.restoreGeometry !== null && !restoreGeometry)) return null
   if (value.mode === 'maximized' && !restoreGeometry) return null
   if (value.titleIsCustom !== undefined && typeof value.titleIsCustom !== 'boolean') return null
-  return { instanceId: value.instanceId, title: value.title, ...(value.titleIsCustom === true ? { titleIsCustom: true } : {}), rootPane, geometry, constraints, options, snap, restoreGeometry, mode: value.mode as WindowMode, focused: value.focused, zIndex: value.zIndex as number }
+  if (value.layoutLocked !== undefined && typeof value.layoutLocked !== 'boolean') return null
+  return { instanceId: value.instanceId, title: value.title, ...(value.titleIsCustom === true ? { titleIsCustom: true } : {}), rootPane, geometry, constraints, options, snap, restoreGeometry, layoutLocked: value.layoutLocked === true, mode: value.mode as WindowMode, focused: value.focused, zIndex: value.zIndex as number }
 }
 
 function readDockRestoreWindow(value: unknown): DockRestoreWindow | undefined | null {
@@ -418,7 +422,7 @@ export function restoreWorkspace(
     candidates.push({
       index, instanceId: entry.instanceId, widgetId: entry.rootPane.kind === 'widget' ? entry.rootPane.widgetId : undefined, focused: entry.focused, mode: entry.mode, zIndex: entry.zIndex,
       open: (target) => {
-        target.openPane({ pane: entry.rootPane, instanceId: entry.instanceId, title: entry.title, titleIsCustom: entry.titleIsCustom === true, position: entry.geometry.position, size: entry.geometry.size, minSize: entry.constraints.minSize, ...(entry.constraints.maxSize ? { maxSize: entry.constraints.maxSize } : {}), options: entry.options, snap: entry.snap, restoreGeometry: entry.restoreGeometry })
+        target.openPane({ pane: entry.rootPane, instanceId: entry.instanceId, title: entry.title, titleIsCustom: entry.titleIsCustom === true, position: entry.geometry.position, size: entry.geometry.size, minSize: entry.constraints.minSize, ...(entry.constraints.maxSize ? { maxSize: entry.constraints.maxSize } : {}), options: entry.options, snap: entry.snap, restoreGeometry: entry.restoreGeometry, layoutLocked: entry.layoutLocked === true })
         if (entry.mode === 'maximized') target.maximizeWindow(entry.instanceId, options.container ?? entry.geometry.size, 'api')
         else if (options.container) target.constrainToContainer(entry.instanceId, options.container, 'api')
         return target.get(entry.instanceId)

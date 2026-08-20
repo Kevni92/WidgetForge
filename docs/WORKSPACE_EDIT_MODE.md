@@ -18,6 +18,14 @@ Im Edit-Mode kann ein Pane ausgewählt und per Context Menu bearbeitet werden. D
 
 Pane-spezifische Locks liegen im `WorkspaceEditController` und verändern den Pane-Tree nicht. Damit bleiben bestehende Workspace-Snapshots kompatibel; Anwendungen können Edit-/Lock-State separat speichern.
 
+## Per-Window-Lock
+
+Ein Fenster besitzt zusätzlich den kanonischen `WindowState.layoutLocked`-Wert. Dieser Lock ist unabhängig vom globalen Workspace-Modus und von Pane-Locks: Er friert die exakte Geometrie sowie den bestehenden Snap-/Restore-Zustand ein, ohne das Fenster zu docken oder zu verankern.
+
+Das Locken und Entsperren ist nur im Edit-Mode möglich. Ein gelocktes Fenster liegt in einer eigenen deterministischen Layout-Ebene unter normalen Floating-Fenstern, bleibt fokussierbar und rendert seinen Widget-Inhalt interaktiv. Bewegung, Resize, Snap, Anchor und Window-Docking werden dagegen abgelehnt. Titelbar, Titel, Header-Actions und Resize-Griffe werden vollständig entfernt.
+
+Im Edit-Mode markiert die generische Workspace-Auswahl auch ein chrome-less gelocktes Fenster. Sein Context Menu bietet dann ausschließlich `Unlock window`; die Aktion arbeitet über die öffentliche Workspace-/Window-API und benötigt keine Playground-Sonderbehandlung.
+
 ## Handle-Semantik
 
 Die Drag-Griffe haben eine eindeutige, modusabhängige Bedeutung:

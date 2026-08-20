@@ -120,6 +120,7 @@ export function dockWindowIntoWindow(
   if (sourceInstanceId === targetInstanceId) throw new InvalidPaneOperationError('a window cannot be docked into itself')
   const source = manager.get(sourceInstanceId)
   const target = manager.get(targetInstanceId)
+  if (source.layoutLocked || target.layoutLocked) throw new InvalidPaneOperationError('layout-locked windows cannot participate in window docking')
   const rootPane = dropPaneAt(target.rootPane, targetPaneId, source.rootPane, zone, containerId)
   commitWorkspacePaneMutations(manager, undefined, [
     { owner: { kind: 'window', id: sourceInstanceId }, rootPane: null },
@@ -192,6 +193,7 @@ export function anchorWindowToDock(
   request: AnchorWindowToDockRequest,
 ): ReturnType<DockManager['get']> {
   const source = manager.get(request.instanceId)
+  if (source.layoutLocked) throw new WorkspaceDockTransformError('layout-locked windows cannot be anchored to a dock')
   if (source.mode !== 'normal' || source.snap) throw new WorkspaceDockTransformError('only a floating, normal window can be anchored to a dock')
   if (source.options.role !== 'normal' && source.options.role !== 'utility') throw new WorkspaceDockTransformError(`window role "${source.options.role}" cannot be anchored to a dock`)
 

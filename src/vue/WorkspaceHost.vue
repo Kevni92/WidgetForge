@@ -258,6 +258,7 @@ function containsPoint(rect: DOMRect, x: number, y: number): boolean {
 }
 function paneDragAllowed(owner: WorkspacePaneOwner, paneId: string): boolean {
   if (layoutLocked.value) return false;
+  if (owner.kind === "window" && windowManager.get(owner.id).layoutLocked) return false;
   const pane = findPane(ownerRoot(owner), paneId);
   return Boolean(
     pane &&
@@ -291,6 +292,18 @@ function syncEditMarkers(): void {
       element.dataset.paneSelected = "true";
     if (editController.isPaneLocked(selection))
       element.dataset.paneLayoutLocked = "true";
+  }
+  for (const element of workspace.querySelectorAll<HTMLElement>(
+    ".wf-window-frame[data-window-instance-id]",
+  )) {
+    element.removeAttribute("data-window-selected");
+    const instanceId = element.dataset.windowInstanceId;
+    if (
+      instanceId &&
+      editState.value.selection?.owner.kind === "window" &&
+      editState.value.selection.owner.id === instanceId
+    )
+      element.dataset.windowSelected = "true";
   }
 }
 
@@ -967,6 +980,16 @@ function executePaneMenu(
   selection: WorkspacePaneSelection,
 ): void {
   if (layoutLocked.value) return;
+  if (item.id === "lock-window" && selection.owner.kind === "window") {
+    windowManager.lockWindow(selection.owner.id, "user");
+    editController.selectPane(null);
+    return;
+  }
+  if (item.id === "unlock-window" && selection.owner.kind === "window") {
+    windowManager.unlockWindow(selection.owner.id, "user");
+    editController.selectPane(null);
+    return;
+  }
   if (item.id === "lock") {
     editController.setPaneLocked(selection, true);
     return;
@@ -1003,11 +1026,14 @@ function openPaneMenu(event: MouseEvent): void {
   if (!pane?.dataset.paneId) return;
   const selection = selectionFor(pane, pane.dataset.paneId);
   if (!selection) return;
-  const items = [...createPaneEditContextMenuItems(
-    ownerRoot(selection.owner),
-    selection.paneId,
-    editController.isPaneLocked(selection),
-  ), ...(selection.owner.kind === "dock" && ownerRoot(selection.owner).id === selection.paneId ? [{ id: "detach-dock", label: "Detach dock to window" }] : [])];
+  const windowState = selection.owner.kind === "window" ? windowManager.get(selection.owner.id) : null;
+  const items = windowState?.layoutLocked
+    ? [{ id: "unlock-window", label: "Unlock window" }]
+    : [...(windowState?.mode === "normal" ? [{ id: "lock-window", label: "Lock window" }] : []), ...createPaneEditContextMenuItems(
+      ownerRoot(selection.owner),
+      selection.paneId,
+      editController.isPaneLocked(selection),
+    ), ...(selection.owner.kind === "dock" && ownerRoot(selection.owner).id === selection.paneId ? [{ id: "detach-dock", label: "Detach dock to window" }] : [])];
   if (items.length === 0) return;
   event.preventDefault();
   editController.selectPane(selection);
@@ -1252,6 +1278,14 @@ onBeforeUnmount(() => {
 .wf-workspace-host--edit :deep(.wf-pane-host[data-pane-layout-locked="true"]) {
   outline-style: solid;
   outline-color: var(--wf-color-warning);
+}
+.wf-workspace-host--edit :deep(.wf-window-frame[data-window-layout-locked="true"]) {
+  outline: 1px solid var(--wf-color-warning);
+  outline-offset: -1px;
+}
+.wf-workspace-host--edit :deep(.wf-window-frame[data-window-selected="true"]) {
+  outline: 2px solid var(--wf-color-focus);
+  outline-offset: -2px;
 }
 .wf-workspace-host--edit :deep([data-pane-divider-index]),
 .wf-workspace-host--edit :deep([data-window-resize-handle]),

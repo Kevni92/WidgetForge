@@ -82,6 +82,28 @@ describe('WorkspaceHost edit mode', () => {
     wrapper.unmount()
   })
 
+  it('locks and unlocks a window through the generic edit context menu', async () => {
+    const { registry, windows, docks, edit } = setup('edit')
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+    const pane = wrapper.get('.wf-pane-host[data-pane-id]').element
+    pane.dispatchEvent(new MouseEvent('contextmenu', { clientX: 100, clientY: 100, bubbles: true, cancelable: true }))
+    await nextTick()
+    expect(wrapper.findAll('[role="menuitem"]').map((item) => item.text())).toContain('Lock window')
+    await wrapper.findAll('[role="menuitem"]').find((item) => item.text() === 'Lock window')?.trigger('click')
+    await nextTick()
+    expect(windows.get('window').layoutLocked).toBe(true)
+    expect(wrapper.find('.wf-window-shell__titlebar').exists()).toBe(false)
+
+    wrapper.get('.wf-pane-host[data-pane-id]').element.dispatchEvent(new MouseEvent('contextmenu', { clientX: 100, clientY: 100, bubbles: true, cancelable: true }))
+    await nextTick()
+    expect(wrapper.findAll('[role="menuitem"]').map((item) => item.text())).toEqual(['Unlock window'])
+    await wrapper.get('[role="menuitem"]').trigger('click')
+    await nextTick()
+    expect(windows.get('window').layoutLocked).toBe(false)
+    expect(wrapper.find('.wf-window-shell__titlebar').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('keeps a click on pane content when the pointer does not cross the drag threshold', async () => {
     const { registry, windows, docks, edit } = setup('edit')
     const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
