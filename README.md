@@ -33,6 +33,26 @@ import {
 
 Ein Consumer definiert sein eigenes Vue-Widget mit `defineWidget`, registriert es über `createWidgetRegistry`, erzeugt einen `createWindowManager` und öffnet es anhand seiner Widget-ID. Ein vollständiges, gegen das gepackte npm-Artefakt validiertes Beispiel liegt unter `examples/minimal-consumer`.
 
+### Data und Mutationen in Vue
+
+Die App erstellt ihre Provider und stellt sie im Vue-Baum bereit. Ein Mutation-Provider kapselt dabei den konkreten Consumer-Transport; WidgetForge öffnet keine WebSocket-Verbindung selbst:
+
+```ts
+import {
+  MutationClientProvider,
+  createMutationClient,
+  useMutation,
+} from 'widgetforge'
+```
+
+```vue
+<MutationClientProvider :client="mutationClient">
+  <WidgetForgeWorkspace />
+</MutationClientProvider>
+```
+
+Ein Widget verwendet `useMutation(definition)`. Das Binding stellt `state`, `execute(input)` und `reset()` bereit. `state.status` ist `idle`, `pending`, `success` oder `error`; `pending` kann beispielsweise für `disabled` und `aria-busy` verwendet werden. Ein erfolgreicher Request verändert keinen Data-Cache automatisch. Fehler bleiben lokal am Binding und werden nicht ungefragt als Notification angezeigt.
+
 ## Package Contract
 
 - ESM-only

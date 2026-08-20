@@ -128,7 +128,7 @@ Eine `MutationDefinition<Input, Result>` beschreibt nur die stabile Mutation-ID 
 
 Mutationen besitzen keinen Data-Cache und werden nicht dedupliziert. Ein erfolgreicher Write invalidiert oder überschreibt keine Data-Ressource automatisch. Ebenso gibt es keine implizite Wiederholung bei Transportfehlern. Ob und wie ein Consumer Requests absichert, wiederholt oder korreliert, ist Teil seines eigenen Protokollvertrags.
 
-Vue stellt diese Core-Fähigkeit später über Context und `useMutation` bereit. Weder `MutationClient` noch Widgets erzeugen selbst eine WebSocket-Verbindung. `WidgetAction`, Navigation und Window-Management bleiben eigenständige Framework-Konzepte.
+Vue stellt diese Core-Fähigkeit über `MutationClientProvider`, `useMutationClient` und `useMutation` bereit. Der Provider reicht ausschließlich den vom Consumer erstellten Client in den Vue-Context; weder `MutationClient` noch Widgets erzeugen selbst eine WebSocket-Verbindung. Beim Unmount wird das Binding freigegeben, ein bereits laufender Request aber nicht automatisch erneut gesendet oder als sicher abgebrochen dargestellt. `WidgetAction`, Navigation und Window-Management bleiben eigenständige Framework-Konzepte.
 
 ## Testing
 
