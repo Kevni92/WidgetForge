@@ -42,6 +42,14 @@ Das generische Context Menu eines ausgewählten Fensters enthält `Layout…` f�
 
 Im Edit-Mode ist der Einstieg zusätzlich als sichtbare `Edit layout`-Aktion und als Selection-Inspector verfügbar. Der Inspector zeigt Titel, stabile `instanceId`, die aufgelöste Geometrie in Pixeln sowie den kombinierten Oberflächen-/Regelstatus. `Floating`, `Snapped` und `Locked layout` beschreiben die Oberfläche; `Responsive active`, `Responsive dormant` und `Free geometry / materialized` beschreiben den Vertrag. Die öffentliche Core-Funktion `deriveWindowLayoutStatus()` hält diese Ableitung unabhängig von DOMRects.
 
-Der Layout-Dialog verwendet im Primärpfad `Left`, `Right`, `Top`, `Bottom`, `Width` und `Height`. Fensterziele sind nach Workspace und Windows gruppiert und zeigen Titel plus stabile ID. `Auf Canvas wählen` aktiviert einen nicht-invasiven Pick-Modus; die Quelle und das gewählte Zielfenster werden im Workspace markiert. Gegenüberliegende Anker erklären die deaktivierte Width-/Height-Eingabe über `Fill between ...`.
+Der Layout-Dialog verwendet im Primärpfad `Left`, `Right`, `Top`, `Bottom`, `Width` und `Height`. Fensterziele sind nach Workspace und Windows gruppiert und zeigen Titel plus stabile ID. `Auf Canvas wählen` aktiviert einen nicht-invasiven Pick-Modus; die Quelle und das gewählte Zielfenster werden im Workspace markiert.
+
+Jede Achse wird im Dialog über genau einen `WindowLayoutAxisMode` bearbeitet:
+
+- `start-size`: `Left + Width` beziehungsweise `Top + Height`,
+- `end-size`: `Right + Width` beziehungsweise `Bottom + Height`,
+- `stretch`: beide Kanten, die Größe wird als `auto` berechnet.
+
+`stretch` ersetzt den früheren unabhängigen `Fill between ...`-Schalter. Beim Moduswechsel werden fehlende Gegenanker deterministisch aus der aktuellen Geometrie vorbelegt; beim Wechsel von `stretch` zu einer festen Größe wird die aktuell aufgelöste Dimension in Pixel materialisiert. Berechnete Größen werden nur für die Darstellung sinnvoll gerundet, nicht im Vertrag.
 
 Responsive Fensterreferenzen werden im Edit-Mode als gestrichelte, nicht interaktive Beziehungen dargestellt. `findWindowLayoutDependents()` liefert für Resize-Feedback den direkten und transitiven Abhängigkeitsgraphen deterministisch sortiert.

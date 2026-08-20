@@ -45,14 +45,16 @@ describe('WindowLayoutDialog', () => {
     const save = wrapper.emitted('save')?.[0]?.[0] as { layoutSpec: { horizontal: { start?: { target: { instanceId?: string } } } } }
     expect(save.layoutSpec.horizontal.start?.target.instanceId).toBe('base')
 
-    await wrapper.get('[data-layout-horizontal-end]').setValue('workspace:left')
+    expect(wrapper.find('[data-layout-horizontal-end]').exists()).toBe(false)
+    await wrapper.get('[data-layout-horizontal-mode="stretch"]').trigger('change')
+    await wrapper.get('[data-layout-horizontal-end]').setValue('workspace:right')
     await wrapper.get('[data-layout-save]').trigger('click')
-    expect(wrapper.emitted('save')).toHaveLength(1)
-    expect(wrapper.get('[role="alert"]').text()).toContain('cannot combine')
+    expect(wrapper.emitted('save')).toHaveLength(2)
+    expect((wrapper.emitted('save')?.[1]?.[0] as { layoutSpec: { horizontal: { size: string } } }).layoutSpec.horizontal.size).toBe('auto')
     wrapper.unmount()
   })
 
-  it('uses directional labels, grouped targets, fill feedback and canvas picking', async () => {
+  it('uses directional labels, exclusive axis modes, grouped targets and canvas picking', async () => {
     const { windows, selected } = setup()
     const target = document.createElement('div')
     target.dataset.windowInstanceId = 'base'
@@ -70,11 +72,35 @@ describe('WindowLayoutDialog', () => {
     await nextTick()
     expect((wrapper.get('[data-layout-left-target]').element as HTMLSelectElement).value).toBe('window:base:right')
 
-    await wrapper.get('[data-layout-horizontal-fill]').setValue(true)
-    expect(wrapper.get('[data-layout-width]').attributes('disabled')).toBeDefined()
-    expect(wrapper.get('[data-layout-fill-hint]').text()).toContain('calculated')
+    await wrapper.get('[data-layout-horizontal-mode="stretch"]').trigger('change')
+    expect(wrapper.find('[data-layout-horizontal-end]').exists()).toBe(true)
+    expect(wrapper.get('[data-layout-calculated-width]').text()).toContain('calculated')
+    expect(wrapper.find('[data-layout-horizontal-fill]').exists()).toBe(false)
+    await wrapper.get('[data-layout-horizontal-mode="start-size"]').trigger('change')
+    expect(wrapper.find('[data-layout-horizontal-end]').exists()).toBe(false)
     wrapper.unmount()
     target.remove()
+  })
+
+  it('supports a right-and-width footer mode without a competing left constraint', async () => {
+    const { windows, selected } = setup()
+    const wrapper = mount(WindowLayoutDialog, { attachTo: document.body, props: { open: true, window: selected, windows: windows.list(), container: { width: 800, height: 600 } } })
+    await wrapper.find('input[type="radio"][value="responsive"]').setValue(true)
+    await wrapper.get('[data-layout-horizontal-mode="end-size"]').trigger('change')
+    await wrapper.get('[data-layout-horizontal-end]').setValue('workspace:right')
+    await wrapper.get('[data-layout-vertical-mode="end-size"]').trigger('change')
+    await wrapper.get('[data-layout-bottom-target]').setValue('workspace:bottom')
+    await wrapper.get('[data-layout-height]').setValue('200')
+    await wrapper.get('[data-layout-save]').trigger('click')
+
+    const save = wrapper.emitted('save')?.[0]?.[0] as { layoutSpec: { horizontal: { start?: unknown; end?: { target: { edge: string } }; size?: { value: number } }; vertical: { start?: unknown; end?: { target: { edge: string } }; size?: { value: number } } } }
+    expect(save.layoutSpec.horizontal.start).toBeUndefined()
+    expect(save.layoutSpec.horizontal.end?.target.edge).toBe('right')
+    expect(save.layoutSpec.horizontal.size?.value).toBe(260)
+    expect(save.layoutSpec.vertical.start).toBeUndefined()
+    expect(save.layoutSpec.vertical.end?.target.edge).toBe('bottom')
+    expect(save.layoutSpec.vertical.size?.value).toBe(200)
+    wrapper.unmount()
   })
 
   it('cancels with Escape and keeps focus inside the dialog while open', async () => {
