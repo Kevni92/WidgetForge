@@ -60,9 +60,10 @@ describe('WorkspaceHistory', () => {
       vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, end: { target: { kind: 'workspace', edge: 'bottom' } } },
     }, { width: 800, height: 600 }, 'user')
     expect(history.state.undoDepth).toBe(1)
+    const dormantGeometry = windows.get('sidebar').geometry
     windows.resolveResponsiveLayouts({ width: 1200, height: 700 }, 'api')
     expect(history.state.undoDepth).toBe(1)
-    expect(windows.get('sidebar').geometry.size.width).toBe(300)
+    expect(windows.get('sidebar').geometry).toEqual(dormantGeometry)
     expect(history.undo()).toBe(true)
     expect(windows.get('sidebar').layoutSpec).toBeUndefined()
     history.dispose()

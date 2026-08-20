@@ -5,7 +5,7 @@ import type { WidgetRegistry } from './widget-registry'
 import { createWindowOptions, type WindowOptions, type WindowOptionsOverride } from './window-options'
 import { maximizeWindowGeometry, restoreFloatingWindowGeometry, snapWindowGeometry, type WindowSnapState, type WindowSnapZone } from './window-snap'
 import { DEFAULT_MIN_WINDOW_SIZE, DEFAULT_WINDOW_SIZE, normalizeWindowGeometry, constrainSize, sameGeometry, type WindowGeometry, type WindowPosition, type WindowSize, type WindowSizeConstraints } from './window-geometry'
-import { cloneWindowLayoutSpec, createAbsoluteWindowLayoutSpec, createWindowLayoutSpecFromSnap, layoutSpecReferencesWindow, resolveWindowLayoutSpecs, validateWindowLayoutSpec, type WindowLayoutSpec } from './window-layout'
+import { cloneWindowLayoutSpec, createAbsoluteWindowLayoutSpec, createWindowLayoutSpecFromSnap, layoutSpecReferencesWindow, resolveWindowLayoutSpecs, validateWindowLayoutReferences, validateWindowLayoutSpec, type WindowLayoutSpec } from './window-layout'
 
 export type WindowInstanceId = string
 export type WindowOperationOrigin = 'api' | 'user'
@@ -52,6 +52,33 @@ function paneParameters(parameters: Readonly<Record<string, unknown>>): PanePara
 function normalizePane(registry: WidgetRegistry, pane: PaneNode): PaneNode { validatePaneTree(pane); if (pane.kind === 'widget') { if (isCommandLauncherPane(pane)) return clonePaneTree(pane); const resolved = registry.resolve(pane.widgetId, pane.parameters); return { ...clonePaneTree(pane), parameters: paneParameters(resolved.parameters) } } return { ...clonePaneTree(pane), children: pane.children.map((child) => normalizePane(registry, child)) } }
 function defaultPaneTitle(registry: WidgetRegistry, pane: PaneNode): string { return isCommandLauncherPane(pane) ? DEFAULT_LAUNCHER_WINDOW_TITLE : pane.kind === 'widget' ? registry.get(pane.widgetId).title : 'Workspace' }
 function rootWidgetId(window: WindowState): WidgetId | undefined { return window.rootPane.kind === 'widget' ? window.rootPane.widgetId : undefined }
+function activeLayoutCandidates(windows: readonly WindowState[]): WindowState[] { return windows.map((window) => window.layoutLocked ? window : { ...window, layoutSpec: null }) }
+function responsiveDependencyClosure(windows: readonly WindowState[], sourceInstanceIds: readonly WindowInstanceId[]): Set<WindowInstanceId> {
+  const affected = new Set(sourceInstanceIds)
+  let expanded = true
+  while (expanded) {
+    expanded = false
+    for (const window of windows) {
+      if (!window.layoutLocked || !window.layoutSpec || affected.has(window.instanceId)) continue
+      if (![...affected].some((instanceId) => layoutSpecReferencesWindow(window.layoutSpec as WindowLayoutSpec, instanceId))) continue
+      affected.add(window.instanceId)
+      expanded = true
+    }
+  }
+  return affected
+}
+function resolveActiveWindowLayouts(windows: readonly WindowState[], container: WindowSize, sourceInstanceIds?: readonly WindowInstanceId[]): WindowState[] {
+  validateWindowLayoutReferences(windows)
+  const resolved = resolveWindowLayoutSpecs(activeLayoutCandidates(windows), container)
+  const affected = sourceInstanceIds
+    ? responsiveDependencyClosure(windows, sourceInstanceIds)
+    : new Set(windows.filter((window) => window.layoutLocked && window.layoutSpec).map((window) => window.instanceId))
+  return windows.map((window) => {
+    if (!window.layoutLocked || !window.layoutSpec || !affected.has(window.instanceId)) return window
+    const geometry = resolved.get(window.instanceId)
+    return geometry ? { ...window, geometry: cloneGeometry(geometry) } : window
+  })
+}
 
 export class WindowManager {
   private windows: WindowState[] = []
@@ -150,6 +177,7 @@ export class WindowManager {
     const floating = current.mode === 'maximized' ? current.restoreGeometry ?? current.geometry : current.snap?.floatingGeometry ?? current.restoreGeometry ?? current.geometry
     const floatingGeometry = normalizeWindowGeometry(floating, current.constraints, container)
     const updated: WindowState = { ...current, mode: 'normal', geometry: snapWindowGeometry(zone, container), snap: { zone, floatingGeometry: cloneGeometry(floatingGeometry) }, restoreGeometry: null }
+    this.responsiveContainer = { ...container }
     this.windows = focusWithinLayer(this.windows, updated); this.setActiveLifecycle(instanceId); this.emit('snap', origin, instanceId); return this.get(instanceId)
   }
   unsnapWindow(instanceId: WindowInstanceId, pointer?: WindowPosition, container?: WindowSize, origin: WindowOperationOrigin = 'user'): WindowState {
@@ -168,58 +196,53 @@ export class WindowManager {
     if (sameGeometry(current.geometry, normalized) && !materialized) return cloneWindow(current)
     const updated: WindowState = { ...current, geometry: normalized, ...(materialized ? { layoutSpec: null } : {}) }
     const candidates = this.windows.map((window) => window.instanceId === instanceId ? updated : window)
-    let nextWindows = candidates
-    if (this.responsiveContainer && candidates.some((window) => window.layoutSpec)) {
-      const resolved = resolveWindowLayoutSpecs(candidates, this.responsiveContainer)
-      nextWindows = candidates.map((window) => window.layoutSpec && resolved.get(window.instanceId) ? { ...window, geometry: cloneGeometry(resolved.get(window.instanceId) as WindowGeometry) } : window)
-    }
+    const nextWindows = this.responsiveContainer && candidates.some((window) => window.layoutLocked && window.layoutSpec)
+      ? resolveActiveWindowLayouts(candidates, this.responsiveContainer, [instanceId])
+      : candidates
     this.windows = nextWindows
     this.emit(materialized ? 'layout' : 'geometry', origin, instanceId)
-    return cloneWindow(updated)
+    return this.get(instanceId)
   }
 
   setLayoutSpec(instanceId: WindowInstanceId, layoutSpec: WindowLayoutSpec | null, container?: WindowSize, origin: WindowOperationOrigin = 'user'): WindowState {
     const current = this.windows.find((window) => window.instanceId === instanceId)
     if (!current) throw new UnknownWindowInstanceError(instanceId)
     if (layoutSpec !== null) validateWindowLayoutSpec(layoutSpec, instanceId)
+    const candidates = this.windows.map((window) => window.instanceId === instanceId ? { ...window, layoutSpec: layoutSpec ? cloneWindowLayoutSpec(layoutSpec) : layoutSpec } : window)
+    validateWindowLayoutReferences(candidates)
     if (container) this.responsiveContainer = { ...container }
-    const candidates = this.windows.map((window) => window.instanceId === instanceId ? { ...window, layoutSpec } : window)
-    const resolved = layoutSpec === null ? null : resolveWindowLayoutSpecs(candidates, container ?? { width: 1, height: 1 })
-    const updatedWindows = candidates.map((window) => {
-      if (!resolved || !window.layoutSpec) return window
-      const geometry = resolved.get(window.instanceId)
-      return geometry ? { ...window, geometry: cloneGeometry(geometry) } : window
-    })
+    const updatedWindows = this.responsiveContainer
+      ? resolveActiveWindowLayouts(candidates, this.responsiveContainer, [instanceId])
+      : candidates
     this.windows = updatedWindows
     this.emit('layout', origin, instanceId)
     return this.get(instanceId)
   }
 
   resolveResponsiveLayouts(container: WindowSize, origin: WindowOperationOrigin = 'api'): readonly WindowState[] {
+    validateWindowLayoutReferences(this.windows)
     this.responsiveContainer = { ...container }
-    const resolved = resolveWindowLayoutSpecs(this.windows, container)
+    const updatedWindows = resolveActiveWindowLayouts(this.windows, container)
     let changed = false
     let firstChangedId: string | undefined
-    const updatedWindows = this.windows.map((window) => {
-      if (!window.layoutSpec) return window
-      const geometry = resolved.get(window.instanceId)
-      if (!geometry || sameGeometry(window.geometry, geometry)) return window
+    for (const [index, window] of updatedWindows.entries()) {
+      const previous = this.windows[index]
+      if (!previous || sameGeometry(previous.geometry, window.geometry)) continue
       changed = true
       firstChangedId ??= window.instanceId
-      return { ...window, geometry: cloneGeometry(geometry) }
-    })
+    }
     if (!changed) return this.list()
     this.windows = updatedWindows
     this.emit('geometry', origin, firstChangedId ?? updatedWindows[0]?.instanceId ?? '')
     return this.list()
   }
 
-  lockWindow(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'user'): WindowState { const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (current.layoutLocked) return cloneWindow(current); if (current.mode !== 'normal') throw new WindowLayoutLockedError(instanceId, 'locking a non-normal window'); const updated: WindowState = { ...current, layoutLocked: true, ...(current.layoutSpec ? {} : current.snap ? { layoutSpec: createWindowLayoutSpecFromSnap(current.snap.zone) } : {}) }; this.windows = focusWithinLayer(this.windows, updated); this.emit('lock', origin, instanceId); return this.get(instanceId) }
+  lockWindow(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'user'): WindowState { const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (current.layoutLocked) return cloneWindow(current); if (current.mode !== 'normal') throw new WindowLayoutLockedError(instanceId, 'locking a non-normal window'); const updated: WindowState = { ...current, layoutLocked: true, ...(current.layoutSpec ? {} : current.snap ? { layoutSpec: createWindowLayoutSpecFromSnap(current.snap.zone) } : {}) }; const candidates = this.windows.map((window) => window.instanceId === instanceId ? updated : window); validateWindowLayoutReferences(candidates); const resolved = this.responsiveContainer ? resolveActiveWindowLayouts(candidates, this.responsiveContainer, [instanceId]) : candidates; const target = resolved.find((window) => window.instanceId === instanceId) ?? updated; this.windows = focusWithinLayer(resolved, target); this.emit('lock', origin, instanceId); return this.get(instanceId) }
   unlockWindow(instanceId: WindowInstanceId, origin: WindowOperationOrigin = 'user'): WindowState { const current = this.windows.find((window) => window.instanceId === instanceId); if (!current) throw new UnknownWindowInstanceError(instanceId); if (!current.layoutLocked) return cloneWindow(current); const updated: WindowState = { ...current, layoutLocked: false }; this.windows = focusWithinLayer(this.windows, updated); this.emit('unlock', origin, instanceId); return this.get(instanceId) }
   constrainToContainer(instanceId: WindowInstanceId, container: WindowSize, origin: WindowOperationOrigin = 'api'): WindowState {
     this.responsiveContainer = { ...container }
     const current = this.get(instanceId)
-    if (current.layoutSpec) {
+    if (current.layoutLocked && current.layoutSpec) {
       this.resolveResponsiveLayouts(container, origin)
       return this.get(instanceId)
     }
