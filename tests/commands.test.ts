@@ -37,6 +37,21 @@ describe('CommandRegistry', () => {
     expect(registry.list()).toHaveLength(2)
   })
 
+  it('retains optional documentation metadata without changing parsing', () => {
+    const registry = createCommandRegistry([{
+      name: 'planet',
+      widgetId: 'planet.summary',
+      description: 'Open a planet overview.',
+      documentation: { details: 'The first argument identifies the planet.', examples: ['planet ARC-01'] },
+      arguments: [{ name: 'planetId', type: 'string', required: true, description: 'Planet identifier.', example: 'ARC-01' }],
+    }])
+
+    expect(registry.get('planet')?.description).toBe('Open a planet overview.')
+    expect(registry.get('planet')?.arguments?.[0]?.example).toBe('ARC-01')
+    expect(registry.getDocumentation('planet')?.examples).toEqual(['planet ARC-01'])
+    expect(registry.parse('planet ARC-01')).toEqual({ widgetId: 'planet.summary', parameters: { planetId: 'ARC-01' } })
+  })
+
   it('parses typed arguments, defaults and quoted strings into navigation intents', () => {
     const registry = createRegistry()
 

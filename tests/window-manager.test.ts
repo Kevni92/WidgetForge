@@ -8,6 +8,7 @@ import {
   DuplicateWindowInstanceError,
   UnknownWindowInstanceError,
 } from '../src/core/window-manager'
+import { createWidgetNavigator } from '../src/core/navigation'
 
 const EmptyWidget = defineComponent({ template: '<div />' })
 
@@ -23,6 +24,7 @@ function createRegistry() {
       },
     }),
     defineWidget({ id: 'test.market', title: 'Market', component: EmptyWidget }),
+    defineWidget({ id: 'test.constrained', title: 'Constrained', component: EmptyWidget, window: { minSize: { width: 360, height: 240 }, maxSize: { width: 560, height: 420 } } }),
   ])
 }
 
@@ -65,6 +67,38 @@ describe('WindowManager', () => {
 
     const updated = manager.setRootPane('multi', { ...pane, weights: [2, 1] }, 'user')
     expect(updated.rootPane.kind === 'split' ? updated.rootPane.weights : []).toEqual([2, 1])
+  })
+
+  it('opens an empty launcher window and atomically replaces its root with a widget', () => {
+    const manager = createWindowManager(createRegistry())
+    manager.open({ widgetId: 'test.market', instanceId: 'existing' })
+    const launcher = manager.openEmptyWindow({ instanceId: 'launcher', position: { x: 80, y: 90 }, size: { width: 300, height: 180 }, options: { opacity: 0.8 } })
+    const before = { geometry: launcher.geometry, options: launcher.options, zIndex: launcher.zIndex, rootPaneId: launcher.rootPane.id }
+    const navigator = createWidgetNavigator(createRegistry(), manager)
+
+    const result = navigator.navigate({ widgetId: 'test.constrained' }, { target: { kind: 'launcher-window', windowInstanceId: 'launcher' } })
+    const replaced = manager.get('launcher')
+
+    expect(result).toEqual({ widgetId: 'test.constrained', instanceId: 'launcher' })
+    expect(replaced.instanceId).toBe('launcher')
+    expect(replaced.rootPane).toMatchObject({ kind: 'widget', id: before.rootPaneId, widgetId: 'test.constrained', instanceId: 'launcher.widget' })
+    expect(replaced.geometry.position).toEqual(before.geometry.position)
+    expect(replaced.geometry.size).toEqual({ width: 360, height: 240 })
+    expect(replaced.options).toEqual(before.options)
+    expect(replaced.zIndex).toBe(before.zIndex)
+    expect(replaced.title).toBe('Constrained')
+    expect(replaced.titleIsCustom).toBe(false)
+  })
+
+  it('keeps a custom launcher title and rolls back invalid replacements', () => {
+    const manager = createWindowManager(createRegistry())
+    const launcher = manager.openEmptyWindow({ instanceId: 'custom-launcher', title: 'Pick a view' })
+    const before = manager.get(launcher.instanceId)
+
+    expect(() => manager.replaceLauncherWindow('custom-launcher', { widgetId: 'missing.widget' })).toThrow()
+    expect(manager.get('custom-launcher').rootPane).toEqual(before.rootPane)
+    expect(manager.get('custom-launcher').title).toBe('Pick a view')
+    expect(manager.get('custom-launcher').titleIsCustom).toBe(true)
   })
 
   it('focuses deterministically by moving only the requested instance to the front', () => {

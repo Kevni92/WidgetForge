@@ -1,4 +1,5 @@
 import {
+  cloneWidgetManifest,
   defineWidget,
   resolveWidgetCapabilities,
   type ResolvedWidgetCapabilities,
@@ -6,6 +7,7 @@ import {
   type WidgetManifest,
   type WidgetParameterDefinition,
 } from './widget'
+import { createWidgetDocumentationView, type WidgetDocumentationView } from './documentation'
 
 export type WidgetParameterIssueCode = 'missing' | 'type' | 'unknown'
 
@@ -59,12 +61,14 @@ export function validateWidgetParameters(manifest: WidgetManifest, input: Readon
 export class WidgetRegistry {
   private readonly manifests = new Map<WidgetId, WidgetManifest>()
   constructor(manifests: readonly WidgetManifest[] = []) { for (const manifest of manifests) this.register(manifest) }
-  register(manifest: WidgetManifest): void { const validatedManifest = defineWidget(manifest); if (this.manifests.has(validatedManifest.id)) throw new DuplicateWidgetIdError(validatedManifest.id); this.manifests.set(validatedManifest.id, validatedManifest) }
+  register(manifest: WidgetManifest): void { const validatedManifest = defineWidget(manifest); if (this.manifests.has(validatedManifest.id)) throw new DuplicateWidgetIdError(validatedManifest.id); this.manifests.set(validatedManifest.id, cloneWidgetManifest(validatedManifest)) }
   unregister(widgetId: WidgetId): boolean { return this.manifests.delete(widgetId) }
   has(widgetId: WidgetId): boolean { return this.manifests.has(widgetId) }
-  get(widgetId: WidgetId): WidgetManifest { const manifest = this.manifests.get(widgetId); if (!manifest) throw new UnknownWidgetError(widgetId); return manifest }
+  get(widgetId: WidgetId): WidgetManifest { const manifest = this.manifests.get(widgetId); if (!manifest) throw new UnknownWidgetError(widgetId); return cloneWidgetManifest(manifest) }
   getCapabilities(widgetId: WidgetId): ResolvedWidgetCapabilities { return resolveWidgetCapabilities(this.get(widgetId)) }
-  list(): readonly WidgetManifest[] { return [...this.manifests.values()] }
+  list(): readonly WidgetManifest[] { return [...this.manifests.values()].map((manifest) => cloneWidgetManifest(manifest)) }
+  getDocumentation(widgetId: WidgetId): WidgetDocumentationView { return createWidgetDocumentationView(this.get(widgetId)) }
+  listDocumentation(): readonly WidgetDocumentationView[] { return [...this.manifests.values()].map(createWidgetDocumentationView) }
   validate(widgetId: WidgetId, parameters: Readonly<Record<string, unknown>> = {}): WidgetParameterValidationResult { return validateWidgetParameters(this.get(widgetId), parameters) }
   resolve(widgetId: WidgetId, parameters: Readonly<Record<string, unknown>> = {}): ResolvedWidget {
     const manifest = this.get(widgetId), result = validateWidgetParameters(manifest, parameters)

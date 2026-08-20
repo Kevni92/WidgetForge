@@ -15,6 +15,7 @@ import {
 import {
   calculateWorkspaceDockLayout,
   type DockManager,
+  type DockPosition,
   type DockState,
 } from "../core/dock-manager";
 import {
@@ -24,6 +25,7 @@ import {
   reorderTab,
   type PaneNode,
 } from "../core/pane";
+import type { CommandRegistry } from "../core/commands";
 import type { WidgetRegistry } from "../core/widget-registry";
 import type { WindowSize } from "../core/window-geometry";
 import type { WindowManager } from "../core/window-manager";
@@ -42,6 +44,8 @@ import {
   detectWorkspaceDropZone,
   movePaneToTarget,
   relocatePaneBetweenTrees,
+  anchorWindowToDock,
+  detachDockToWindow,
   type WorkspaceDropRect,
   type WorkspaceDropZone,
 } from "../core/workspace-docking";
@@ -52,11 +56,16 @@ import DockingOverlay from "./DockingOverlay.vue";
 import { observeElementSize } from "./observe-element-size";
 import { handleWorkspaceHistoryShortcut } from "./workspace-history-shortcuts";
 import WindowManagerHost from "./WindowManagerHost.vue";
+import { provideWidgetDocumentationForHost } from './documentation-context'
 
 interface Props {
   windows: WindowManager;
   docks: DockManager;
   registry: WidgetRegistry;
+  commands?: CommandRegistry | undefined;
+  newWindowLabel?: string | undefined;
+  launcherPlaceholder?: string | undefined;
+  launcherSubmitLabel?: string | undefined;
   history?: WorkspaceHistory | undefined;
   historyShortcuts?: boolean | undefined;
   edit?: WorkspaceEditController | undefined;
@@ -118,6 +127,7 @@ interface HistoryPointerSession {
 }
 
 const props = defineProps<Props>();
+provideWidgetDocumentationForHost(props.registry, props.commands)
 const emit = defineEmits<{
   paneAction: [action: PaneEditActionId, selection: WorkspacePaneSelection];
 }>();
@@ -159,6 +169,17 @@ const editMode = computed(
 );
 const layoutLocked = computed(() => editState.value.locked);
 
+function openNewWindow(): void {
+  if (layoutLocked.value) return;
+  history?.beginTransaction();
+  try {
+    windowManager.openEmptyWindow({}, "user");
+    history?.commitTransaction();
+  } catch {
+    history?.cancelTransaction();
+  }
+}
+
 function rectStyle(rect: {
   x: number;
   y: number;
@@ -193,6 +214,27 @@ function setOwnerRoot(owner: WorkspacePaneOwner, pane: PaneNode): void {
     commitWorkspacePaneMutations(windowManager, dockManager, [
       { owner, rootPane: pane },
     ]);
+}
+function anchorWindow(instanceId: string, position: DockPosition): void {
+  if (layoutLocked.value) return;
+  history?.beginTransaction();
+  try {
+    anchorWindowToDock(windowManager, dockManager, { instanceId, position });
+    history?.commitTransaction();
+  } catch {
+    history?.cancelTransaction();
+  }
+}
+function detachDock(dockId: string): void {
+  if (layoutLocked.value) return;
+  history?.beginTransaction();
+  try {
+    detachDockToWindow(windowManager, dockManager, { dockId });
+    history?.commitTransaction();
+  } catch (error) {
+    history?.cancelTransaction();
+    throw error;
+  }
 }
 function sameOwner(a: WorkspacePaneOwner, b: WorkspacePaneOwner): boolean {
   return a.kind === b.kind && a.id === b.id;
@@ -933,6 +975,15 @@ function executePaneMenu(
     editController.setPaneLocked(selection, false);
     return;
   }
+  if (item.id === "detach-dock" && selection.owner.kind === "dock") {
+    try {
+      detachDock(selection.owner.id);
+      editController.selectPane(null);
+    } catch {
+      history?.cancelTransaction();
+    }
+    return;
+  }
   if (item.id === "delete") {
     const next = removePaneForEdit(
       ownerRoot(selection.owner),
@@ -952,11 +1003,11 @@ function openPaneMenu(event: MouseEvent): void {
   if (!pane?.dataset.paneId) return;
   const selection = selectionFor(pane, pane.dataset.paneId);
   if (!selection) return;
-  const items = createPaneEditContextMenuItems(
+  const items = [...createPaneEditContextMenuItems(
     ownerRoot(selection.owner),
     selection.paneId,
     editController.isPaneLocked(selection),
-  );
+  ), ...(selection.owner.kind === "dock" && ownerRoot(selection.owner).id === selection.paneId ? [{ id: "detach-dock", label: "Detach dock to window" }] : [])];
   if (items.length === 0) return;
   event.preventDefault();
   editController.selectPane(selection);
@@ -1064,6 +1115,20 @@ onBeforeUnmount(() => {
     @click.capture="onWorkspaceClick"
     @contextmenu.capture="openPaneMenu"
   >
+    <div class="wf-workspace-host__actions" data-workspace-actions>
+      <button
+        class="wf-workspace-host__new-window"
+        type="button"
+        data-workspace-new-window
+        :aria-label="props.newWindowLabel ?? 'New window'"
+        :title="props.newWindowLabel ?? 'New window'"
+        :disabled="layoutLocked"
+        @click="openNewWindow"
+      >
+        <span aria-hidden="true">+</span>
+        <span>{{ props.newWindowLabel ?? "New window" }}</span>
+      </button>
+    </div>
     <div
       class="wf-workspace-host__floating"
       :style="rectStyle(layout.floating)"
@@ -1072,9 +1137,13 @@ onBeforeUnmount(() => {
       <WindowManagerHost
         :manager="windowManager"
         :registry="registry"
+        :commands="props.commands"
+        :launcher-placeholder="props.launcherPlaceholder"
+        :launcher-submit-label="props.launcherSubmitLabel"
         :layout-locked="layoutLocked"
         :edit-mode="editMode"
         :pane-drag-enabled="windowPaneDragEnabled"
+        :anchor-window="anchorWindow"
       />
     </div>
     <DockHost
@@ -1084,6 +1153,7 @@ onBeforeUnmount(() => {
       :rect="layout.docks[dock.id] ?? { x: 0, y: 0, width: 0, height: 0 }"
       :manager="dockManager"
       :registry="registry"
+      :commands="props.commands"
       :layout-locked="layoutLocked"
       :edit-mode="editMode"
       :pane-drag-enabled="(paneId) => dockPaneDragEnabled(dock.id, paneId)"
@@ -1124,6 +1194,29 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: var(--wf-color-canvas);
 }
+.wf-workspace-host__actions {
+  position: absolute;
+  top: var(--wf-space-sm);
+  right: var(--wf-space-sm);
+  z-index: var(--wf-layer-overlay);
+}
+.wf-workspace-host__new-window {
+  display: inline-flex;
+  min-height: var(--wf-size-control-height);
+  align-items: center;
+  gap: var(--wf-space-xs);
+  padding: 0 var(--wf-space-sm);
+  border: 1px solid var(--wf-color-border);
+  border-radius: var(--wf-radius-sm);
+  color: var(--wf-color-text);
+  background: var(--wf-color-surface-floating);
+  box-shadow: var(--wf-shadow-sm);
+  font: inherit;
+  cursor: pointer;
+}
+.wf-workspace-host__new-window:hover:not(:disabled) { background: var(--wf-color-hover); }
+.wf-workspace-host__new-window:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
+.wf-workspace-host__new-window:disabled { cursor: default; opacity: .6; }
 .wf-workspace-host__floating {
   position: absolute;
   min-width: 0;

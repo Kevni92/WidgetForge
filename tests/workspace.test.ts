@@ -33,6 +33,21 @@ describe('workspace persistence', () => {
     expect(target.get('layers').rootPane).toMatchObject({kind:'stack',children:[{id:'base',settings:{sizeMode:'fixed',size:160,minSize:120,collapsible:true}},{id:'overlay',settings:{locked:true}}]})
   })
 
+  it('persists and reloads an empty launcher as well as its final widget state', () => {
+    const registry = createRegistry()
+    const source = createWindowManager(registry)
+    source.openEmptyWindow({ instanceId: 'launcher', position: { x: 40, y: 50 } })
+    const launcherSnapshot = serializeWorkspace(source)
+    const launcherTarget = createWindowManager(registry)
+    expect(restoreWorkspace(launcherTarget, launcherSnapshot).issues).toEqual([])
+    expect(launcherTarget.get('launcher').rootPane).toMatchObject({ widgetId: '@widgetforge/command-launcher', instanceId: 'launcher.launcher' })
+
+    source.replaceLauncherWindow('launcher', { widgetId: 'test.alpha', parameters: { name: 'restored' } })
+    const widgetTarget = createWindowManager(registry)
+    expect(restoreWorkspace(widgetTarget, serializeWorkspace(source)).issues).toEqual([])
+    expect(widgetTarget.get('launcher').rootPane).toMatchObject({ widgetId: 'test.alpha', instanceId: 'launcher.widget', parameters: { name: 'restored', count: 1 } })
+  })
+
   it('persists maximized state with its original floating restore geometry', () => {
     const registry=createRegistry(),source=createWindowManager(registry)
     source.open({widgetId:'test.alpha',instanceId:'max',parameters:{name:'max'},position:{x:90,y:70},size:{width:420,height:280}})

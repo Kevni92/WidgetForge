@@ -12,6 +12,8 @@ Ein Command definiert:
 - optionale statische Parameter,
 - eine geordnete Liste typisierter Argumente.
 
+Für Discovery und Help kann ein Command zusätzlich `description`, `category` und textuelle `examples` tragen. Argumente können mit `description` und einem typkompatiblen `example` ergänzt werden. Die Typ-, Pflicht- und Defaultangaben bleiben direkt am Argument und werden nicht in einem parallelen Dokumentationsschema wiederholt.
+
 Unterstützte Argumenttypen sind `string`, `number` und `boolean`. Argumente werden positional geparst. Pflichtargumente müssen vor optionalen Argumenten stehen. Optionale Argumente können Defaultwerte besitzen.
 
 ## Parser
@@ -44,6 +46,25 @@ Parserfehler sind als `CommandParseError` mit strukturiertem Code verfügbar:
 
 Ungültige oder kollidierende Command-Definitionen werden bereits beim Registrieren mit `CommandDefinitionError` abgewiesen.
 
+`CommandRegistry.getDocumentation(nameOrAlias)` und `listDocumentation()` liefern eine reine normalisierte Ansicht mit Aliasen, Argumentmetadaten und einer abgeleiteten `usage`-Zeichenkette. `get()` und `list()` geben Kopien der Definitionen zurück und sind damit für lesende Discovery- und Devtools-Integrationen geeignet. Die Reihenfolge entspricht der Registrierungsreihenfolge.
+
+Das öffentliche `HelpWidget` nutzt diese Ansichten automatisch, wenn es über einen Widget-/Workspace-Host gerendert wird. Ein Consumer muss nur das Widget registrieren und einen Command auf dessen `HELP_WIDGET_ID` definieren; eine separate Help-Liste ist nicht erforderlich.
+
 ## Architekturgrenze
 
 Konkrete Commands wie `planet`, `market` oder andere Spielbegriffe gehören ausschließlich in die Consumer-Anwendung beziehungsweise in den Playground. WidgetForge stellt Registry, Parser, die generische Eingabekomponente und die Verbindung zur Navigation bereit.
+
+## Launcher-Fenster
+
+`WorkspaceHost` bietet eine generische `New window`-Aktion. Sie öffnet über `WindowManager.openEmptyWindow()` ein normales Floating-Window mit einem framework-eigenen Launcher-Root; Consumer müssen dafür kein Dummy-Widget registrieren. Übergibt der Host eine `CommandRegistry` über `commands`, wird der Launcher automatisch fokussiert.
+
+```vue
+<WorkspaceHost
+  :windows="windows"
+  :docks="docks"
+  :registry="widgets"
+  :commands="commands"
+/>
+```
+
+Die Navigation des Launcher-Roots nutzt dieselbe `CommandRegistry` und dieselbe Widget-Parameterprüfung wie die normale Widget-Navigation. Der typisierte `WidgetNavigationContext` markiert das aktuelle Launcher-Fenster als Ziel; ein erfolgreicher Command ersetzt nur dessen Root-Pane. Fensterinstanz, Geometrie, Optionen, Fokus und Z-Reihenfolge bleiben erhalten. Ein ungültiger Command verändert den Workspace nicht und lässt die Eingabe für die Korrektur fokussiert.

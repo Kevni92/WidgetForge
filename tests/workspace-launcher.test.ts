@@ -1,0 +1,68 @@
+import { defineComponent } from 'vue'
+import { mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it } from 'vitest'
+import { createCommandRegistry } from '../src/core/commands'
+import { createDockManager } from '../src/core/dock-manager'
+import { defineWidget } from '../src/core/widget'
+import { createWidgetRegistry } from '../src/core/widget-registry'
+import { createWorkspaceHistory } from '../src/core/workspace-history'
+import { createWindowManager } from '../src/core/window-manager'
+import WorkspaceHost from '../src/vue/WorkspaceHost.vue'
+
+const Widget = defineComponent({ template: '<div data-launcher-widget>Widget content</div>' })
+
+describe('Workspace launcher flow', () => {
+  let host: HTMLDivElement | null = null
+
+  afterEach(() => {
+    host?.remove()
+    host = null
+  })
+
+  it('opens a focused launcher from the workspace action, handles errors and replaces it in place', async () => {
+    const registry = createWidgetRegistry([defineWidget({ id: 'launcher.widget', title: 'Launcher Widget', component: Widget })])
+    const commands = createCommandRegistry([{ name: 'widget', widgetId: 'launcher.widget' }])
+    const windows = createWindowManager(registry)
+    const docks = createDockManager(registry)
+    const history = createWorkspaceHistory(windows, docks)
+    host = document.createElement('div')
+    document.body.append(host)
+    const wrapper = mount(WorkspaceHost, { attachTo: host, props: { windows, docks, registry, commands, history } })
+
+    await wrapper.get('[data-workspace-new-window]').trigger('click')
+    await wrapper.vm.$nextTick()
+    const windowBefore = windows.get('wf-window-1')
+    expect(wrapper.get('[data-command-launcher]')).toBeTruthy()
+    expect(document.activeElement).toBe(wrapper.get('[data-command-launcher] input').element)
+    expect(history.state.undoDepth).toBe(1)
+
+    const input = wrapper.get('[data-command-launcher] input')
+    await input.setValue('unknown')
+    await wrapper.get('[data-command-launcher] form').trigger('submit')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[data-command-input-feedback]').text()).toContain('unknown command')
+    expect(document.activeElement).toBe(input.element)
+    expect(history.state.undoDepth).toBe(1)
+
+    await input.setValue('widget')
+    await wrapper.get('[data-command-launcher] form').trigger('submit')
+    await wrapper.vm.$nextTick()
+    expect(windows.get('wf-window-1').rootPane).toMatchObject({ widgetId: 'launcher.widget', instanceId: 'wf-window-1.widget' })
+    expect(windows.get('wf-window-1').geometry).toEqual(windowBefore.geometry)
+    expect(windows.get('wf-window-1').zIndex).toBe(windowBefore.zIndex)
+    expect(windows.get('wf-window-1').title).toBe('Launcher Widget')
+    expect(wrapper.find('[data-launcher-widget]').exists()).toBe(true)
+    expect(history.state.undoDepth).toBe(2)
+
+    history.undo()
+    await wrapper.vm.$nextTick()
+    const restoredRoot = windows.get('wf-window-1').rootPane
+    expect(restoredRoot.kind === 'widget' ? restoredRoot.widgetId : null).toBe('@widgetforge/command-launcher')
+    expect(wrapper.find('[data-command-launcher]').exists()).toBe(true)
+    history.redo()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-launcher-widget]').exists()).toBe(true)
+    wrapper.unmount()
+    history.dispose()
+  })
+})

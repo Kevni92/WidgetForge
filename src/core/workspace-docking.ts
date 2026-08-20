@@ -10,8 +10,11 @@ import {
   type PaneNode,
   type PaneSplitEdge,
 } from './pane'
+import { type DockManager, type DockPosition } from './dock-manager'
+import type { WindowGeometry, WindowPosition, WindowSize } from './window-geometry'
 import type { WindowManager, WindowState } from './window-manager'
-import { commitWorkspacePaneMutations } from './workspace'
+import { defaultWindowOptions } from './window-options'
+import { captureWorkspace, commitWorkspacePaneMutations, restoreWorkspace, validateWorkspaceSnapshot, type WorkspaceSnapshot } from './workspace'
 
 export type WorkspaceDropZone = 'center' | PaneSplitEdge
 
@@ -123,4 +126,133 @@ export function dockWindowIntoWindow(
     { owner: { kind: 'window', id: targetInstanceId }, rootPane },
   ])
   return manager.get(targetInstanceId)
+}
+
+export class WorkspaceDockTransformError extends Error {
+  constructor(message: string) { super(message); this.name = 'WorkspaceDockTransformError' }
+}
+
+export interface AnchorWindowToDockRequest {
+  readonly instanceId: string
+  readonly position: DockPosition
+  readonly dockId?: string
+}
+
+export interface DetachDockToWindowRequest {
+  readonly dockId: string
+  readonly position?: WindowPosition
+  readonly size?: WindowSize
+}
+
+function cloneGeometry(geometry: WindowGeometry): WindowGeometry {
+  return { position: { ...geometry.position }, size: { ...geometry.size } }
+}
+
+function nextDockId(dockManager: DockManager, requested: string): string {
+  const ids = new Set(dockManager.list().map((dock) => dock.id))
+  if (!ids.has(requested)) return requested
+  let suffix = 2
+  while (ids.has(`${requested}-${suffix}`)) suffix += 1
+  return `${requested}-${suffix}`
+}
+
+function nextWindowId(manager: WindowManager, requested: string): string {
+  const ids = new Set(manager.list().map((window) => window.instanceId))
+  if (!ids.has(requested)) return requested
+  let suffix = 2
+  while (ids.has(`${requested}-${suffix}`)) suffix += 1
+  return `${requested}-${suffix}`
+}
+
+function clearAndRestoreWorkspace(manager: WindowManager, dockManager: DockManager, snapshot: WorkspaceSnapshot): void {
+  for (const window of [...manager.list()]) manager.close(window.instanceId, 'api')
+  for (const dock of [...dockManager.list()]) dockManager.remove(dock.id)
+  const restored = restoreWorkspace(manager, snapshot, dockManager, undefined, { atomic: true })
+  if (!restored.valid || restored.issues.length > 0) throw new WorkspaceDockTransformError('workspace transformation could not be applied atomically')
+}
+
+function applyWorkspaceTransformation(
+  manager: WindowManager,
+  dockManager: DockManager,
+  before: WorkspaceSnapshot,
+  next: WorkspaceSnapshot,
+): void {
+  validateWorkspaceSnapshot(next)
+  try {
+    clearAndRestoreWorkspace(manager, dockManager, next)
+  } catch (error) {
+    try { clearAndRestoreWorkspace(manager, dockManager, before) } catch (rollbackError) { throw new WorkspaceDockTransformError(`workspace transformation and rollback failed: ${String(rollbackError)}`) }
+    throw error
+  }
+}
+
+export function anchorWindowToDock(
+  manager: WindowManager,
+  dockManager: DockManager,
+  request: AnchorWindowToDockRequest,
+): ReturnType<DockManager['get']> {
+  const source = manager.get(request.instanceId)
+  if (source.mode !== 'normal' || source.snap) throw new WorkspaceDockTransformError('only a floating, normal window can be anchored to a dock')
+  if (source.options.role !== 'normal' && source.options.role !== 'utility') throw new WorkspaceDockTransformError(`window role "${source.options.role}" cannot be anchored to a dock`)
+
+  const before = captureWorkspace(manager, dockManager)
+  const axis = request.position === 'top' || request.position === 'bottom' ? 'height' : 'width'
+  const minThickness = source.constraints.minSize[axis]
+  const maxThickness = source.constraints.maxSize?.[axis] ?? null
+  const thickness = Math.max(minThickness, maxThickness === null ? source.geometry.size[axis] : Math.min(maxThickness, source.geometry.size[axis]))
+  const id = nextDockId(dockManager, request.dockId?.trim() || `${source.instanceId}-dock`)
+  const restoreWindow = {
+    instanceId: source.instanceId,
+    title: source.title,
+    geometry: cloneGeometry(source.geometry),
+    constraints: { minSize: { ...source.constraints.minSize }, maxSize: source.constraints.maxSize ? { ...source.constraints.maxSize } : null },
+    options: { ...source.options },
+  }
+  const remainingWindows = before.windows.filter((window) => window.instanceId !== source.instanceId)
+  const nextFocusId = source.focused
+    ? remainingWindows.filter((window) => window.mode !== 'minimized').at(-1)?.instanceId
+    : remainingWindows.find((window) => window.focused)?.instanceId
+  const next: WorkspaceSnapshot = {
+    version: before.version,
+    windows: remainingWindows.map((window) => ({ ...window, focused: window.instanceId === nextFocusId })),
+    docks: [...before.docks, { id, position: request.position, rootPane: source.rootPane, thickness, minThickness, maxThickness, resizable: source.options.resizable, restoreWindow }],
+  }
+  applyWorkspaceTransformation(manager, dockManager, before, next)
+  return dockManager.get(id)
+}
+
+export function detachDockToWindow(
+  manager: WindowManager,
+  dockManager: DockManager,
+  request: DetachDockToWindowRequest,
+): WindowState {
+  const dock = dockManager.get(request.dockId)
+  const before = captureWorkspace(manager, dockManager)
+  const restore = dock.restoreWindow
+  const fallbackSize = request.size ?? {
+    width: dock.position === 'left' || dock.position === 'right' ? dock.thickness : 420,
+    height: dock.position === 'top' || dock.position === 'bottom' ? dock.thickness : 300,
+  }
+  const fallbackGeometry: WindowGeometry = {
+    position: request.position ?? { x: 24, y: 24 },
+    size: fallbackSize,
+  }
+  const instanceId = nextWindowId(manager, restore?.instanceId ?? `workspace-${dock.id}-window`)
+  const geometry = restore?.geometry ?? fallbackGeometry
+  const nextWindows = [...before.windows.map((window) => ({ ...window, focused: false })), {
+    instanceId,
+    title: restore?.title ?? `Dock ${dock.id}`,
+    rootPane: dock.rootPane,
+    geometry,
+    constraints: restore?.constraints ?? { minSize: { width: 160, height: 96 }, maxSize: null },
+    options: restore?.options ?? defaultWindowOptions,
+    snap: null,
+    restoreGeometry: null,
+    mode: 'normal' as const,
+    focused: true,
+    zIndex: before.windows.reduce((max, window) => Math.max(max, window.zIndex), -1) + 1,
+  }]
+  const next: WorkspaceSnapshot = { version: before.version, windows: nextWindows, docks: before.docks.filter((item) => item.id !== dock.id) }
+  applyWorkspaceTransformation(manager, dockManager, before, next)
+  return manager.get(instanceId)
 }

@@ -1,14 +1,20 @@
 import type { NavigationIntent } from './navigation'
+import { cloneDocumentationMetadata, createCommandDocumentationView, validateDocumentationMetadata, type CommandDocumentationView, type DocumentationMetadata } from './documentation'
 import type { WidgetId } from './widget'
 
 export type CommandArgumentType = 'string' | 'number' | 'boolean'
 
-export interface CommandArgumentDefinition {
-  readonly name: string
-  readonly type: CommandArgumentType
-  readonly required?: boolean
-  readonly default?: string | number | boolean
-}
+type CommandArgumentValue<TType extends CommandArgumentType> = TType extends 'string' ? string : TType extends 'number' ? number : boolean
+export type CommandArgumentDefinition = {
+  [TType in CommandArgumentType]: {
+    readonly name: string
+    readonly type: TType
+    readonly required?: boolean
+    readonly default?: CommandArgumentValue<TType>
+    readonly description?: string
+    readonly example?: CommandArgumentValue<TType>
+  }
+}[CommandArgumentType]
 
 export interface CommandDefinition {
   readonly name: string
@@ -16,6 +22,10 @@ export interface CommandDefinition {
   readonly widgetId: WidgetId
   readonly arguments?: readonly CommandArgumentDefinition[]
   readonly parameters?: Readonly<Record<string, unknown>>
+  readonly description?: string
+  readonly category?: string
+  readonly examples?: readonly string[]
+  readonly documentation?: DocumentationMetadata
 }
 
 export type CommandParseErrorCode =
@@ -59,6 +69,8 @@ function validateArgument(definition: CommandArgumentDefinition): void {
   if (definition.required && definition.default !== undefined) {
     throw new CommandDefinitionError(`required command argument "${definition.name}" must not define a default value`)
   }
+  if (definition.description !== undefined && !definition.description.trim()) throw new CommandDefinitionError(`description for command argument "${definition.name}" must not be empty`)
+  if (definition.example !== undefined && typeof definition.example !== definition.type) throw new CommandDefinitionError(`example value for command argument "${definition.name}" must be a ${definition.type}`)
 }
 
 function validateDefinition(definition: CommandDefinition): void {
@@ -66,6 +78,11 @@ function validateDefinition(definition: CommandDefinition): void {
   if (!commandNamePattern.test(name)) {
     throw new CommandDefinitionError('command name must start with a letter and contain only lowercase letters, numbers or hyphens')
   }
+  for (const [field, value] of [['description', definition.description], ['category', definition.category]] as const) {
+    if (value !== undefined && !value.trim()) throw new CommandDefinitionError(`command ${field} must not be empty`)
+  }
+  if (definition.examples?.some((example) => !example.trim())) throw new CommandDefinitionError('command examples must not contain empty values')
+  try { validateDocumentationMetadata(definition.documentation, 'command.documentation') } catch (error) { throw new CommandDefinitionError(error instanceof Error ? error.message : 'invalid command documentation') }
 
   const aliases = definition.aliases ?? []
   for (const alias of aliases) {
@@ -204,6 +221,8 @@ export class CommandRegistry {
       aliases: (definition.aliases ?? []).map(normalizeName),
       arguments: (definition.arguments ?? []).map((argument) => ({ ...argument })),
       parameters: { ...(definition.parameters ?? {}) },
+      ...(definition.examples !== undefined ? { examples: [...definition.examples] } : {}),
+      ...(definition.documentation !== undefined ? { documentation: cloneDocumentationMetadata(definition.documentation) } : {}),
     }
     this.definitions.set(name, stored)
     for (const candidate of names) this.lookup.set(candidate, name)
@@ -212,16 +231,21 @@ export class CommandRegistry {
   get(nameOrAlias: string): CommandDefinition | undefined {
     const canonical = this.lookup.get(normalizeName(nameOrAlias))
     if (!canonical) return undefined
-    return this.definitions.get(canonical)
+    const definition = this.definitions.get(canonical)
+    return definition ? cloneCommandDefinition(definition) : undefined
   }
 
   list(): readonly CommandDefinition[] {
-    return [...this.definitions.values()].map((definition) => ({
-      ...definition,
-      aliases: [...(definition.aliases ?? [])],
-      arguments: (definition.arguments ?? []).map((argument) => ({ ...argument })),
-      parameters: { ...(definition.parameters ?? {}) },
-    }))
+    return [...this.definitions.values()].map(cloneCommandDefinition)
+  }
+
+  getDocumentation(nameOrAlias: string): CommandDocumentationView | undefined {
+    const definition = this.get(nameOrAlias)
+    return definition ? createCommandDocumentationView(definition) : undefined
+  }
+
+  listDocumentation(): readonly CommandDocumentationView[] {
+    return this.list().map(createCommandDocumentationView)
   }
 
   parse(input: string): NavigationIntent {
@@ -263,6 +287,17 @@ export class CommandRegistry {
     }
 
     return { widgetId: definition.widgetId, parameters }
+  }
+}
+
+function cloneCommandDefinition(definition: CommandDefinition): CommandDefinition {
+  return {
+    ...definition,
+    aliases: [...(definition.aliases ?? [])],
+    arguments: (definition.arguments ?? []).map((argument) => ({ ...argument })),
+    parameters: { ...(definition.parameters ?? {}) },
+    ...(definition.examples !== undefined ? { examples: [...definition.examples] } : {}),
+    ...(definition.documentation !== undefined ? { documentation: cloneDocumentationMetadata(definition.documentation) } : {}),
   }
 }
 

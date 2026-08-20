@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { ref, toRaw, watch } from 'vue'
+import { nextTick, onMounted, ref, toRaw, watch } from 'vue'
 import { CommandParseError, type CommandRegistry } from '../core/commands'
-import { WidgetNavigationError, type NavigationResult, type WidgetNavigator } from '../core/navigation'
+import { WidgetNavigationError, type NavigationResult, type WidgetNavigationContext, type WidgetNavigator } from '../core/navigation'
 
 interface CommandInputProps {
   commands: CommandRegistry
   navigator: WidgetNavigator
-  placeholder?: string
-  submitLabel?: string
+  context?: WidgetNavigationContext | undefined
+  placeholder?: string | undefined
+  submitLabel?: string | undefined
+  autoFocus?: boolean
 }
 
 let nextCommandInputId = 0
@@ -25,6 +27,7 @@ function createFeedbackId(): string {
 const props = withDefaults(defineProps<CommandInputProps>(), {
   placeholder: 'Enter command',
   submitLabel: 'Run',
+  autoFocus: false,
 })
 
 const emit = defineEmits<{
@@ -38,6 +41,7 @@ const input = ref('')
 const status = ref<'idle' | 'success' | 'error'>('idle')
 const feedback = ref('')
 const liveAnnouncement = ref('')
+const inputElement = ref<HTMLInputElement | null>(null)
 
 watch(input, () => {
   if (status.value !== 'error') return
@@ -49,7 +53,8 @@ watch(input, () => {
 function submit(): void {
   try {
     const intent = toRaw(props.commands).parse(input.value)
-    const result = toRaw(props.navigator).navigate(intent)
+    const navigator = toRaw(props.navigator)
+    const result = props.context ? navigator.navigate(intent, props.context) : navigator.navigate(intent)
     status.value = 'success'
     feedback.value = `Opened ${result.widgetId}`
     liveAnnouncement.value = ''
@@ -64,15 +69,21 @@ function submit(): void {
     feedback.value = message
     if (liveAnnouncement.value !== message) liveAnnouncement.value = message
     emit('error', normalized)
+    void nextTick(() => inputElement.value?.focus())
   }
 }
+
+onMounted(() => {
+  if (props.autoFocus) void nextTick(() => inputElement.value?.focus())
+})
 </script>
 
 <template>
   <form class="wf-command-input" @submit.prevent="submit">
     <label class="wf-command-input__label" :for="inputId">
       <span class="wf-command-input__label-text">Command</span>
-      <input
+        <input
+          ref="inputElement"
         :id="inputId"
         v-model="input"
         class="wf-command-input__field"
