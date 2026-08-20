@@ -5,6 +5,20 @@ export type WindowLayoutUnit = 'px' | 'percent'
 export type WindowLayoutAxis = 'horizontal' | 'vertical'
 export type WindowLayoutEdge = 'left' | 'right' | 'top' | 'bottom'
 
+/** The mutually exclusive sizing models exposed by the responsive editor. */
+export type WindowLayoutAxisMode = 'start-size' | 'end-size' | 'stretch'
+
+/**
+ * Map the durable start/end/size contract to the safe, directional editor
+ * model. Legacy over-defined specs intentionally prefer their start anchor so
+ * opening the editor never creates a new invalid combination.
+ */
+export function deriveWindowLayoutAxisMode(axisSpec: WindowLayoutAxisSpec): WindowLayoutAxisMode {
+  if (axisSpec.start && axisSpec.end && (axisSpec.size === undefined || axisSpec.size === 'auto')) return 'stretch'
+  if (axisSpec.end && !axisSpec.start && axisSpec.size !== undefined && axisSpec.size !== 'auto') return 'end-size'
+  return 'start-size'
+}
+
 /** The durable relationship between a window and its responsive rule. */
 export type WindowLayoutRuleState = 'none' | 'active' | 'dormant' | 'materialized'
 

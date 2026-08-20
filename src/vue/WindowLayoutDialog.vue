@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { resolveWindowLayoutSpecs, validateWindowLayoutSpec, type WindowLayoutAnchor, type WindowLayoutAxis, type WindowLayoutAxisSpec, type WindowLayoutLength, type WindowLayoutSpec } from '../core/window-layout'
+import { deriveWindowLayoutAxisMode, resolveWindowLayoutSpecs, validateWindowLayoutSpec, type WindowLayoutAnchor, type WindowLayoutAxis, type WindowLayoutAxisMode, type WindowLayoutAxisSpec, type WindowLayoutLength, type WindowLayoutSpec } from '../core/window-layout'
 import type { WindowGeometry, WindowSize } from '../core/window-geometry'
 import type { WindowState } from '../core/window-manager'
 import { focusModal, trapFocus } from './modal-focus'
@@ -9,7 +9,7 @@ type LayoutMode = 'absolute' | 'responsive'
 type TargetValue = 'none' | string
 type PickerSide = 'left' | 'right' | 'top' | 'bottom'
 type PickerAxis = 'horizontal' | 'vertical'
-interface AxisDraft { startTarget: TargetValue; startOffset: number | string; startOffsetUnit: 'px' | 'percent'; endTarget: TargetValue; endOffset: number | string; endOffsetUnit: 'px' | 'percent'; size: number | string; sizeUnit: 'px' | 'percent'; fill: boolean }
+interface AxisDraft { mode: WindowLayoutAxisMode; startTarget: TargetValue; startOffset: number | string; startOffsetUnit: 'px' | 'percent'; endTarget: TargetValue; endOffset: number | string; endOffsetUnit: 'px' | 'percent'; size: number | string; sizeUnit: 'px' | 'percent' }
 interface TargetOption { readonly value: string; readonly label: string; readonly kind: 'workspace' | 'window' }
 interface PickerRequest { readonly axis: PickerAxis; readonly side: PickerSide }
 
@@ -20,10 +20,11 @@ const emit = defineEmits<{ cancel: []; save: [value: WindowLayoutDialogSave] }>(
 const dialog = ref<HTMLElement | null>(null)
 const mode = ref<LayoutMode>('absolute')
 const errorMessage = ref('')
+const noticeMessage = ref('')
 const pickerRequest = ref<PickerRequest | null>(null)
 const absolute = reactive({ x: 0 as number | string, y: 0 as number | string, width: 0 as number | string, height: 0 as number | string, xUnit: 'px' as 'px' | 'percent', yUnit: 'px' as 'px' | 'percent', widthUnit: 'px' as 'px' | 'percent', heightUnit: 'px' as 'px' | 'percent' })
-const horizontal = reactive<AxisDraft>({ startTarget: 'workspace:left', startOffset: 0, startOffsetUnit: 'px', endTarget: 'none', endOffset: 0, endOffsetUnit: 'px', size: 0, sizeUnit: 'px', fill: false })
-const vertical = reactive<AxisDraft>({ startTarget: 'workspace:top', startOffset: 0, startOffsetUnit: 'px', endTarget: 'none', endOffset: 0, endOffsetUnit: 'px', size: 0, sizeUnit: 'px', fill: false })
+const horizontal = reactive<AxisDraft>({ mode: 'start-size', startTarget: 'workspace:left', startOffset: 0, startOffsetUnit: 'px', endTarget: 'none', endOffset: 0, endOffsetUnit: 'px', size: 0, sizeUnit: 'px' })
+const vertical = reactive<AxisDraft>({ mode: 'start-size', startTarget: 'workspace:top', startOffset: 0, startOffsetUnit: 'px', endTarget: 'none', endOffset: 0, endOffsetUnit: 'px', size: 0, sizeUnit: 'px' })
 let previousFocus: HTMLElement | null = null
 
 const otherWindows = computed(() => props.windows.filter((window) => window.instanceId !== props.window.instanceId))
@@ -45,16 +46,30 @@ function readTarget(anchor: WindowLayoutAnchor | undefined): TargetValue {
   return anchor.target.kind === 'workspace' ? `workspace:${anchor.target.edge}` : `window:${anchor.target.instanceId}:${anchor.target.edge}`
 }
 function readLength(length: WindowLayoutLength | undefined, fallback: number): { value: number; unit: 'px' | 'percent' } { return length ? { value: length.value, unit: length.unit } : { value: fallback, unit: 'px' } }
+function formatCalculatedSize(value: number): string {
+  const rounded = Math.round(value * 100) / 100
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
+}
+function axisEdge(axis: WindowLayoutAxis, side: 'start' | 'end'): 'left' | 'right' | 'top' | 'bottom' {
+  if (axis === 'horizontal') return side === 'start' ? 'left' : 'right'
+  return side === 'start' ? 'top' : 'bottom'
+}
 function applyAxis(draft: AxisDraft, axisSpec: WindowLayoutAxisSpec | undefined, fallbackPosition: number, fallbackSize: number): void {
   const startLength = readLength(axisSpec?.start?.offset, fallbackPosition), endLength = readLength(axisSpec?.end?.offset, 0), sizeLength = axisSpec?.size === 'auto' || axisSpec?.size === undefined ? { value: fallbackSize, unit: 'px' as const } : readLength(axisSpec.size, fallbackSize)
-  draft.startTarget = readTarget(axisSpec?.start); draft.startOffset = startLength.value; draft.startOffsetUnit = startLength.unit; draft.endTarget = readTarget(axisSpec?.end); draft.endOffset = endLength.value; draft.endOffsetUnit = endLength.unit; draft.size = sizeLength.value; draft.sizeUnit = sizeLength.unit; draft.fill = axisSpec?.size === 'auto' || (axisSpec?.size === undefined && axisSpec?.start !== undefined && axisSpec?.end !== undefined)
+  draft.mode = axisSpec ? deriveWindowLayoutAxisMode(axisSpec) : 'start-size'
+  draft.startTarget = readTarget(axisSpec?.start); draft.startOffset = startLength.value; draft.startOffsetUnit = startLength.unit; draft.endTarget = readTarget(axisSpec?.end); draft.endOffset = endLength.value; draft.endOffsetUnit = endLength.unit; draft.size = sizeLength.value; draft.sizeUnit = sizeLength.unit
 }
 function initialize(): void {
   const geometry = props.window.geometry
-  mode.value = props.window.layoutSpec ? 'responsive' : 'absolute'; errorMessage.value = ''; pickerRequest.value = null
+  mode.value = props.window.layoutSpec ? 'responsive' : 'absolute'; errorMessage.value = ''; noticeMessage.value = ''; pickerRequest.value = null
   absolute.x = geometry.position.x; absolute.y = geometry.position.y; absolute.width = geometry.size.width; absolute.height = geometry.size.height; absolute.xUnit = 'px'; absolute.yUnit = 'px'; absolute.widthUnit = 'px'; absolute.heightUnit = 'px'
   applyAxis(horizontal, props.window.layoutSpec?.horizontal, geometry.position.x, geometry.size.width); applyAxis(vertical, props.window.layoutSpec?.vertical, geometry.position.y, geometry.size.height)
-  if (!props.window.layoutSpec) { horizontal.startTarget = 'workspace:left'; horizontal.endTarget = 'none'; horizontal.fill = false; vertical.startTarget = 'workspace:top'; vertical.endTarget = 'none'; vertical.fill = false }
+  if (!props.window.layoutSpec) { horizontal.mode = 'start-size'; horizontal.startTarget = 'workspace:left'; horizontal.endTarget = 'none'; vertical.mode = 'start-size'; vertical.startTarget = 'workspace:top'; vertical.endTarget = 'none' }
+  const migratedAxes = (['horizontal', 'vertical'] as const).filter((axis) => {
+    const spec = props.window.layoutSpec?.[axis]
+    return Boolean(spec?.start && spec.end && spec.size !== undefined && spec.size !== 'auto')
+  })
+  if (migratedAxes.length) noticeMessage.value = `${migratedAxes.map((axis) => axis === 'horizontal' ? 'Horizontal' : 'Vertical').join(' and ')} used conflicting anchors in the saved layout. The editor will keep the start anchor and size.`
 }
 function numeric(value: number | string, label: string): number { const parsed = typeof value === 'number' ? value : Number(value); if (!Number.isFinite(parsed)) throw new Error(`${label} must be a finite number`); return parsed }
 function length(value: number | string, unit: 'px' | 'percent', label: string): WindowLayoutLength { return { value: numeric(value, label), unit } }
@@ -67,8 +82,34 @@ function parseTarget(value: TargetValue, axis: WindowLayoutAxis, offset: WindowL
   if (!otherWindows.value.some((window) => window.instanceId === instanceId)) throw new Error(`${axis} target window "${instanceId}" is no longer available`)
   return { target: { kind: 'window', instanceId, edge }, offset }
 }
+function draftFor(axis: WindowLayoutAxis): AxisDraft { return axis === 'horizontal' ? horizontal : vertical }
+function axisGeometry(axis: WindowLayoutAxis): { position: number; size: number; available: number } {
+  return axis === 'horizontal'
+    ? { position: props.window.geometry.position.x, size: props.window.geometry.size.width, available: props.container.width }
+    : { position: props.window.geometry.position.y, size: props.window.geometry.size.height, available: props.container.height }
+}
+function workspaceTarget(axis: WindowLayoutAxis, side: 'start' | 'end'): TargetValue { return `workspace:${axisEdge(axis, side)}` }
+function setAxisMode(axis: WindowLayoutAxis, nextMode: WindowLayoutAxisMode): void {
+  const draft = draftFor(axis)
+  if (draft.mode === nextMode) return
+  const geometry = axisGeometry(axis)
+  if (nextMode === 'stretch') {
+    if (draft.startTarget === 'none') { draft.startTarget = workspaceTarget(axis, 'start'); draft.startOffset = geometry.position; draft.startOffsetUnit = 'px' }
+    if (draft.endTarget === 'none') { draft.endTarget = workspaceTarget(axis, 'end'); draft.endOffset = geometry.position + geometry.size - geometry.available; draft.endOffsetUnit = 'px' }
+  } else {
+    draft.size = geometry.size
+    draft.sizeUnit = 'px'
+    if (nextMode === 'start-size' && draft.startTarget === 'none') { draft.startTarget = workspaceTarget(axis, 'start'); draft.startOffset = geometry.position; draft.startOffsetUnit = 'px' }
+    if (nextMode === 'end-size' && draft.endTarget === 'none') { draft.endTarget = workspaceTarget(axis, 'end'); draft.endOffset = geometry.position + geometry.size - geometry.available; draft.endOffsetUnit = 'px' }
+  }
+  draft.mode = nextMode
+  errorMessage.value = ''
+}
 function writeAxis(draft: AxisDraft, axis: WindowLayoutAxis, label: string): WindowLayoutAxisSpec {
-  const startOffset = length(draft.startOffset, draft.startOffsetUnit, `${label} left offset`), endOffset = length(draft.endOffset, draft.endOffsetUnit, `${label} right offset`), start = parseTarget(draft.startTarget, axis, startOffset), end = parseTarget(draft.endTarget, axis, endOffset), size = draft.fill ? 'auto' as const : length(draft.size, draft.sizeUnit, `${label} size`)
+  const startOffset = length(draft.startOffset, draft.startOffsetUnit, `${label} start offset`), endOffset = length(draft.endOffset, draft.endOffsetUnit, `${label} end offset`)
+  const start = draft.mode === 'end-size' ? undefined : parseTarget(draft.startTarget, axis, startOffset)
+  const end = draft.mode === 'start-size' ? undefined : parseTarget(draft.endTarget, axis, endOffset)
+  const size = draft.mode === 'stretch' ? 'auto' as const : length(draft.size, draft.sizeUnit, `${label} size`)
   return { ...(start ? { start } : {}), ...(end ? { end } : {}), size }
 }
 function absoluteGeometry(): WindowGeometry {
@@ -98,7 +139,6 @@ function cancel(): void { pickerRequest.value = null; clearPickerMarkers(); emit
 function handleBackdrop(event: MouseEvent): void { if (event.target === event.currentTarget && !pickerRequest.value) cancel() }
 function handleKeydown(event: KeyboardEvent): void { if (event.key === 'Escape') { event.preventDefault(); if (pickerRequest.value) { pickerRequest.value = null; clearPickerMarkers() } else cancel(); return } if (event.key === 'Tab' && dialog.value) { event.preventDefault(); trapFocus(dialog.value, event.shiftKey) } }
 function startPicker(axis: PickerAxis, side: PickerSide): void { pickerRequest.value = { axis, side }; errorMessage.value = ''; markPickerSource() }
-function draftFor(axis: PickerAxis): AxisDraft { return axis === 'horizontal' ? horizontal : vertical }
 function setTargetValue(axis: PickerAxis, side: PickerSide, value: TargetValue): void { const draft = draftFor(axis); if (side === 'left' || side === 'top') draft.startTarget = value; else draft.endTarget = value }
 function onDocumentPointerDown(event: PointerEvent): void {
   const request = pickerRequest.value; if (!request) return
@@ -131,26 +171,45 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPo
         </div>
         <template v-else>
           <fieldset>
-            <legend>Horizontal · Left / Right / Width</legend>
-            <label>Left <select v-model="horizontal.startTarget" data-layout-left-target data-layout-horizontal-start><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="horizontal:left" @click="startPicker('horizontal', 'left')">Auf Canvas wählen</button></label>
-            <label>Left offset <input v-model="horizontal.startOffset" type="number" step="any" data-layout-left-offset /><select v-model="horizontal.startOffsetUnit" aria-label="Left offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
-            <label>Right <select v-model="horizontal.endTarget" data-layout-right-target data-layout-horizontal-end><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="horizontal:right" @click="startPicker('horizontal', 'right')">Auf Canvas wählen</button></label>
-            <label>Right offset <input v-model="horizontal.endOffset" type="number" step="any" data-layout-right-offset /><select v-model="horizontal.endOffsetUnit" aria-label="Right offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
-            <label>Width <input v-model="horizontal.size" type="number" step="any" :disabled="horizontal.fill" data-layout-width /><select v-model="horizontal.sizeUnit" aria-label="Width unit" :disabled="horizontal.fill"><option value="px">px</option><option value="percent">%</option></select></label>
-            <label class="wf-window-layout-dialog__check"><input v-model="horizontal.fill" type="checkbox" data-layout-horizontal-fill /> Fill between Left and Right</label><small v-if="horizontal.fill" class="wf-window-layout-dialog__hint" data-layout-fill-hint>Width is calculated from both anchors.</small>
+            <legend>Horizontal</legend>
+            <div class="wf-window-layout-dialog__modes" role="radiogroup" aria-label="Horizontal sizing mode">
+              <label><input type="radio" :checked="horizontal.mode === 'start-size'" data-layout-horizontal-mode="start-size" @change="setAxisMode('horizontal', 'start-size')" /> Left + Width</label>
+              <label><input type="radio" :checked="horizontal.mode === 'end-size'" data-layout-horizontal-mode="end-size" @change="setAxisMode('horizontal', 'end-size')" /> Right + Width</label>
+              <label><input type="radio" :checked="horizontal.mode === 'stretch'" data-layout-horizontal-mode="stretch" @change="setAxisMode('horizontal', 'stretch')" /> Stretch Left ↔ Right</label>
+            </div>
+            <template v-if="horizontal.mode !== 'end-size'">
+              <label>Left <select v-model="horizontal.startTarget" data-layout-left-target data-layout-horizontal-start><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="horizontal:left" @click="startPicker('horizontal', 'left')">Auf Canvas wählen</button></label>
+              <label>Left offset <input v-model="horizontal.startOffset" type="number" step="any" data-layout-left-offset /><select v-model="horizontal.startOffsetUnit" aria-label="Left offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
+            </template>
+            <template v-if="horizontal.mode !== 'start-size'">
+              <label>Right <select v-model="horizontal.endTarget" data-layout-right-target data-layout-horizontal-end><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in horizontalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="horizontal:right" @click="startPicker('horizontal', 'right')">Auf Canvas wählen</button></label>
+              <label>Right offset <input v-model="horizontal.endOffset" type="number" step="any" data-layout-right-offset /><select v-model="horizontal.endOffsetUnit" aria-label="Right offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
+            </template>
+            <label v-if="horizontal.mode !== 'stretch'">Width <input v-model="horizontal.size" type="number" step="any" data-layout-width /><select v-model="horizontal.sizeUnit" aria-label="Width unit"><option value="px">px</option><option value="percent">%</option></select></label>
+            <p v-else class="wf-window-layout-dialog__calculated" data-layout-calculated-width>Width: <output data-layout-width>{{ formatCalculatedSize(props.window.geometry.size.width) }}</output> px (calculated from both anchors)</p>
           </fieldset>
           <fieldset>
-            <legend>Vertical · Top / Bottom / Height</legend>
-            <label>Top <select v-model="vertical.startTarget" data-layout-top-target data-layout-vertical-start><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in verticalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in verticalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="vertical:top" @click="startPicker('vertical', 'top')">Auf Canvas wählen</button></label>
-            <label>Top offset <input v-model="vertical.startOffset" type="number" step="any" /><select v-model="vertical.startOffsetUnit" aria-label="Top offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
-            <label>Bottom <select v-model="vertical.endTarget" data-layout-bottom-target data-layout-vertical-end><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in verticalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in verticalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="vertical:bottom" @click="startPicker('vertical', 'bottom')">Auf Canvas wählen</button></label>
-            <label>Bottom offset <input v-model="vertical.endOffset" type="number" step="any" /><select v-model="vertical.endOffsetUnit" aria-label="Bottom offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
-            <label>Height <input v-model="vertical.size" type="number" step="any" :disabled="vertical.fill" data-layout-height /><select v-model="vertical.sizeUnit" aria-label="Height unit" :disabled="vertical.fill"><option value="px">px</option><option value="percent">%</option></select></label>
-            <label class="wf-window-layout-dialog__check"><input v-model="vertical.fill" type="checkbox" data-layout-vertical-fill /> Fill between Top and Bottom</label><small v-if="vertical.fill" class="wf-window-layout-dialog__hint" data-layout-fill-hint>Height is calculated from both anchors.</small>
+            <legend>Vertical</legend>
+            <div class="wf-window-layout-dialog__modes" role="radiogroup" aria-label="Vertical sizing mode">
+              <label><input type="radio" :checked="vertical.mode === 'start-size'" data-layout-vertical-mode="start-size" @change="setAxisMode('vertical', 'start-size')" /> Top + Height</label>
+              <label><input type="radio" :checked="vertical.mode === 'end-size'" data-layout-vertical-mode="end-size" @change="setAxisMode('vertical', 'end-size')" /> Bottom + Height</label>
+              <label><input type="radio" :checked="vertical.mode === 'stretch'" data-layout-vertical-mode="stretch" @change="setAxisMode('vertical', 'stretch')" /> Stretch Top ↔ Bottom</label>
+            </div>
+            <template v-if="vertical.mode !== 'end-size'">
+              <label>Top <select v-model="vertical.startTarget" data-layout-top-target data-layout-vertical-start><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in verticalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in verticalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="vertical:top" @click="startPicker('vertical', 'top')">Auf Canvas wählen</button></label>
+              <label>Top offset <input v-model="vertical.startOffset" type="number" step="any" data-layout-top-offset /><select v-model="vertical.startOffsetUnit" aria-label="Top offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
+            </template>
+            <template v-if="vertical.mode !== 'start-size'">
+              <label>Bottom <select v-model="vertical.endTarget" data-layout-bottom-target data-layout-vertical-end><option value="none">Not anchored</option><optgroup label="Workspace"><option v-for="target in verticalTargets.filter((target) => target.kind === 'workspace')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup><optgroup label="Windows"><option v-for="target in verticalTargets.filter((target) => target.kind === 'window')" :key="target.value" :value="target.value">{{ target.label }}</option></optgroup></select><button type="button" data-layout-pick="vertical:bottom" @click="startPicker('vertical', 'bottom')">Auf Canvas wählen</button></label>
+              <label>Bottom offset <input v-model="vertical.endOffset" type="number" step="any" data-layout-bottom-offset /><select v-model="vertical.endOffsetUnit" aria-label="Bottom offset unit"><option value="px">px</option><option value="percent">%</option></select></label>
+            </template>
+            <label v-if="vertical.mode !== 'stretch'">Height <input v-model="vertical.size" type="number" step="any" data-layout-height /><select v-model="vertical.sizeUnit" aria-label="Height unit"><option value="px">px</option><option value="percent">%</option></select></label>
+            <p v-else class="wf-window-layout-dialog__calculated" data-layout-calculated-height>Height: <output data-layout-height>{{ formatCalculatedSize(props.window.geometry.size.height) }}</output> px (calculated from both anchors)</p>
           </fieldset>
-          <p class="wf-window-layout-dialog__summary" data-layout-relationship-summary>Left {{ horizontal.startTarget === 'none' ? 'free' : horizontal.startTarget }} · Right {{ horizontal.endTarget === 'none' ? 'free' : horizontal.endTarget }} · Top {{ vertical.startTarget === 'none' ? 'free' : vertical.startTarget }} · Bottom {{ vertical.endTarget === 'none' ? 'free' : vertical.endTarget }}</p>
+          <p class="wf-window-layout-dialog__summary" data-layout-relationship-summary>Horizontal: {{ horizontal.mode }} · Vertical: {{ vertical.mode }} · Left {{ horizontal.startTarget === 'none' ? 'free' : horizontal.startTarget }} · Right {{ horizontal.endTarget === 'none' ? 'free' : horizontal.endTarget }} · Top {{ vertical.startTarget === 'none' ? 'free' : vertical.startTarget }} · Bottom {{ vertical.endTarget === 'none' ? 'free' : vertical.endTarget }}</p>
           <p v-if="pickerRequest" class="wf-window-layout-dialog__picker" data-layout-picker-state role="status">{{ pickerLabel }} — click a highlighted window in the workspace. Press Escape to cancel.</p>
         </template>
+        <p v-if="noticeMessage" class="wf-window-layout-dialog__notice" role="status">{{ noticeMessage }}</p>
         <p v-if="errorMessage" :id="errorId" class="wf-window-layout-dialog__error" role="alert">{{ errorMessage }}</p>
         <footer class="wf-window-layout-dialog__actions"><button type="button" @click="cancel">Cancel</button><button type="submit" data-layout-save>Save layout</button></footer>
       </form>
@@ -175,14 +234,18 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocumentPo
 .wf-window-layout-dialog select { width: 100%; }
 .wf-window-layout-dialog button { min-height: var(--wf-size-control-height-compact); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: transparent; color: var(--wf-color-text); font: inherit; cursor: pointer; }
 .wf-window-layout-dialog button:hover { background: var(--wf-color-hover); }
+.wf-window-layout-dialog__modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--wf-space-xs); }
+.wf-window-layout-dialog__modes label { display: flex; min-height: var(--wf-size-control-height-compact); padding: var(--wf-space-xs) var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface); }
+.wf-window-layout-dialog__modes input { min-height: auto; }
 .wf-window-layout-dialog__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--wf-space-md); }
 .wf-window-layout-dialog__grid label { grid-template-columns: auto minmax(0, 1fr) auto; }
-.wf-window-layout-dialog__hint, .wf-window-layout-dialog__summary, .wf-window-layout-dialog__picker { margin: 0; color: var(--wf-color-text-muted); font-size: var(--wf-font-size-sm); }
+.wf-window-layout-dialog__hint, .wf-window-layout-dialog__summary, .wf-window-layout-dialog__picker, .wf-window-layout-dialog__calculated, .wf-window-layout-dialog__notice { margin: 0; color: var(--wf-color-text-muted); font-size: var(--wf-font-size-sm); }
+.wf-window-layout-dialog__notice { padding: var(--wf-space-sm); border-left: 3px solid var(--wf-color-accent); }
 .wf-window-layout-dialog__picker { padding: var(--wf-space-sm); border-left: 3px solid var(--wf-color-focus); color: var(--wf-color-accent); }
 .wf-window-layout-dialog__error { margin: 0; padding: var(--wf-space-sm); border-left: 3px solid var(--wf-color-danger); color: var(--wf-color-danger); }
 .wf-window-layout-dialog__actions { display: flex; justify-content: flex-end; gap: var(--wf-space-sm); }
 .wf-window-layout-dialog__actions button { padding: 0 var(--wf-space-md); }
 .wf-window-layout-dialog__actions button:last-child { border-color: var(--wf-color-accent); color: var(--wf-color-accent); }
 .wf-window-layout-dialog button:focus-visible, .wf-window-layout-dialog input:focus-visible, .wf-window-layout-dialog select:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
-@media (max-width: 720px) { .wf-window-layout-dialog__grid { grid-template-columns: 1fr; } .wf-window-layout-dialog label { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .wf-window-layout-dialog__grid, .wf-window-layout-dialog__modes { grid-template-columns: 1fr; } .wf-window-layout-dialog label { grid-template-columns: 1fr; } }
 </style>
