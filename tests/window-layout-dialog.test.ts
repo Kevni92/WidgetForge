@@ -32,7 +32,50 @@ describe('WindowLayoutDialog', () => {
     await wrapper.findAll('select')[2]?.setValue('percent')
     await wrapper.get('[data-layout-save]').trigger('click')
 
-    expect(wrapper.emitted('save')?.[0]?.[0]).toEqual({ layoutSpec: null, geometry: { position: { x: 80, y: 220 }, size: { width: 400, height: 160 } } })
+    expect(wrapper.emitted('save')?.[0]?.[0]).toEqual({ layoutSpec: null, geometry: { position: { x: 10, y: 220 }, size: { width: 50, height: 160 } } })
+    wrapper.unmount()
+  })
+
+  it('converts absolute units without changing the represented geometry', async () => {
+    const { windows, selected } = setup()
+    const wrapper = mount(WindowLayoutDialog, { attachTo: document.body, props: { open: true, window: selected, windows: windows.list(), container: { width: 800, height: 600 } } })
+    await wrapper.get('[data-layout-width]').setValue('260')
+    await wrapper.get('[aria-label="Width unit"]').setValue('percent')
+    expect((wrapper.get('[data-layout-width]').element as HTMLInputElement).value).toBe('32.5')
+    await wrapper.get('[data-layout-save]').trigger('click')
+    expect(wrapper.emitted('save')?.[0]?.[0]).toEqual({ layoutSpec: null, geometry: { position: { x: 300, y: 220 }, size: { width: 260, height: 160 } } })
+    wrapper.unmount()
+  })
+
+  it('converts responsive offsets on the correct workspace axis', async () => {
+    const { windows, selected } = setup()
+    const wrapper = mount(WindowLayoutDialog, { attachTo: document.body, props: { open: true, window: selected, windows: windows.list(), container: { width: 800, height: 600 } } })
+    await wrapper.find('input[type="radio"][value="responsive"]').setValue(true)
+    await wrapper.get('[data-layout-left-offset]').setValue('200')
+    await wrapper.get('[aria-label="Left offset unit"]').setValue('percent')
+    expect((wrapper.get('[data-layout-left-offset]').element as HTMLInputElement).value).toBe('25')
+    await wrapper.get('[data-layout-save]').trigger('click')
+    const save = wrapper.emitted('save')?.[0]?.[0] as { geometry: { position: { x: number } }; layoutSpec: { horizontal: { start?: { offset?: { value: number; unit: string } } } } }
+    expect(save.geometry.position.x).toBe(200)
+    expect(save.layoutSpec.horizontal.start?.offset).toEqual({ value: 25, unit: 'percent' })
+    wrapper.unmount()
+  })
+
+  it('initializes free geometry as a valid Left+Width and Top+Height draft', async () => {
+    const { windows, selected } = setup()
+    const wrapper = mount(WindowLayoutDialog, { attachTo: document.body, props: { open: true, window: selected, windows: windows.list(), container: { width: 800, height: 600 } } })
+    await wrapper.find('input[type="radio"][value="responsive"]').setValue(true)
+    expect(wrapper.get('[data-layout-horizontal-mode="start-size"]').element).toBeTruthy()
+    expect((wrapper.get('[data-layout-left-target]').element as HTMLSelectElement).value).toBe('workspace:left')
+    expect((wrapper.get('[data-layout-top-target]').element as HTMLSelectElement).value).toBe('workspace:top')
+    expect((wrapper.get('[data-layout-width]').element as HTMLInputElement).value).toBe('260')
+    expect((wrapper.get('[data-layout-height]').element as HTMLInputElement).value).toBe('160')
+    await wrapper.get('[data-layout-save]').trigger('click')
+    const save = wrapper.emitted('save')?.[0]?.[0] as { layoutSpec: { horizontal: { start?: unknown; end?: unknown }; vertical: { start?: unknown; end?: unknown } } }
+    expect(save.layoutSpec.horizontal.start).toBeTruthy()
+    expect(save.layoutSpec.horizontal.end).toBeUndefined()
+    expect(save.layoutSpec.vertical.start).toBeTruthy()
+    expect(save.layoutSpec.vertical.end).toBeUndefined()
     wrapper.unmount()
   })
 
@@ -100,6 +143,26 @@ describe('WindowLayoutDialog', () => {
     expect(save.layoutSpec.vertical.start).toBeUndefined()
     expect(save.layoutSpec.vertical.end?.target.edge).toBe('bottom')
     expect(save.layoutSpec.vertical.size?.value).toBe(200)
+    wrapper.unmount()
+  })
+
+  it('makes the retained-rule versus current-geometry choice explicit', async () => {
+    const { windows, selected } = setup()
+    const retainedWindow = {
+      ...selected,
+      layoutSpec: {
+        horizontal: { start: { target: { kind: 'workspace' as const, edge: 'left' as const } }, size: { value: 50, unit: 'percent' as const } },
+        vertical: { start: { target: { kind: 'workspace' as const, edge: 'top' as const } }, size: { value: 50, unit: 'percent' as const } },
+      },
+      layoutSpecState: 'dormant' as const,
+    }
+    const wrapper = mount(WindowLayoutDialog, { attachTo: document.body, props: { open: true, window: retainedWindow, windows: windows.list(), container: { width: 800, height: 600 } } })
+    expect(wrapper.get('[data-layout-retained-choice]').text()).toContain('Responsive rule retained')
+    expect((wrapper.get('[data-layout-width]').element as HTMLInputElement).value).toBe('50')
+    await wrapper.get('[data-layout-start-current]').trigger('click')
+    expect((wrapper.get('[data-layout-width]').element as HTMLInputElement).value).toBe('260')
+    await wrapper.get('[data-layout-use-retained]').trigger('click')
+    expect((wrapper.get('[data-layout-width]').element as HTMLInputElement).value).toBe('50')
     wrapper.unmount()
   })
 
