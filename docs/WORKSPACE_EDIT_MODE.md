@@ -5,10 +5,12 @@ WidgetForge trennt normale Nutzung und Layout-Bearbeitung explizit.
 ## Modi
 
 - `normal`: Widgets und Fenster werden normal benutzt. Das Halten von `Ctrl` kann temporär den Edit-Mode aktivieren.
-- `edit`: Pane-Grenzen, Auswahl und Layout-Handles werden sichtbar. Pane-Reparenting ist ohne dauerhaft gehaltene Modifier-Taste möglich.
+- `edit`: Der sichtbare `Edit layout`-Befehl aktiviert einen persistenten Layout-Editor. Eine stabile Editor-Chrome zeigt `Layout editing` und `Done`; Pane-Grenzen, Window-Hosts und Layout-Beziehungen werden sichtbar. Pane-Reparenting ist ohne dauerhaft gehaltene Modifier-Taste möglich.
 - `locked`: strukturelle Layout-Interaktionen sind gesperrt. Widget-Interaktion, Fokus, Tabs sowie Window-Aktionen wie Minimieren/Schließen bleiben nutzbar.
 
 `WorkspaceEditController` ist DOM-/Vue-unabhängig und hält Modus, Pane-Auswahl, Window-Host-Auswahl und optionale Pane-Locks. `snapshot()`/`restore()` sind vollständig serialisierbar und können von Anwendungen unabhängig vom Workspace-Snapshot persistiert werden.
+
+Im persistenten Edit Mode liegt eine eigene, nicht persistierte Interaction-Layer über dem Window-Content. Sie nimmt Pointer-Selection und strukturelles Pane-Dragging entgegen; sie ist keine Quelle für DOM-Geometrie oder Layout-State. Der fachliche Widget-Content wird mit semantischem Dimming zurückgenommen und per `inert` aus dem Fokus-/Aktionspfad genommen. Editor-Chrome, Inspector und Window-Host-Selection bleiben interaktiv. Unselected-, Hovered- und Selected-Hosts besitzen getrennte visuelle Marker. Window-Hosts sind im Edit Mode keyboard-fokussierbar; `Escape` verwirft nur aktive transiente Aktionen, während `Done` den gesamten Modus beendet und Selection-/Preview-Zustände bereinigt.
 
 ## Interaktionsgrenzen
 

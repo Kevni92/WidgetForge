@@ -134,7 +134,7 @@ function closeLauncher(): void { props.onLauncherClose?.() }
         <button v-if="closable" class="wf-window-shell__close" type="button" aria-label="Close window" @pointerdown.stop @click.stop="requestClose"><span class="wf-window-shell__action-icon" aria-hidden="true">×</span></button>
       </div>
     </header>
-    <div v-show="!minimized" class="wf-window-shell__content" :aria-hidden="minimized ? 'true' : undefined">
+    <div v-show="!minimized" class="wf-window-shell__content" :class="{ 'wf-window-shell__content--layout-edit': editMode }" :aria-hidden="minimized ? 'true' : undefined" :inert="editMode ? true : undefined" :data-layout-content="editMode ? 'dimmed' : undefined">
       <slot><CommandLauncher v-if="isLauncher && launcherNavigator" :commands="commandRegistry" :navigator="launcherNavigator" :context="launcherContext" :placeholder="launcherPlaceholder" :submit-label="launcherSubmitLabel" @close="closeLauncher" /><PaneHost v-else-if="contentPane" :pane="contentPane" :registry="registry" :command-registry="commandRegistry" :lifecycle="lifecycle" :layout-locked="layoutLocked || windowLocked" :edit-mode="editMode" :pane-drag-enabled="paneDragEnabled" host-type="window" action-chrome="none" :host-visible="!minimized" :host-focused="focused" @actions-change="setWidgetActions" @update:pane="emit('update:pane', $event)" /></slot>
     </div>
     </div>
