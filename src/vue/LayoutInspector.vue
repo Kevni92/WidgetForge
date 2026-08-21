@@ -3,11 +3,16 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { normalizeWindowGeometry, type WindowGeometry, type WindowSize } from '../core/window-geometry'
 import { cloneWindowLayoutSpec, convertWindowLayoutValue, deriveWindowLayoutAxisMode, removeWindowLayoutConstraint, resolveWindowLayoutSpecs, setWindowLayoutConstraint, type WindowLayoutAnchor, type WindowLayoutAxis, type WindowLayoutAxisMode, type WindowLayoutEdge, type WindowLayoutSpec } from '../core/window-layout'
 import type { WindowState } from '../core/window-manager'
+import type { DockState } from '../core/dock-manager'
+import { cloneLayoutSurfaceStyle, createLayoutSurfaceStyle, resolveLayoutSurfaceStyle, type LayoutSurfaceSide, type LayoutSurfaceStyle, type ResolvedLayoutSurfaceStyle } from '../core/layout-surface-style'
+import type { LayoutInspectorSelection } from '../core/layout-inspector'
 import type { WindowLayoutDialogPreview, WindowLayoutDialogSave } from './WindowLayoutDialog.vue'
 
 interface Props {
   readonly window: WindowState | null
   readonly windows: readonly WindowState[]
+  readonly selection?: LayoutInspectorSelection | null
+  readonly docks?: readonly DockState[]
   readonly container: WindowSize
   readonly surface?: string | undefined
   readonly rule?: string | undefined
@@ -28,6 +33,10 @@ const emit = defineEmits<{
   constraintSelect: [edge: WindowLayoutEdge]
   modeChange: [mode: InspectorMode]
   floatingPositionChange: [position: InspectorFloatingPosition]
+  styleEditStart: []
+  stylePreview: [style: LayoutSurfaceStyle | undefined]
+  styleSave: [style: LayoutSurfaceStyle | undefined]
+  styleCancel: []
 }>()
 
 type InspectorMode = 'docked' | 'floating' | 'minimized'
@@ -36,6 +45,7 @@ interface InspectorFloatingPosition { readonly x: number; readonly y: number }
 type DraftUnit = 'px' | 'percent'
 type DraftValue = { value: string; unit: DraftUnit }
 type DraftField = 'x' | 'y' | 'width' | 'height'
+type InspectorTab = 'object' | 'styles'
 const horizontalEdges: readonly WindowLayoutEdge[] = ['left', 'right']
 const verticalEdges: readonly WindowLayoutEdge[] = ['top', 'bottom']
 const allEdges: readonly WindowLayoutEdge[] = ['top', 'right', 'bottom', 'left']
@@ -64,8 +74,27 @@ const constraintDrafts = reactive<Record<WindowLayoutEdge, DraftValue>>({
   left: { value: '0', unit: 'px' },
 })
 const freeDraft = reactive<Record<DraftField, string>>({ x: '0', y: '0', width: '0', height: '0' })
+const styleTab = ref<InspectorTab>('object')
+const styleEditing = ref(false)
+const styleDraft = ref<LayoutSurfaceStyle | undefined>(undefined)
+const styleErrorMessage = ref('')
+const selectedBorderSide = ref<LayoutSurfaceSide>('top')
+const paddingLinked = ref(true)
+const stylePaddingDraft = reactive<Record<LayoutSurfaceSide, string>>({ top: '0', right: '0', bottom: '0', left: '0' })
+const styleRadiusDraft = ref('0')
+const styleOpacityDraft = ref('100')
+const styleBackgroundColorDraft = ref('')
 
-const currentWindow = computed(() => props.window)
+const currentSelection = computed(() => props.selection ?? null)
+const currentWindow = computed(() => currentSelection.value?.window ?? props.window)
+const currentDock = computed(() => currentSelection.value?.dock ?? null)
+const currentPane = computed(() => currentSelection.value?.pane ?? null)
+const selectionKind = computed(() => currentSelection.value?.kind ?? (currentWindow.value ? 'window' : null))
+const selectionId = computed(() => currentSelection.value?.id ?? currentWindow.value?.instanceId ?? '')
+const selectionLabel = computed(() => currentSelection.value?.label ?? currentWindow.value?.title ?? '')
+const currentSurfaceStyle = computed<LayoutSurfaceStyle | undefined>(() => currentSelection.value?.surfaceStyle ?? currentWindow.value?.options.surfaceStyle)
+const styleValue = computed<LayoutSurfaceStyle | undefined>(() => styleDraft.value ?? currentSurfaceStyle.value)
+const resolvedStyle = computed<ResolvedLayoutSurfaceStyle>(() => resolveLayoutSurfaceStyle(styleValue.value))
 const inspectorStyle = computed<Record<string, string>>(() => {
   if (inspectorMode.value === 'floating' || (inspectorMode.value === 'minimized' && lastExpandedMode.value === 'floating')) {
     return { left: `${floatingPosition.value.x}px`, top: `${floatingPosition.value.y}px`, right: 'auto', bottom: 'auto' }
@@ -179,6 +208,120 @@ function syncDraftFields(): void {
     constraintDrafts[edge].value = rounded(displayValue(edge))
   }
 }
+function syncStyleFields(): void {
+  const resolved = resolveLayoutSurfaceStyle(currentSurfaceStyle.value)
+  styleDraft.value = cloneLayoutSurfaceStyle(currentSurfaceStyle.value)
+  styleRadiusDraft.value = String(resolved.borderRadius)
+  styleOpacityDraft.value = String(Math.round(resolved.opacity * 1000) / 10)
+  styleBackgroundColorDraft.value = resolved.background.mode === 'custom' ? resolved.background.color ?? '' : ''
+  for (const side of allEdges) stylePaddingDraft[side] = String(resolved.padding[side])
+  paddingLinked.value = allEdges.every((side) => resolved.padding[side] === resolved.padding.top)
+  styleErrorMessage.value = ''
+}
+function beginStyleEdit(): void {
+  if (styleEditing.value) return
+  styleEditing.value = true
+  styleErrorMessage.value = ''
+  emit('styleEditStart')
+}
+function styleBase(): LayoutSurfaceStyle {
+  return cloneLayoutSurfaceStyle(styleDraft.value ?? currentSurfaceStyle.value) ?? {}
+}
+function previewStyle(next: LayoutSurfaceStyle): void {
+  beginStyleEdit()
+  styleDraft.value = createLayoutSurfaceStyle(next)
+  emit('stylePreview', styleDraft.value)
+}
+function commitStyle(next: LayoutSurfaceStyle | undefined = styleDraft.value ?? currentSurfaceStyle.value): void {
+  if (!styleEditing.value) emit('styleEditStart')
+  emit('styleSave', cloneLayoutSurfaceStyle(next))
+  styleEditing.value = false
+  styleDraft.value = undefined
+  styleErrorMessage.value = ''
+}
+function cancelStyleEdit(): void {
+  if (!styleEditing.value) return
+  styleEditing.value = false
+  styleDraft.value = undefined
+  styleErrorMessage.value = ''
+  emit('styleCancel')
+}
+function styleBorder(side: LayoutSurfaceSide): { enabled: boolean; width: number; color?: string } {
+  const border = styleValue.value?.border?.[side]
+  return { enabled: border?.enabled ?? false, width: border?.width ?? 0, ...(border?.color ? { color: border.color } : {}) }
+}
+function stylePatchBorder(side: LayoutSurfaceSide, patch: { enabled?: boolean; width?: number; color?: string }): LayoutSurfaceStyle {
+  const base = styleBase(), border = styleBorder(side)
+  const nextBorder = { ...border, ...patch }
+  return { ...base, border: { ...(base.border ?? {}), [side]: nextBorder } }
+}
+function toggleBorder(side: LayoutSurfaceSide): void {
+  selectedBorderSide.value = side
+  commitStyle(stylePatchBorder(side, { enabled: !styleBorder(side).enabled }))
+}
+function borderWidthValue(): string { return String(styleBorder(selectedBorderSide.value).width) }
+function borderColorValue(): string { return styleBorder(selectedBorderSide.value).color ?? '' }
+function updateBorderWidth(event: Event): void {
+  const value = (event.target as HTMLInputElement).value
+  if (value.trim() === '') { styleErrorMessage.value = 'Border width must be non-negative.'; return }
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) { styleErrorMessage.value = 'Border width must be non-negative.'; return }
+  previewStyle(stylePatchBorder(selectedBorderSide.value, { width: parsed }))
+}
+function updateBorderColor(event: Event): void {
+  const color = (event.target as HTMLInputElement).value
+  if (!color.trim()) { styleErrorMessage.value = 'Border color must not be empty.'; return }
+  previewStyle(stylePatchBorder(selectedBorderSide.value, { color }))
+}
+function backgroundMode(): string { return styleValue.value?.background?.mode ?? 'theme' }
+function updateBackgroundMode(event: Event): void {
+  const mode = (event.target as HTMLSelectElement).value as 'theme' | 'transparent' | 'custom'
+  if (mode === 'custom') commitStyle({ ...styleBase(), background: { mode, color: styleBackgroundColorDraft.value || '#000000' } })
+  else commitStyle({ ...styleBase(), background: { mode } })
+}
+function updateBackgroundColor(event: Event): void {
+  const color = (event.target as HTMLInputElement).value
+  styleBackgroundColorDraft.value = color
+  if (!color.trim()) { styleErrorMessage.value = 'Background color must not be empty.'; return }
+  previewStyle({ ...styleBase(), background: { mode: 'custom', color } })
+}
+function paddingValue(side: LayoutSurfaceSide): string { return stylePaddingDraft[side] }
+function updatePadding(side: LayoutSurfaceSide, event: Event): void {
+  const value = (event.target as HTMLInputElement).value
+  stylePaddingDraft[side] = value
+  const parsed = Number(value)
+  if (value.trim() === '' || !Number.isFinite(parsed) || parsed < 0) { styleErrorMessage.value = 'Padding must be non-negative.'; return }
+  const nextPadding = { ...resolvedStyle.value.padding }
+  if (paddingLinked.value) for (const edge of allEdges) { nextPadding[edge] = parsed; stylePaddingDraft[edge] = value }
+  else nextPadding[side] = parsed
+  previewStyle({ ...styleBase(), padding: nextPadding })
+}
+function togglePaddingLinked(): void { paddingLinked.value = !paddingLinked.value }
+function updateRadius(event: Event): void {
+  const value = (event.target as HTMLInputElement).value
+  styleRadiusDraft.value = value
+  const parsed = Number(value)
+  if (value.trim() === '' || !Number.isFinite(parsed) || parsed < 0) { styleErrorMessage.value = 'Radius must be non-negative.'; return }
+  previewStyle({ ...styleBase(), borderRadius: parsed })
+}
+function updateOpacity(event: Event): void {
+  const value = (event.target as HTMLInputElement).value
+  styleOpacityDraft.value = value
+  const parsed = Number(value)
+  if (value.trim() === '' || !Number.isFinite(parsed) || parsed < 0 || parsed > 100) { styleErrorMessage.value = 'Opacity must be between 0 and 100 percent.'; return }
+  previewStyle({ ...styleBase(), opacity: parsed / 100 })
+}
+function updateShadow(event: Event): void {
+  commitStyle({ ...styleBase(), shadow: (event.target as HTMLSelectElement).value as 'none' | 'sm' | 'md' | 'lg' })
+}
+function resetStyles(): void {
+  if (!styleEditing.value) emit('styleEditStart')
+  emit('styleSave', undefined)
+  styleEditing.value = false
+  styleDraft.value = undefined
+  styleErrorMessage.value = ''
+}
+function commitInspectorEdits(): void { commitEdit(); if (styleEditing.value) commitStyle() }
 function startEdit(): void {
   if (!currentWindow.value || editing.value) return
   editing.value = true
@@ -342,17 +485,26 @@ function cancelEdit(): void {
 function onFocusOut(event: FocusEvent): void {
   const next = event.relatedTarget
   if (next instanceof Node && root.value?.contains(next)) return
-  commitEdit()
+  commitInspectorEdits()
 }
 function commitOnBlur(event: FocusEvent): void {
   const next = event.relatedTarget
   if (next instanceof Node && root.value?.contains(next)) return
-  commitEdit()
+  commitInspectorEdits()
 }
 function onKeydown(event: KeyboardEvent): void {
   if (cancelInspectorDrag(event)) return
-  if (event.key === 'Escape') { event.preventDefault(); cancelEdit() }
-  if (event.key === 'Enter' && (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)) { event.preventDefault(); commitEdit() }
+  if (event.key === 'Escape') { event.preventDefault(); cancelStyleEdit(); cancelEdit() }
+  if (event.key === 'Enter' && (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)) { event.preventDefault(); if (styleEditing.value) commitStyle(); else commitEdit() }
+}
+function onTabKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') return
+  event.preventDefault()
+  const tabs: readonly InspectorTab[] = ['object', 'styles']
+  const current = tabs.indexOf(styleTab.value)
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+  styleTab.value = tabs[next] ?? 'object'
+  nextTick(() => root.value?.querySelector<HTMLElement>(`[data-layout-inspector-tab="${styleTab.value}"]`)?.focus())
 }
 function anchorDisplayLabel(edge: WindowLayoutEdge): string { return isOpposite(edge, targetEdgeValue(edge)) ? 'Distance' : 'Offset' }
 function sizeReadOnly(axis: WindowLayoutAxis): boolean { return modeFor(axis) === 'stretch' || modeFor(axis) === 'free' }
@@ -485,10 +637,13 @@ function clampInspectorAfterResize(): void {
 function initialize(): void {
   draftSpec.value = null; draftGeometry.value = null; editing.value = false; errorMessage.value = ''
   syncDraftFields()
+  styleEditing.value = false; styleDraft.value = undefined
+  syncStyleFields()
 }
 
-watch(() => props.window?.instanceId, initialize, { immediate: true })
+watch(() => selectionId.value, initialize, { immediate: true })
 watch(() => props.window, () => { if (!editing.value) syncDraftFields() }, { deep: true })
+watch(() => currentSurfaceStyle.value, () => { if (!styleEditing.value) syncStyleFields() }, { deep: true })
 watch(() => props.mode, (next) => {
   if (next && next !== inspectorMode.value) inspectorMode.value = next
   if (next === 'floating' || next === 'docked') lastExpandedMode.value = next
@@ -510,16 +665,19 @@ defineExpose({ cancelEdit })
     <template v-if="inspectorMode === 'minimized'">
       <div class="wf-layout-inspector__minimized" data-layout-inspector-minimized>
         <button ref="restoreControl" type="button" data-layout-inspector-toggle data-layout-inspector-restore aria-label="Restore layout inspector" @click="toggleMinimized"><span aria-hidden="true">☷</span><span class="wf-layout-inspector__minimized-label">Inspector</span></button>
-        <small class="wf-layout-inspector__minimized-selection" data-selected-window-id aria-live="polite">{{ currentWindow?.instanceId ?? '' }}</small>
+        <small class="wf-layout-inspector__minimized-selection" data-selected-window-id aria-live="polite">{{ selectionId }}</small>
       </div>
     </template>
     <template v-else>
       <header ref="header" class="wf-layout-inspector__header" data-layout-inspector-header tabindex="-1" @pointerdown="beginInspectorDrag">
-        <div class="wf-layout-inspector__identity"><span class="wf-layout-inspector__grip" data-layout-inspector-grip role="button" tabindex="0" aria-label="Move layout inspector" aria-describedby="layout-inspector-mobility-help">⠿</span><div><strong v-if="currentWindow" data-selected-window-title>{{ currentWindow.title }}</strong><strong v-else>Layout Inspector</strong><small v-if="currentWindow" data-selected-window-id>{{ currentWindow.instanceId }}</small></div></div>
+        <div class="wf-layout-inspector__identity"><span class="wf-layout-inspector__grip" data-layout-inspector-grip role="button" tabindex="0" aria-label="Move layout inspector" aria-describedby="layout-inspector-mobility-help">⠿</span><div><strong v-if="currentSelection || currentWindow" data-selected-window-title>{{ selectionLabel }}</strong><strong v-else>Layout Inspector</strong><small v-if="currentSelection || currentWindow" data-selected-window-id>{{ selectionId }}</small><small v-if="currentSelection || currentWindow" data-layout-inspector-selection-kind>{{ selectionKind?.toUpperCase() }} · {{ selectionId }}</small></div></div>
         <div class="wf-layout-inspector__header-actions"><div v-if="currentWindow" class="wf-layout-inspector__status" data-window-layout-status><span data-window-layout-surface>{{ surfaceLabel }}</span><span aria-hidden="true">·</span><span data-window-layout-rule>{{ ruleLabel }}</span></div><button type="button" data-layout-inspector-dock :aria-label="inspectorMode === 'floating' ? 'Dock layout inspector to right' : 'Undock layout inspector'" @click="toggleDockMode">{{ inspectorMode === 'floating' ? 'Dock' : 'Undock' }}</button><button type="button" data-layout-inspector-toggle data-layout-inspector-minimize aria-expanded="true" aria-label="Minimize layout inspector" @click="toggleMinimized">Minimize</button></div>
       </header>
       <p id="layout-inspector-mobility-help" class="wf-layout-inspector__mobility-help">Drag the header to move the floating inspector.</p>
-      <template v-if="currentWindow">
+      <div class="wf-layout-inspector__tabs" role="tablist" aria-label="Inspector sections" data-layout-inspector-tabs @keydown="onTabKeydown">
+        <button v-for="tab in (['object', 'styles'] as const)" :key="tab" :id="`layout-inspector-tab-${tab}`" class="wf-layout-inspector__tab" :class="{ 'wf-layout-inspector__tab--active': styleTab === tab }" :data-layout-inspector-tab="tab" role="tab" type="button" :aria-selected="styleTab === tab ? 'true' : 'false'" :tabindex="styleTab === tab ? 0 : -1" :aria-controls="`layout-inspector-panel-${tab}`" @click="styleTab = tab">{{ tab === 'object' ? 'Object' : 'Styles' }}</button>
+      </div>
+      <div v-if="styleTab === 'object' && currentWindow && selectionKind === 'window'" id="layout-inspector-panel-object" role="tabpanel" aria-labelledby="layout-inspector-tab-object" data-layout-inspector-object="window">
       <div class="wf-layout-inspector__actions">
         <button class="wf-workspace-selection-actions__layout" type="button" data-window-selection-layout :aria-label="`Advanced layout for ${currentWindow.title}`" @click="emit('layout', currentWindow.instanceId)">Advanced layout…</button>
         <button class="wf-workspace-selection-actions__toggle" type="button" data-window-selection-lock :aria-pressed="currentWindow.layoutLocked ? 'true' : 'false'" :aria-label="`${currentWindow.layoutLocked ? 'Unlock' : 'Lock'} window ${currentWindow.title}`" :title="`${currentWindow.layoutLocked ? 'Unlock' : 'Lock'} window ${currentWindow.title}`" @click="currentWindow.layoutLocked ? emit('unlock', currentWindow.instanceId) : emit('lock', currentWindow.instanceId)">{{ currentWindow.layoutLocked ? 'Unlock' : 'Lock' }}</button>
@@ -529,9 +687,29 @@ defineExpose({ cancelEdit })
       <fieldset data-layout-inspector-size><legend>Size</legend><template v-if="isResponsive"><template v-for="axis in (['horizontal', 'vertical'] as const)" :key="axis"><label>{{ axis === 'horizontal' ? 'Width' : 'Height' }} <template v-if="sizeReadOnly(axis)"><output :data-layout-derived-size="axis">{{ Math.round(axisSize(axis)) }} px · Calculated</output></template><template v-else><input :data-layout-size="axis" :value="axisSizeValue(axis)" type="number" step="any" min="0" @focus="startEdit" @input="updateSize(axis, $event)" /><select :data-layout-size-unit="axis" :value="axisSizeUnit(axis)" @focus="startEdit" @change="updateSizeUnit(axis, $event)"><option value="px">px</option><option value="percent">%</option></select></template></label></template></template><template v-else><label>Width <input data-layout-inspector-width :value="freeDraft.width" type="number" step="any" min="0" @focus="startEdit" @input="updateFree('width', $event)" /></label><label>Height <input data-layout-inspector-height :value="freeDraft.height" type="number" step="any" min="0" @focus="startEdit" @input="updateFree('height', $event)" /></label></template></fieldset>
       <dl class="wf-layout-inspector__geometry" data-window-geometry><div><dt>X</dt><dd>{{ Math.round(geometryForDraft().position.x) }} px</dd></div><div><dt>Y</dt><dd>{{ Math.round(geometryForDraft().position.y) }} px</dd></div><div><dt>W</dt><dd>{{ Math.round(geometryForDraft().size.width) }} px</dd></div><div><dt>H</dt><dd>{{ Math.round(geometryForDraft().size.height) }} px</dd></div></dl>
       <fieldset v-for="(edges, axis) in { horizontal: horizontalEdges, vertical: verticalEdges }" :key="axis" :data-layout-inspector-constraints="axis"><legend>{{ axis === 'horizontal' ? 'Horizontal' : 'Vertical' }} constraints</legend><p class="wf-layout-inspector__mode" :data-layout-axis-mode="axis">{{ axisModeLabel(axis) }}</p><template v-for="edge in edges" :key="edge"><article v-if="anchorFor(edge)" class="wf-layout-inspector__constraint" :class="{ 'wf-layout-inspector__constraint--selected': selectedConstraintEdge === edge }" :data-window-constraint-card="edge" @click="emit('constraintSelect', edge)"><header><strong>{{ edge }} edge</strong><span>{{ anchorDisplayLabel(edge) }}</span></header><small class="wf-layout-inspector__target-label" data-layout-constraint-target-label>{{ targetLabel(anchorFor(edge)!) }}</small><label>Target <select :data-layout-constraint-target="edge" :value="`${targetValue(anchorFor(edge)!) }:${targetEdgeValue(edge)}`" @focus="startEdit" @change="updateTarget(edge, $event)"><option v-for="option in targetOptions(edge)" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><label>Target edge <select :data-layout-constraint-target-edge="edge" :value="targetEdgeValue(edge)" @focus="startEdit" @change="updateTargetEdge(edge, $event)"><option v-for="targetEdge in (edgeAxis(edge) === 'horizontal' ? horizontalEdges : verticalEdges)" :key="targetEdge" :value="targetEdge">{{ targetEdge }}</option></select></label><label>{{ anchorDisplayLabel(edge) }} <input :data-layout-constraint-offset="edge" type="number" step="any" :value="rounded(displayValue(edge))" @focus="startEdit" @input="updateDistance(edge, $event)" /><select :data-layout-constraint-unit="edge" :value="constraintDrafts[edge].unit" @focus="startEdit" @change="updateDistanceUnit(edge, $event)"><option value="px">px</option><option value="percent">%</option></select></label><button type="button" :data-layout-constraint-disconnect="edge" @click.stop="disconnect(edge)">Remove {{ edge }} constraint</button></article></template><p v-if="!edges.some((edge) => anchorFor(edge))" class="wf-layout-inspector__empty">No direct constraints on this axis.</p></fieldset>
-      <fieldset data-layout-inspector-minmax><legend>Size constraints</legend><dl><div><dt>Min W × H</dt><dd>{{ currentWindow.constraints.minSize.width }} × {{ currentWindow.constraints.minSize.height }} px</dd></div><div><dt>Max W × H</dt><dd>{{ currentWindow.constraints.maxSize ? `${currentWindow.constraints.maxSize.width} × ${currentWindow.constraints.maxSize.height} px` : 'none' }}</dd></div></dl></fieldset>
+       <fieldset data-layout-inspector-minmax><legend>Size constraints</legend><dl><div><dt>Min W × H</dt><dd>{{ currentWindow.constraints.minSize.width }} × {{ currentWindow.constraints.minSize.height }} px</dd></div><div><dt>Max W × H</dt><dd>{{ currentWindow.constraints.maxSize ? `${currentWindow.constraints.maxSize.width} × ${currentWindow.constraints.maxSize.height} px` : 'none' }}</dd></div></dl></fieldset>
+       </div>
+      <template v-if="styleTab === 'object' && currentDock">
+        <div class="wf-layout-inspector__selection-kind" data-layout-inspector-object="dock">DOCK · {{ currentDock.id }}</div>
+        <fieldset data-layout-inspector-dock-object><legend>Dock</legend><dl><div><dt>ID</dt><dd>{{ currentDock.id }}</dd></div><div><dt>Position</dt><dd>{{ currentDock.position }}</dd></div><div><dt>Thickness</dt><dd>{{ currentDock.thickness }} px</dd></div><div><dt>Min / Max</dt><dd>{{ currentDock.minThickness }} / {{ currentDock.maxThickness ?? 'none' }} px</dd></div><div><dt>Resizable</dt><dd>{{ currentDock.resizable ? 'Yes' : 'No' }}</dd></div><div><dt>Root Pane</dt><dd>{{ currentDock.rootPane.id }}</dd></div></dl></fieldset>
       </template>
-      <div v-else class="wf-layout-inspector__empty-state" data-layout-inspector-empty>Select a window to edit its layout.</div>
+      <template v-if="styleTab === 'object' && currentPane">
+        <div class="wf-layout-inspector__selection-kind" data-layout-inspector-object="pane">PANE · {{ currentPane.id }}</div>
+        <fieldset data-layout-inspector-pane-object><legend>Pane</legend><dl><div><dt>Kind</dt><dd>{{ currentPane.kind }}</dd></div><div><dt>ID</dt><dd>{{ currentPane.id }}</dd></div><div><dt>Locked</dt><dd>{{ currentPane.settings?.locked ? 'Yes' : 'No' }}</dd></div><div><dt>Size mode</dt><dd>{{ currentPane.settings?.sizeMode ?? 'flex' }}</dd></div><div v-if="currentPane.settings?.sizeMode === 'fixed'"><dt>Fixed size</dt><dd>{{ currentPane.settings.size ?? 0 }} px</dd></div><div><dt>Min / Max</dt><dd>{{ currentPane.settings?.minSize ?? 0 }} / {{ currentPane.settings?.maxSize ?? 'none' }} px</dd></div><div><dt>Grow</dt><dd>{{ currentPane.settings?.grow ?? 1 }}</dd></div><div><dt>Collapsible</dt><dd>{{ currentPane.settings?.collapsible ? 'Yes' : 'No' }}{{ currentPane.settings?.collapsed ? ' · collapsed' : '' }}</dd></div><div><dt>Overflow</dt><dd>{{ currentPane.settings?.overflow ?? 'hidden' }}</dd></div></dl></fieldset>
+      </template>
+      <template v-if="styleTab === 'styles' && (currentSelection || currentWindow)">
+        <div id="layout-inspector-panel-styles" role="tabpanel" aria-labelledby="layout-inspector-tab-styles" data-layout-inspector-styles>
+          <fieldset data-layout-style-background><legend>Background</legend><label>Mode <select data-style-background-mode :value="backgroundMode()" @change="updateBackgroundMode"><option value="theme">Theme</option><option value="transparent">Transparent</option><option value="custom">Custom</option></select></label><label v-if="backgroundMode() === 'custom'">Color <input data-style-background-color type="text" :value="styleBackgroundColorDraft" @focus="beginStyleEdit" @input="updateBackgroundColor" /></label></fieldset>
+          <fieldset data-layout-style-border><legend>Border</legend><div class="wf-layout-inspector__side-controls"><button v-for="side in allEdges" :key="side" type="button" :data-style-border-side="side" :aria-pressed="styleBorder(side).enabled ? 'true' : 'false'" :aria-label="`Toggle ${side} border`" :class="{ 'wf-layout-inspector__side-control--active': selectedBorderSide === side, 'wf-layout-inspector__side-control--enabled': styleBorder(side).enabled }" @click="toggleBorder(side)">{{ side[0]?.toUpperCase() }}</button></div><label>Editing side <select data-style-border-target :value="selectedBorderSide" @change="selectedBorderSide = ($event.target as HTMLSelectElement).value as LayoutSurfaceSide"><option v-for="side in allEdges" :key="side" :value="side">{{ side }}</option></select></label><label>Width <input data-style-border-width type="number" min="0" step="any" :value="borderWidthValue()" @focus="beginStyleEdit" @input="updateBorderWidth" /></label><label>Color <input data-style-border-color type="text" :value="borderColorValue()" placeholder="Theme default" @focus="beginStyleEdit" @input="updateBorderColor" /></label></fieldset>
+          <fieldset data-layout-style-padding><legend>Padding</legend><button type="button" data-style-padding-linked :aria-pressed="paddingLinked ? 'true' : 'false'" @click="togglePaddingLinked">{{ paddingLinked ? 'Linked' : 'Unlinked' }}</button><template v-if="paddingLinked"><label>All sides <input data-style-padding-all type="number" min="0" step="any" :value="paddingValue('top')" @focus="beginStyleEdit" @input="updatePadding('top', $event)" /> <span>px</span></label></template><template v-else><label v-for="side in allEdges" :key="side">{{ side[0]?.toUpperCase() }} <input :data-style-padding-side="side" type="number" min="0" step="any" :value="paddingValue(side)" @focus="beginStyleEdit" @input="updatePadding(side, $event)" /> <span>px</span></label></template></fieldset>
+          <fieldset data-layout-style-radius><legend>Radius</legend><label>Radius <input data-style-radius type="number" min="0" step="any" :value="styleRadiusDraft" @focus="beginStyleEdit" @input="updateRadius" /> <span>px</span></label></fieldset>
+          <fieldset data-layout-style-opacity><legend>Opacity</legend><label>Opacity <input data-style-opacity type="number" min="0" max="100" step="1" :value="styleOpacityDraft" @focus="beginStyleEdit" @input="updateOpacity" /> <span>%</span></label></fieldset>
+          <fieldset data-layout-style-shadow><legend>Shadow</legend><label>Shadow <select data-style-shadow :value="resolvedStyle.shadow" @change="updateShadow"><option value="none">None</option><option value="sm">Small</option><option value="md">Medium</option><option value="lg">Large</option></select></label></fieldset>
+          <p v-if="styleErrorMessage" class="wf-layout-inspector__error" data-style-error role="alert">{{ styleErrorMessage }}</p>
+          <button type="button" data-style-reset @click="resetStyles">Reset all styles</button>
+        </div>
+      </template>
+      <div v-if="!currentWindow && !currentDock && !currentPane" class="wf-layout-inspector__empty-state" data-layout-inspector-empty>Select an object to edit its layout or styles. Select a window or host to begin.</div>
     </template>
   </aside>
 </template>
@@ -572,6 +750,14 @@ defineExpose({ cancelEdit })
 .wf-layout-inspector dt { color: var(--wf-color-text-muted); }
 .wf-layout-inspector dd { margin: 0; }
 .wf-layout-inspector output { color: var(--wf-color-text-muted); }
+.wf-layout-inspector__tabs { display: flex; gap: var(--wf-space-2xs); border-bottom: 1px solid var(--wf-color-border); }
+.wf-layout-inspector__tab { flex: 1 1 0; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important; background: transparent !important; }
+.wf-layout-inspector__tab--active { border-bottom-color: var(--wf-color-focus) !important; color: var(--wf-color-accent) !important; }
+.wf-layout-inspector__selection-kind { color: var(--wf-color-text-muted); font-size: var(--wf-font-size-xs); font-weight: var(--wf-font-weight-bold); letter-spacing: .04em; }
+.wf-layout-inspector__side-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--wf-space-2xs); }
+.wf-layout-inspector__side-control--enabled { background: var(--wf-color-selected) !important; color: var(--wf-color-accent) !important; }
+.wf-layout-inspector__side-control--active { outline: 2px solid var(--wf-color-focus) !important; outline-offset: 1px; }
+.wf-layout-inspector__side-controls + label { margin-top: var(--wf-space-2xs); }
 .wf-layout-inspector__empty-state { display: grid; min-height: 120px; place-items: center; color: var(--wf-color-text-muted); text-align: center; }
 @media (max-width: 720px) { .wf-layout-inspector { width: min(360px, calc(100% - var(--wf-space-md))); } .wf-layout-inspector__minimized-label { display: none; } }
 </style>

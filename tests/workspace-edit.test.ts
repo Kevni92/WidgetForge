@@ -41,6 +41,24 @@ describe('workspace edit controller', () => {
     restored.selectWindow(null)
     expect(restored.state.windowSelection).toBeNull()
   })
+
+  it('selects docks as independent hosts and restores the selection', () => {
+    const edit = createWorkspaceEditController({ mode: 'edit' })
+    edit.selectDock('topnav')
+    expect(edit.state.dockSelection).toEqual({ id: 'topnav' })
+    expect(edit.state.selection).toBeNull()
+    expect(edit.state.windowSelection).toBeNull()
+
+    const snapshot = JSON.parse(JSON.stringify(edit.snapshot()))
+    const restored = createWorkspaceEditController()
+    restored.restore(snapshot)
+    expect(restored.state.dockSelection).toEqual({ id: 'topnav' })
+
+    restored.selectWindow('window-a')
+    expect(restored.state.dockSelection).toBeNull()
+    restored.selectDock(null)
+    expect(restored.state.dockSelection).toBeNull()
+  })
 })
 
 describe('generic pane edit actions', () => {

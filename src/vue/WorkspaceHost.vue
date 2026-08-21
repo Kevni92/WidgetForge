@@ -23,8 +23,10 @@ import {
   findPane,
   removePane,
   reorderTab,
+  setPaneSurfaceStyle,
   type PaneNode,
 } from "../core/pane";
+import { createDockInspectorSelection, createPaneInspectorSelection, createWindowInspectorSelection, type LayoutInspectorSelection } from '../core/layout-inspector'
 import type { CommandRegistry } from "../core/commands";
 import type { WidgetRegistry } from "../core/widget-registry";
 import type { WindowGeometry, WindowSize } from "../core/window-geometry";
@@ -40,6 +42,7 @@ import {
   type WorkspacePaneOwner,
   type WorkspacePaneSelection,
 } from "../core/workspace-edit";
+import type { LayoutSurfaceStyle } from '../core/layout-surface-style'
 import type { WorkspaceHistory } from "../core/workspace-history";
 import {
   detectWorkspaceDropZone,
@@ -230,9 +233,27 @@ const selectedWindow = computed<WindowState | null>(() => {
   return id ? windowStates.value.find((window) => window.instanceId === id) ?? null : null;
 });
 const selectedWindowStatus = computed<WindowLayoutStatus | null>(() => selectedWindow.value ? deriveWindowLayoutStatus(selectedWindow.value) : null)
+const selectedDock = computed<DockState | null>(() => {
+  const id = editState.value.dockSelection?.id
+  return id ? dockStates.value.find((dock) => dock.id === id) ?? null : null
+})
+const selectedPane = computed<{ pane: PaneNode; owner: WorkspacePaneOwner } | null>(() => {
+  const selection = editState.value.selection
+  if (!selection) return null
+  try {
+    const pane = findPane(ownerRoot(selection.owner), selection.paneId)
+    return pane ? { pane, owner: selection.owner } : null
+  } catch { return null }
+})
+const inspectorSelection = computed<LayoutInspectorSelection | null>(() => {
+  if (selectedPane.value && !(selectedPane.value.owner.kind === 'window' && selectedWindow.value?.rootPane.id === selectedPane.value.pane.id)) return createPaneInspectorSelection(selectedPane.value.pane, selectedPane.value.owner.kind, selectedPane.value.owner.id)
+  if (selectedDock.value) return createDockInspectorSelection(selectedDock.value)
+  if (selectedWindow.value) return createWindowInspectorSelection(selectedWindow.value)
+  return null
+})
 function dockLayoutSelection(dockId: string): 'selected' | 'unselected' | undefined {
   if (!editMode.value) return undefined
-  return editState.value.selection?.owner.kind === 'dock' && editState.value.selection.owner.id === dockId ? 'selected' : 'unselected'
+  return editState.value.dockSelection?.id === dockId || (editState.value.selection?.owner.kind === 'dock' && editState.value.selection.owner.id === dockId) ? 'selected' : 'unselected'
 }
 interface LayoutRelation { readonly sourceId: string; readonly targetId: string; readonly sourceEdge: WindowLayoutEdge; readonly targetEdge: WindowLayoutEdge; readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number }
 function edgePoint(geometry: WindowGeometry, edge: WindowLayoutEdge): { x: number; y: number } {
@@ -1365,16 +1386,21 @@ function selectFromPointer(event: PointerEvent): void {
     editController.selectWindow(constraintHandle.dataset.windowConstraintSource);
     return;
   }
+  const dockElement = target.closest<HTMLElement>('[data-dock-id]');
+  if (dockElement?.dataset.dockId && !target.closest('.wf-pane-host')) {
+    editController.selectDock(dockElement.dataset.dockId);
+    return;
+  }
   const frame = target.closest<HTMLElement>('.wf-window-frame[data-window-instance-id]');
   const windowId = frame?.dataset.windowInstanceId;
   const windowState = windowId ? windowStates.value.find((window) => window.instanceId === windowId) : undefined;
   const interactionLayer = target.closest('[data-layout-edit-interaction-layer]');
   const layerPane = interactionLayer && windowId ? paneAtPoint(windowId, event.clientX, event.clientY) : null;
-  if (windowState?.layoutLocked && windowId) {
+  const pane = layerPane ?? target.closest<HTMLElement>(".wf-pane-host[data-pane-id]");
+  if (windowState?.layoutLocked && windowId && !pane) {
     editController.selectWindow(windowId);
     return;
   }
-  const pane = layerPane ?? target.closest<HTMLElement>(".wf-pane-host[data-pane-id]");
   if (!pane && windowId) {
     editController.selectWindow(windowId);
     return;
@@ -1510,6 +1536,34 @@ function cancelInspectorEdit(): void {
   history?.cancelTransaction();
   inspectorTransactionActive.value = false;
   layoutPreview.value = null;
+}
+function applyInspectorStyle(style: LayoutSurfaceStyle | undefined): void {
+  const selection = inspectorSelection.value;
+  if (!selection) return;
+  if (selection.kind === 'window') {
+    windowManager.setOptions(selection.id, { surfaceStyle: style }, 'user');
+    return;
+  }
+  if (selection.kind === 'dock') {
+    dockManager.setSurfaceStyle(selection.id, style);
+    return;
+  }
+  const owner = selection.ownerKind && selection.ownerId ? { kind: selection.ownerKind, id: selection.ownerId } as WorkspacePaneOwner : null;
+  if (!owner) return;
+  setOwnerRoot(owner, setPaneSurfaceStyle(ownerRoot(owner), selection.id, style));
+}
+function previewInspectorStyle(style: LayoutSurfaceStyle | undefined): void {
+  if (!inspectorTransactionActive.value) beginInspectorEdit();
+  try { applyInspectorStyle(style) } catch { cancelInspectorEdit() }
+}
+function commitInspectorStyle(style: LayoutSurfaceStyle | undefined): void {
+  try {
+    applyInspectorStyle(style);
+    if (inspectorTransactionActive.value) {
+      history?.commitTransaction();
+      inspectorTransactionActive.value = false;
+    }
+  } catch { cancelInspectorEdit() }
 }
 function updateInspectorMode(mode: LayoutInspectorMode): void {
   inspectorMode.value = mode;
@@ -1769,6 +1823,8 @@ onBeforeUnmount(() => {
       v-if="editMode"
       :window="selectedWindow"
       :windows="windowStates"
+      :selection="inspectorSelection"
+      :docks="dockStates"
       :container="floatingSize"
       :surface="selectedWindowStatus?.surface"
       :rule="selectedWindowStatus?.rule"
@@ -1785,6 +1841,10 @@ onBeforeUnmount(() => {
       @constraint-select="selectInspectorConstraint"
       @mode-change="updateInspectorMode"
       @floating-position-change="updateInspectorFloatingPosition"
+      @style-edit-start="beginInspectorEdit"
+      @style-preview="previewInspectorStyle"
+      @style-save="commitInspectorStyle"
+      @style-cancel="cancelInspectorEdit"
     />
     <div
       class="wf-workspace-host__floating"

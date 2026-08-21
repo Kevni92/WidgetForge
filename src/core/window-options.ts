@@ -39,8 +39,9 @@ export interface WindowOptions {
   readonly headerActions: readonly WindowHeaderAction[]
 }
 
-export type WindowOptionsOverride = Partial<Omit<WindowOptions, 'headerActions'>> & {
+export type WindowOptionsOverride = Partial<Omit<WindowOptions, 'headerActions' | 'surfaceStyle'>> & {
   readonly headerActions?: readonly WindowHeaderActionInput[]
+  readonly surfaceStyle?: LayoutSurfaceStyle | undefined
 }
 
 export const defaultWindowOptions: WindowOptions = {
