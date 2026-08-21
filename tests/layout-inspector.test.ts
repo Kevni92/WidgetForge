@@ -56,7 +56,7 @@ describe('LayoutInspector', () => {
     await wrapper.get('[data-layout-inspector-toggle]').trigger('click')
     await nextTick()
     expect(wrapper.get('[data-layout-inspector-mode]').attributes('data-layout-inspector-mode')).toBe('minimized')
-    expect(wrapper.get('[data-layout-inspector-minimized]').exists()).toBe(true)
+    expect(wrapper.find('[data-layout-inspector-minimized]').exists()).toBe(true)
     expect(document.activeElement).toBe(wrapper.get('[data-layout-inspector-restore]').element)
 
     await wrapper.setProps({ window: windows.get('target') })
