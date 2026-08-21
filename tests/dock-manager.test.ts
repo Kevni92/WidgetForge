@@ -18,6 +18,16 @@ describe('DockManager',()=>{
     expect(()=>manager.add({id:'bad',position:'left',pane:pane('bad-pane'),thickness:10,minThickness:30,maxThickness:20})).toThrow(DockDefinitionError)
   })
 
+  it('clones and updates a dock surface style independently from pane state', () => {
+    const manager = createDockManager(registry)
+    manager.add({ id: 'styled', position: 'left', pane: pane('styled-pane'), thickness: 100, surfaceStyle: { background: { mode: 'custom', color: '#101820' }, border: { right: { enabled: true, width: 2 } }, padding: { left: 8 }, shadow: 'sm' } })
+    const first = manager.get('styled')
+    expect(first.surfaceStyle).toMatchObject({ background: { color: '#101820' }, border: { right: { width: 2 } } })
+    const updated = manager.setSurfaceStyle('styled', { background: { mode: 'transparent' }, opacity: 0.8 })
+    expect(updated.surfaceStyle).toEqual({ background: { mode: 'transparent' }, opacity: 0.8 })
+    expect(manager.get('styled').surfaceStyle).not.toBe(updated.surfaceStyle)
+  })
+
   it('calculates sequential dock rectangles and remaining floating area',()=>{
     const manager=createDockManager(registry)
     manager.add({id:'top',position:'top',pane:pane('top-pane'),thickness:60})

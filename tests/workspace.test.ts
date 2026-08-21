@@ -1,6 +1,7 @@
 import { defineComponent } from 'vue'
 import { describe, expect, it } from 'vitest'
 import { createSplitPane, createStackPane, createWidgetPane } from '../src/core/pane'
+import { createDockManager } from '../src/core/dock-manager'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
@@ -31,6 +32,25 @@ describe('workspace persistence', () => {
     const serialized=serializeWorkspace(source),target=createWindowManager(registry),result=restoreWorkspace(target,serialized)
     expect(result.valid).toBe(true);expect(result.issues).toEqual([])
     expect(target.get('layers').rootPane).toMatchObject({kind:'stack',children:[{id:'base',settings:{sizeMode:'fixed',size:160,minSize:120,collapsible:true}},{id:'overlay',settings:{locked:true}}]})
+  })
+
+  it('persists and restores window, dock and pane surface styles as independent cloned state', () => {
+    const registry = createRegistry(), source = createWindowManager(registry), sourceDocks = createDockManager(registry)
+    const paneStyle = { background: { mode: 'custom' as const, color: '#202830' }, border: { left: { enabled: true, width: 1 } }, padding: { top: 4 } }
+    source.openPane({ instanceId: 'styled-window', title: 'Styled', pane: createWidgetPane({ id: 'styled-window-pane', widgetId: 'test.alpha', instanceId: 'styled-window-widget', parameters: { name: 'styled' }, settings: { surfaceStyle: paneStyle } }), options: { surfaceStyle: { background: { mode: 'transparent' }, opacity: 0.82, shadow: 'md' } } })
+    sourceDocks.add({ id: 'styled-dock', position: 'bottom', pane: createWidgetPane({ id: 'styled-dock-pane', widgetId: 'test.beta', instanceId: 'styled-dock-widget' }), thickness: 70, surfaceStyle: { background: { mode: 'custom', color: '#111820' }, border: { top: { enabled: true, width: 2 } } } })
+    const snapshot = captureWorkspace(source, sourceDocks)
+    expect(snapshot.windows[0]?.options.surfaceStyle).toMatchObject({ opacity: 0.82 })
+    expect(snapshot.windows[0]?.rootPane.settings?.surfaceStyle).toEqual(paneStyle)
+    expect(snapshot.docks[0]?.surfaceStyle).toEqual({ background: { mode: 'custom', color: '#111820' }, border: { top: { enabled: true, width: 2 } } })
+    expect(snapshot.windows[0]?.options.surfaceStyle).not.toBe(source.get('styled-window').options.surfaceStyle)
+
+    const target = createWindowManager(registry), targetDocks = createDockManager(registry), result = restoreWorkspace(target, serializeWorkspace(source, sourceDocks), targetDocks)
+    expect(result.valid).toBe(true)
+    expect(result.issues).toEqual([])
+    expect(target.get('styled-window').options.surfaceStyle).toMatchObject({ opacity: 0.82, shadow: 'md' })
+    expect(target.get('styled-window').rootPane.settings?.surfaceStyle).toEqual(paneStyle)
+    expect(targetDocks.get('styled-dock').surfaceStyle).toEqual(snapshot.docks[0]?.surfaceStyle)
   })
 
   it('persists and reloads an empty launcher as well as its final widget state', () => {

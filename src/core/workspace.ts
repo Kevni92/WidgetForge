@@ -1,10 +1,11 @@
 import { DuplicateDockError, type DockManager, type DockPosition, type DockRestoreWindow, type DockState } from './dock-manager'
 import { clonePaneTree, validatePaneTree, type PaneNode, type PaneSettings } from './pane'
+import { cloneLayoutSurfaceStyle, parseLayoutSurfaceStyle, createLayoutSurfaceStyle, type LayoutSurfaceStyle } from './layout-surface-style'
 import type { WidgetId } from './widget'
 import { DuplicateWindowInstanceError, type WindowManager, type WindowMode, type WindowState } from './window-manager'
 import type { WindowGeometry, WindowSize, WindowSizeConstraints } from './window-geometry'
 import { cloneWindowLayoutSpec, validateWindowLayoutReferences, validateWindowLayoutSpec, type WindowLayoutRuleState, type WindowLayoutSpec } from './window-layout'
-import { createWindowOptions, type WindowOptions } from './window-options'
+import { cloneWindowOptions, createWindowOptions, type WindowOptions } from './window-options'
 import { isWindowSnapZone, type WindowSnapState } from './window-snap'
 import { UnknownWidgetError, WidgetParameterValidationError } from './widget-registry'
 import { defaultWorkspaceMigrationRegistry, WorkspaceMigrationError, type WorkspaceMigrationRegistry } from './workspace-migrations'
@@ -39,6 +40,7 @@ export interface WorkspaceDockSnapshot {
   readonly minThickness: number
   readonly maxThickness: number | null
   readonly resizable: boolean
+  readonly surfaceStyle?: LayoutSurfaceStyle
   readonly restoreWindow?: DockRestoreWindow
 }
 
@@ -104,7 +106,7 @@ function cloneGeometry(geometry: WindowGeometry): WindowGeometry { return { posi
 function cloneConstraints(constraints: WindowSizeConstraints): WindowSizeConstraints { return { minSize: { ...constraints.minSize }, maxSize: constraints.maxSize ? { ...constraints.maxSize } : null } }
 function cloneSnap(snap: WindowSnapState | null): WindowSnapState | null { return snap ? { zone: snap.zone, floatingGeometry: cloneGeometry(snap.floatingGeometry) } : null }
 function cloneDockRestoreWindow(window: DockRestoreWindow): DockRestoreWindow {
-  return { ...window, geometry: cloneGeometry(window.geometry), constraints: cloneConstraints(window.constraints), options: { ...window.options } }
+  return { ...window, geometry: cloneGeometry(window.geometry), constraints: cloneConstraints(window.constraints), options: cloneWindowOptions(window.options) }
 }
 
 function validateGeometry(geometry: WindowGeometry, label: string): void {
@@ -122,6 +124,7 @@ function validateDockRestoreWindow(window: DockRestoreWindow, dockId: string): v
   if (window.constraints.maxSize && (!isFiniteNumber(window.constraints.maxSize.width) || !isFiniteNumber(window.constraints.maxSize.height) || window.constraints.maxSize.width < window.constraints.minSize.width || window.constraints.maxSize.height < window.constraints.minSize.height)) {
     throw new WorkspaceInvariantError(`dock "${dockId}" has invalid restore window maximum size`)
   }
+  try { createWindowOptions(window.options) } catch (error) { throw new WorkspaceInvariantError(error instanceof Error ? error.message : `dock "${dockId}" has invalid restore window options`) }
 }
 
 function validatePaneOwnership(root: PaneNode, paneIds: Set<string>, widgetInstances: Set<string>): void {
@@ -169,6 +172,7 @@ export function validateWorkspaceSnapshot(snapshot: WorkspaceSnapshot): void {
     if (window.restoreGeometry) validateGeometry(window.restoreGeometry, `window "${window.instanceId}" restore geometry`)
     if (window.mode === 'maximized' && !window.restoreGeometry) throw new WorkspaceInvariantError(`maximized window "${window.instanceId}" must have restore geometry`)
     if (window.snap && window.restoreGeometry) throw new WorkspaceInvariantError(`window "${window.instanceId}" cannot have snap and restore geometry simultaneously`)
+    try { createWindowOptions(window.options) } catch (error) { throw new WorkspaceInvariantError(error instanceof Error ? error.message : `invalid options for window "${window.instanceId}"`) }
     try { validatePaneTree(window.rootPane) } catch (error) { throw new WorkspaceInvariantError(error instanceof Error ? error.message : `invalid pane tree for window "${window.instanceId}"`) }
     validatePaneOwnership(window.rootPane, paneIds, widgetInstances)
   }
@@ -180,6 +184,9 @@ export function validateWorkspaceSnapshot(snapshot: WorkspaceSnapshot): void {
     dockIds.add(dock.id)
     if (!isFiniteNumber(dock.minThickness) || dock.minThickness < 0 || !isFiniteNumber(dock.thickness) || dock.thickness < dock.minThickness || (dock.maxThickness !== null && (!isFiniteNumber(dock.maxThickness) || dock.maxThickness < dock.minThickness || dock.thickness > dock.maxThickness))) {
       throw new WorkspaceInvariantError(`invalid thickness constraints for dock "${dock.id}"`)
+    }
+    if (dock.surfaceStyle) {
+      try { createLayoutSurfaceStyle(dock.surfaceStyle) } catch (error) { throw new WorkspaceInvariantError(error instanceof Error ? error.message : `invalid surface style for dock "${dock.id}"`) }
     }
     try { validatePaneTree(dock.rootPane) } catch (error) { throw new WorkspaceInvariantError(error instanceof Error ? error.message : `invalid pane tree for dock "${dock.id}"`) }
     if (dock.restoreWindow) {
@@ -199,7 +206,7 @@ export function captureWorkspace(manager: WindowManager, dockManager?: DockManag
     rootPane: clonePaneTree(window.rootPane),
     geometry: cloneGeometry(window.geometry),
     constraints: cloneConstraints(window.constraints),
-    options: { ...window.options },
+    options: cloneWindowOptions(window.options),
     snap: cloneSnap(window.snap),
     restoreGeometry: window.restoreGeometry ? cloneGeometry(window.restoreGeometry) : null,
     layoutLocked: window.layoutLocked,
@@ -210,7 +217,8 @@ export function captureWorkspace(manager: WindowManager, dockManager?: DockManag
     zIndex: window.zIndex,
   }))
   const docks = (dockManager?.list() ?? []).map((dock): WorkspaceDockSnapshot => {
-    const snapshot: WorkspaceDockSnapshot = { ...dock, rootPane: clonePaneTree(dock.rootPane) }
+    const surfaceStyle = cloneLayoutSurfaceStyle(dock.surfaceStyle)
+    const snapshot: WorkspaceDockSnapshot = { ...dock, rootPane: clonePaneTree(dock.rootPane), ...(surfaceStyle ? { surfaceStyle } : {}) }
     return dock.restoreWindow ? { ...snapshot, restoreWindow: cloneDockRestoreWindow(dock.restoreWindow) } : snapshot
   })
   const snapshot: WorkspaceSnapshot = { version: WORKSPACE_VERSION, windows, docks }
@@ -285,7 +293,7 @@ function readPaneSettings(value: unknown): PaneSettings | undefined | null {
   const settings: {
     resizable?: boolean; minSize?: number; maxSize?: number; grow?: number; sizeMode?: 'flex' | 'fixed' | 'content'; size?: number
     collapsible?: boolean; collapsed?: boolean; locked?: boolean; background?: 'transparent' | 'canvas' | 'surface' | 'surface-raised'
-    backgroundColor?: string; overflow?: 'auto' | 'hidden' | 'visible'
+    backgroundColor?: string; surfaceStyle?: LayoutSurfaceStyle; overflow?: 'auto' | 'hidden' | 'visible'
   } = {}
   for (const key of ['resizable', 'collapsible', 'collapsed', 'locked'] as const) {
     const candidate = value[key]
@@ -315,6 +323,9 @@ function readPaneSettings(value: unknown): PaneSettings | undefined | null {
     if (typeof value.backgroundColor !== 'string' || !value.backgroundColor.trim()) return null
     settings.backgroundColor = value.backgroundColor
   }
+  const surfaceStyle = parseLayoutSurfaceStyle(value.surfaceStyle)
+  if (surfaceStyle === null) return null
+  if (surfaceStyle) settings.surfaceStyle = surfaceStyle
   if (value.overflow !== undefined) {
     if (!['auto', 'hidden', 'visible'].includes(String(value.overflow))) return null
     settings.overflow = value.overflow as NonNullable<PaneSettings['overflow']>
@@ -379,12 +390,12 @@ function readDockRestoreWindow(value: unknown): DockRestoreWindow | undefined | 
 
 function readDock(value: unknown): WorkspaceDockSnapshot | null {
   if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim() || !['top', 'bottom', 'left', 'right'].includes(String(value.position))) return null
-  const rootPane = readPane(value.rootPane), restoreWindow = readDockRestoreWindow(value.restoreWindow)
+  const rootPane = readPane(value.rootPane), restoreWindow = readDockRestoreWindow(value.restoreWindow), surfaceStyle = parseLayoutSurfaceStyle(value.surfaceStyle)
   if (!rootPane || !isFiniteNumber(value.thickness) || value.thickness < 0 || !isFiniteNumber(value.minThickness) || value.minThickness < 0) return null
-  if (restoreWindow === null) return null
+  if (restoreWindow === null || surfaceStyle === null) return null
   const max = value.maxThickness === null ? null : value.maxThickness
   if (value.thickness < value.minThickness || (max !== null && (!isFiniteNumber(max) || max < value.minThickness || value.thickness > max)) || typeof value.resizable !== 'boolean') return null
-  return { id: value.id, position: value.position as DockPosition, rootPane, thickness: value.thickness, minThickness: value.minThickness, maxThickness: max, resizable: value.resizable, ...(restoreWindow ? { restoreWindow } : {}) }
+  return { id: value.id, position: value.position as DockPosition, rootPane, thickness: value.thickness, minThickness: value.minThickness, maxThickness: max, resizable: value.resizable, ...(surfaceStyle ? { surfaceStyle } : {}), ...(restoreWindow ? { restoreWindow } : {}) }
 }
 
 interface RestoreCandidate {
@@ -481,7 +492,7 @@ export function restoreWorkspace(
     const dock = readDock(value)
     if (!dock) { issues.push({ code: 'invalid-dock', message: 'invalid workspace dock entry', index }); return }
     try {
-      const added = dockManager.add({ id: dock.id, position: dock.position, pane: dock.rootPane, thickness: dock.thickness, minThickness: dock.minThickness, ...(dock.maxThickness !== null ? { maxThickness: dock.maxThickness } : {}), resizable: dock.resizable, ...(dock.restoreWindow ? { restoreWindow: dock.restoreWindow } : {}) })
+      const added = dockManager.add({ id: dock.id, position: dock.position, pane: dock.rootPane, thickness: dock.thickness, minThickness: dock.minThickness, ...(dock.maxThickness !== null ? { maxThickness: dock.maxThickness } : {}), resizable: dock.resizable, ...(dock.surfaceStyle ? { surfaceStyle: dock.surfaceStyle } : {}), ...(dock.restoreWindow ? { restoreWindow: dock.restoreWindow } : {}) })
       try { validatePaneOwnership(added.rootPane, paneIds, widgetInstances) } catch (error) {
         dockManager.remove(dock.id)
         issues.push({ code: 'invalid-workspace', message: error instanceof Error ? error.message : 'workspace pane identities are not unique', index, dockId: dock.id })
