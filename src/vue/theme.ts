@@ -70,6 +70,11 @@ export interface WidgetForgeTheme {
     overlay: number
     tooltip: number
   }
+  editor: {
+    contentOpacity: string
+    contentSaturation: string
+    contentBlur: string
+  }
 }
 
 export type DeepPartial<T> = {
@@ -135,6 +140,7 @@ export const defaultTheme: WidgetForgeTheme = {
     tableRowHeightCompact: '24px',
   },
   layer: { base: 0, window: 100, overlay: 1000, tooltip: 2000 },
+  editor: { contentOpacity: '0.52', contentSaturation: '0.7', contentBlur: '0.5px' },
 }
 
 function mergeSection<T extends object>(base: T, override?: DeepPartial<T>): T {
@@ -150,6 +156,7 @@ export function createTheme(override: WidgetForgeThemeOverride = {}): WidgetForg
     shadow: mergeSection(defaultTheme.shadow, override.shadow),
     size: mergeSection(defaultTheme.size, override.size),
     layer: mergeSection(defaultTheme.layer, override.layer),
+    editor: mergeSection(defaultTheme.editor, override.editor),
   }
 }
 

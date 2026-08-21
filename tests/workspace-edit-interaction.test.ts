@@ -27,6 +27,35 @@ function pointer(target: EventTarget, type: string, x: number, y: number): void 
 }
 
 describe('WorkspaceHost edit mode', () => {
+  it('provides a persistent canvas editor layer, dims inert content and supports keyboard host selection', async () => {
+    const { registry, windows, docks, edit } = setup('normal')
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+
+    await wrapper.get('[data-workspace-edit-toggle]').trigger('click')
+    await nextTick()
+    expect(edit.state.mode).toBe('edit')
+    expect(wrapper.get('[data-workspace-edit-status]').text()).toBe('Layout editing')
+    expect(wrapper.get('[data-workspace-edit-toggle]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('[data-layout-edit-interaction-layer]').exists()).toBe(true)
+    expect(wrapper.get('.wf-window-shell__content').attributes('inert')).toBeDefined()
+    expect(wrapper.get('.wf-window-shell__content').attributes('data-layout-content')).toBe('dimmed')
+
+    const frame = wrapper.get('.wf-window-frame[data-window-instance-id="window"]').element as HTMLElement
+    frame.focus()
+    await nextTick()
+    expect(edit.state.windowSelection).toEqual({ instanceId: 'window' })
+
+    await wrapper.get('[data-workspace-edit-toggle]').trigger('click')
+    await nextTick()
+    expect(edit.state.mode).toBe('normal')
+    expect(edit.state.windowSelection).toBeNull()
+    expect(wrapper.find('[data-layout-edit-interaction-layer]').exists()).toBe(false)
+    expect(wrapper.find('[data-workspace-edit-status]').exists()).toBe(false)
+    expect(wrapper.get('[data-workspace-edit-toggle]').attributes('aria-pressed')).toBe('false')
+    expect(wrapper.get('.wf-window-shell__content').attributes('inert')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('marks the full pane surface as draggable in edit mode without rendering drag icons', () => {
     const normal = setup('normal')
     const normalWrapper = mount(WorkspaceHost, { props: { windows: normal.windows, docks: normal.docks, registry: normal.registry, edit: normal.edit }, attachTo: document.body })

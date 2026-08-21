@@ -57,6 +57,7 @@ export const forgeDarkTheme: WidgetForgeTheme = {
     tableRowHeightCompact: '24px',
   },
   layer: { base: 0, window: 100, overlay: 1000, tooltip: 2000 },
+  editor: { contentOpacity: '0.52', contentSaturation: '0.7', contentBlur: '0.5px' },
 }
 
 export const forgeLightTheme: WidgetForgeTheme = {
@@ -116,4 +117,5 @@ export const forgeLightTheme: WidgetForgeTheme = {
     tableRowHeightCompact: '24px',
   },
   layer: { base: 0, window: 100, overlay: 1000, tooltip: 2000 },
+  editor: { contentOpacity: '0.52', contentSaturation: '0.7', contentBlur: '0.5px' },
 }

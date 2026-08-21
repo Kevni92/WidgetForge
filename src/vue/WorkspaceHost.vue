@@ -169,6 +169,7 @@ const unsubscribeWindow = windowManager.subscribe((change) => {
 });
 const unsubscribeEdit = editController.subscribe((state) => {
   editState.value = state;
+  if (state.mode !== 'edit') resetEditTransients();
   queueMicrotask(syncEditMarkers);
 });
 const layout = computed(() =>
@@ -285,6 +286,18 @@ function containsPoint(rect: DOMRect, x: number, y: number): boolean {
     y <= rect.bottom
   );
 }
+function paneAtPoint(windowId: string, x: number, y: number): HTMLElement | null {
+  const frame = [...(root.value?.querySelectorAll<HTMLElement>('.wf-window-frame[data-window-instance-id]') ?? [])]
+    .find((element) => element.dataset.windowInstanceId === windowId);
+  if (!frame) return null;
+  return [...frame.querySelectorAll<HTMLElement>('.wf-pane-host[data-pane-id]')]
+    .filter((element) => containsPoint(element.getBoundingClientRect(), x, y))
+    .sort((a, b) => {
+      const ar = a.getBoundingClientRect();
+      const br = b.getBoundingClientRect();
+      return ar.width * ar.height - br.width * br.height;
+    })[0] ?? null;
+}
 function paneDragAllowed(owner: WorkspacePaneOwner, paneId: string): boolean {
   if (layoutLocked.value) return false;
   if (owner.kind === "window" && windowManager.get(owner.id).layoutLocked) return false;
@@ -326,13 +339,18 @@ function syncEditMarkers(): void {
     ".wf-window-frame[data-window-instance-id]",
   )) {
     element.removeAttribute("data-window-selected");
+    element.removeAttribute("data-layout-selection");
     const instanceId = element.dataset.windowInstanceId;
     const selectedWindowId = editState.value.windowSelection?.instanceId ?? (editState.value.selection?.owner.kind === 'window' ? editState.value.selection.owner.id : null);
     if (
       instanceId &&
       selectedWindowId === instanceId
-    )
+    ) {
       element.dataset.windowSelected = "true";
+      element.dataset.layoutSelection = "selected";
+    } else if (editState.value.editActive) {
+      element.dataset.layoutSelection = "unselected";
+    }
   }
 }
 
@@ -603,6 +621,8 @@ function pointerEditAllowed(event: PointerEvent): boolean {
 
 function paneDragSourceFromTarget(
   target: HTMLElement,
+  clientX: number,
+  clientY: number,
 ): {
   owner: WorkspacePaneOwner;
   sourcePaneId: string;
@@ -610,7 +630,10 @@ function paneDragSourceFromTarget(
   sourceElement: HTMLElement;
   captureTarget: HTMLElement;
 } | null {
-  const pane = target.closest<HTMLElement>(".wf-pane-host[data-pane-id]");
+  const layer = target.closest<HTMLElement>('[data-layout-edit-interaction-layer]');
+  const frame = layer?.closest<HTMLElement>('.wf-window-frame[data-window-instance-id]');
+  const pane = target.closest<HTMLElement>(".wf-pane-host[data-pane-id]") ??
+    (frame?.dataset.windowInstanceId ? paneAtPoint(frame.dataset.windowInstanceId, clientX, clientY) : null);
   if (!pane?.dataset.paneId) return null;
   const owner = ownerFromElement(pane);
   if (!owner) return null;
@@ -625,7 +648,7 @@ function paneDragSourceFromTarget(
     sourcePaneId,
     ...(sourceTabPaneId ? { sourceTabPaneId } : {}),
     sourceElement: tab ?? pane,
-    captureTarget: pane,
+    captureTarget: layer ?? pane,
   };
 }
 
@@ -634,7 +657,7 @@ function startPaneDrag(event: PointerEvent): void {
     return;
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
-  const source = paneDragSourceFromTarget(target);
+  const source = paneDragSourceFromTarget(target, event.clientX, event.clientY);
   if (!source || target.closest('[data-tab-drag-disabled="true"]')) return;
   const sourceRoot = ownerRoot(source.owner);
   if (
@@ -935,14 +958,29 @@ function selectFromPointer(event: PointerEvent): void {
   const frame = target.closest<HTMLElement>('.wf-window-frame[data-window-instance-id]');
   const windowId = frame?.dataset.windowInstanceId;
   const windowState = windowId ? windowStates.value.find((window) => window.instanceId === windowId) : undefined;
+  const interactionLayer = target.closest('[data-layout-edit-interaction-layer]');
+  const layerPane = interactionLayer && windowId ? paneAtPoint(windowId, event.clientX, event.clientY) : null;
   if (windowState?.layoutLocked && windowId) {
     editController.selectWindow(windowId);
     return;
   }
-  const pane = target.closest<HTMLElement>(".wf-pane-host[data-pane-id]");
+  const pane = layerPane ?? target.closest<HTMLElement>(".wf-pane-host[data-pane-id]");
+  if (!pane && windowId) {
+    editController.selectWindow(windowId);
+    return;
+  }
   if (!pane?.dataset.paneId) return;
   const selection = selectionFor(pane, pane.dataset.paneId);
   if (selection) editController.selectPane(selection);
+}
+function selectFromFocus(event: FocusEvent): void {
+  if (!editState.value.editActive || layoutLocked.value) return;
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const frame = target.closest<HTMLElement>('.wf-window-frame[data-window-instance-id]');
+  const windowId = frame?.dataset.windowInstanceId;
+  if (!windowId || target !== frame) return;
+  editController.selectWindow(windowId);
 }
 function pointerSessionKind(event: PointerEvent): PointerSessionKind | null {
   const target = event.target;
@@ -954,6 +992,7 @@ function pointerSessionKind(event: PointerEvent): PointerSessionKind | null {
     return null;
   if (target.closest("[data-pane-divider-index]")) return "pane-resize";
   if (target.closest("[data-dock-resize]")) return "dock-resize";
+  if (target.closest('[data-layout-edit-interaction-layer]')) return "pane-drag";
   if (target.closest("[data-window-resize-handle]")) return "window-resize";
   if (target.closest("[data-window-drag-handle]")) return "window-drag";
   const tabHandle = target.closest<HTMLElement>("[data-tab-drag-handle]");
@@ -1018,6 +1057,16 @@ function openLayoutDialog(instanceId: string): void {
 function toggleEditMode(): void {
   if (editState.value.mode === 'locked') return
   editController.setMode(editState.value.mode === 'edit' ? 'normal' : 'edit')
+}
+function resetEditTransients(): void {
+  finishPaneDrag();
+  finishTabReorder();
+  paneDropPreview.value = null;
+  tabReorderPreview.value = null;
+  layoutPreview.value = null;
+  layoutDialogWindow.value = null;
+  contextMenu.close();
+  finishHistoryPointer('cancel');
 }
 function closeLayoutDialog(): void {
   layoutPreview.value = null;
@@ -1237,12 +1286,16 @@ onBeforeUnmount(() => {
     :data-workspace-locked="layoutLocked"
     :data-tab-reorder-active="tabReorderPreview ? 'true' : undefined"
     @pointerdown.capture="handlePointerDown"
+    @focusin.capture="selectFromFocus"
     @click.capture="onWorkspaceClick"
     @contextmenu.capture="openPaneMenu"
   >
-    <button class="wf-workspace-edit-toggle" type="button" data-workspace-edit-toggle :aria-pressed="editState.mode === 'edit' ? 'true' : 'false'" @click="toggleEditMode">
-      {{ editState.mode === 'edit' ? 'Exit layout edit mode' : 'Edit layout' }}
-    </button>
+    <div class="wf-workspace-edit-chrome" data-workspace-edit-chrome role="toolbar" aria-label="Layout editor controls">
+      <span v-if="editState.mode === 'edit'" class="wf-workspace-edit-status" data-workspace-edit-status role="status">Layout editing</span>
+      <button class="wf-workspace-edit-toggle" type="button" data-workspace-edit-toggle :aria-label="editState.mode === 'edit' ? 'Exit layout edit mode' : 'Edit layout'" :aria-pressed="editState.mode === 'edit' ? 'true' : 'false'" @click="toggleEditMode">
+        {{ editState.mode === 'edit' ? 'Done' : 'Edit layout' }}
+      </button>
+    </div>
     <svg v-if="editMode && layoutRelations.length" class="wf-window-layout-relations" :width="size.width" :height="size.height" :viewBox="`0 0 ${Math.max(1, size.width)} ${Math.max(1, size.height)}`" data-window-layout-relations aria-hidden="true">
       <line v-for="(relation, index) in layoutRelations" :key="`${relation.sourceId}-${relation.targetId}-${index}`" :x1="relation.x1" :y1="relation.y1" :x2="relation.x2" :y2="relation.y2" data-window-layout-relation />
     </svg>
@@ -1341,7 +1394,9 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: var(--wf-color-canvas);
 }
-.wf-workspace-edit-toggle { position: absolute; top: var(--wf-space-sm); right: var(--wf-space-sm); z-index: var(--wf-layer-overlay); min-height: var(--wf-size-control-height); padding: 0 var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-floating); color: var(--wf-color-text); font: inherit; font-size: var(--wf-font-size-xs); cursor: pointer; box-shadow: var(--wf-shadow-sm); }
+.wf-workspace-edit-chrome { position: absolute; top: var(--wf-space-sm); right: var(--wf-space-sm); z-index: var(--wf-layer-overlay); display: inline-flex; align-items: center; gap: var(--wf-space-xs); padding: var(--wf-space-2xs); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-floating); box-shadow: var(--wf-shadow-sm); }
+.wf-workspace-edit-status { padding-inline: var(--wf-space-xs); color: var(--wf-color-accent); font-size: var(--wf-font-size-xs); font-weight: var(--wf-font-weight-bold); }
+.wf-workspace-edit-toggle { min-height: var(--wf-size-control-height); padding: 0 var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-floating); color: var(--wf-color-text); font: inherit; font-size: var(--wf-font-size-xs); cursor: pointer; }
 .wf-workspace-edit-toggle:hover { background: var(--wf-color-hover); }
 .wf-workspace-edit-toggle[aria-pressed="true"] { border-color: var(--wf-color-focus); background: var(--wf-color-selected); color: var(--wf-color-accent); }
 .wf-workspace-edit-toggle:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
@@ -1360,6 +1415,28 @@ onBeforeUnmount(() => {
   position: relative;
   outline: 1px dashed var(--wf-color-border);
   outline-offset: -1px;
+}
+.wf-workspace-host--edit :deep(.wf-window-shell__content) {
+  opacity: var(--wf-editor-content-opacity);
+  filter: blur(var(--wf-editor-content-blur)) saturate(var(--wf-editor-content-saturation));
+  transition: opacity 120ms ease, filter 120ms ease;
+}
+.wf-workspace-host--edit :deep(.wf-window-frame[data-layout-selection="unselected"]) {
+  outline: 1px solid var(--wf-color-border-floating);
+  outline-offset: 1px;
+}
+.wf-workspace-host--edit :deep(.wf-window-frame:hover[data-layout-selection="unselected"]) {
+  outline: 2px solid var(--wf-color-focus);
+  outline-offset: 1px;
+}
+.wf-workspace-host--edit :deep(.wf-window-frame[data-layout-selection="selected"]) {
+  outline: 2px solid var(--wf-color-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px var(--wf-color-selected);
+}
+.wf-workspace-host--edit :deep(.wf-window-frame:focus-visible) {
+  outline: 2px solid var(--wf-color-focus);
+  outline-offset: 3px;
 }
 .wf-workspace-host--edit :deep(.wf-pane-host:hover) {
   outline-color: var(--wf-color-focus);
@@ -1382,6 +1459,7 @@ onBeforeUnmount(() => {
   font-size: var(--wf-font-size-xs);
   pointer-events: none;
 }
+.wf-workspace-host--edit :deep([data-window-resize-handle]) { display: none; }
 .wf-workspace-host--edit :deep(.wf-pane-host[data-pane-layout-locked="true"]) {
   outline-style: solid;
   outline-color: var(--wf-color-warning);
