@@ -1,4 +1,5 @@
 import type { WidgetId } from './widget'
+import { createLayoutSurfaceStyle, type LayoutSurfaceStyle } from './layout-surface-style'
 
 export type PaneId = string
 export type PaneAxis = 'horizontal' | 'vertical'
@@ -24,6 +25,7 @@ export interface PaneSettings {
   readonly locked?: boolean
   readonly background?: PaneBackground
   readonly backgroundColor?: string
+  readonly surfaceStyle?: LayoutSurfaceStyle
   readonly overflow?: PaneOverflow
 }
 
@@ -121,7 +123,7 @@ export class InvalidPaneOperationError extends Error {
 }
 
 function cloneSettings(settings: PaneSettings): PaneSettings {
-  return { ...settings }
+  return { ...settings, ...(settings.surfaceStyle ? { surfaceStyle: createLayoutSurfaceStyle(settings.surfaceStyle) } : {}) }
 }
 
 function validateId(id: string, label: string): void {
@@ -155,6 +157,11 @@ function validateSettings(settings?: PaneSettings): void {
   }
   if (settings.backgroundColor !== undefined && !settings.backgroundColor.trim()) {
     throw new PaneDefinitionError('pane backgroundColor must not be empty')
+  }
+  if (settings.surfaceStyle) {
+    try { createLayoutSurfaceStyle(settings.surfaceStyle) } catch (error) {
+      throw new PaneDefinitionError(error instanceof Error ? error.message : 'invalid pane surface style')
+    }
   }
 }
 
@@ -449,4 +456,13 @@ export function setPaneCollapsed(root: PaneNode, paneId: PaneId, collapsed: bool
   if (!pane.settings?.collapsible) throw new InvalidPaneOperationError(`pane "${paneId}" is not collapsible`)
   if (Boolean(pane.settings.collapsed) === collapsed) return clonePaneTree(root)
   return replacePane(root, paneId, { ...pane, settings: { ...pane.settings, collapsed } })
+}
+
+export function setPaneSurfaceStyle(root: PaneNode, paneId: PaneId, surfaceStyle: LayoutSurfaceStyle | undefined): PaneNode {
+  const pane = findPane(root, paneId)
+  if (!pane) throw new UnknownPaneError(paneId)
+  assertUnlocked(pane, 'style pane')
+  const settings = { ...(pane.settings ?? {}), ...(surfaceStyle ? { surfaceStyle: createLayoutSurfaceStyle(surfaceStyle) } : {}) }
+  if (!surfaceStyle) delete settings.surfaceStyle
+  return replacePane(root, paneId, { ...pane, ...(Object.keys(settings).length > 0 ? { settings } : {}) })
 }

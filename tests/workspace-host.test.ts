@@ -34,6 +34,15 @@ describe('WorkspaceHost',()=>{
 })
 
 describe('DockHost',()=>{
+  it('renders the dock surface style without changing its structural layout state', () => {
+    const { registry, docks } = setup()
+    docks.add({ id: 'styled', position: 'top', pane: pane('styled-dock-pane'), thickness: 80, surfaceStyle: { background: { mode: 'custom', color: '#161b22' }, border: { bottom: { enabled: true, width: 2 } }, padding: { bottom: 6 }, opacity: 0.9 } })
+    const wrapper = mount(DockHost, { props: { dock: docks.get('styled'), rect: { x: 0, y: 0, width: 900, height: 80 }, manager: docks, registry } })
+    expect(wrapper.get('[data-dock-id="styled"]').attributes('style')).toContain('--wf-surface-border-bottom-width: 2px')
+    expect(wrapper.get('[data-dock-id="styled"]').attributes('style')).toContain('--wf-surface-opacity: 0.9')
+    wrapper.unmount()
+  })
+
   it('resizes a dock through its inner-edge handle',async()=>{
     const {registry,docks}=setup();docks.add({id:'left',position:'left',pane:pane('left-pane'),thickness:120,minThickness:80,maxThickness:220})
     const wrapper=mount(DockHost,{props:{dock:docks.get('left'),rect:{x:0,y:0,width:120,height:500},manager:docks,registry}})

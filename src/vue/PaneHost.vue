@@ -35,6 +35,7 @@ import {
   type SplitPane,
   type TabPane,
 } from "../core/pane";
+import { resolveLegacyPaneSurfaceStyle, surfaceStyleToCssVars, type LayoutSurfaceStyle } from "../core/layout-surface-style";
 import { resizePaneSplitWeights } from "../core/pane-layout";
 import type { WidgetActionBinding } from "../core/widget-actions";
 import type { CommandRegistry } from "../core/commands";
@@ -105,11 +106,14 @@ const backgroundClass = computed(
   () =>
     `wf-pane-host--background-${props.pane.settings?.background ?? "transparent"}`,
 );
+const renderedSurfaceStyle = computed<LayoutSurfaceStyle | undefined>(() => {
+  const settings = props.pane.settings;
+  if (settings?.surfaceStyle) return settings.surfaceStyle;
+  return resolveLegacyPaneSurfaceStyle(settings);
+});
 const paneStyle = computed<Record<string, string>>(() => ({
   overflow: props.pane.settings?.overflow ?? "hidden",
-  ...(props.pane.settings?.backgroundColor
-    ? { backgroundColor: props.pane.settings.backgroundColor }
-    : {}),
+  ...surfaceStyleToCssVars(renderedSurfaceStyle.value),
 }));
 const visibleWidgetActions = computed(() =>
   widgetActions.value.some((binding) => binding.action.visible !== false),
@@ -362,6 +366,7 @@ onBeforeUnmount(() => {
     :data-pane-active="active ? 'true' : 'false'"
     :data-pane-visible="visible ? 'true' : 'false'"
     :data-pane-focused="focused ? 'true' : 'false'"
+    :data-surface-style="renderedSurfaceStyle ? 'true' : undefined"
     :data-layout-locked="layoutLocked || undefined"
     :data-pane-edit-draggable="
       editMode &&
@@ -548,6 +553,19 @@ onBeforeUnmount(() => {
 }
 .wf-pane-host--background-surface-raised {
   background: var(--wf-color-surface-raised);
+}
+.wf-pane-host[data-surface-style="true"] {
+  background: var(--wf-surface-background, var(--wf-color-surface));
+  border: 0;
+  border-top: var(--wf-surface-border-top-width, 0px) solid var(--wf-surface-border-top-color, var(--wf-color-border));
+  border-right: var(--wf-surface-border-right-width, 0px) solid var(--wf-surface-border-right-color, var(--wf-color-border));
+  border-bottom: var(--wf-surface-border-bottom-width, 0px) solid var(--wf-surface-border-bottom-color, var(--wf-color-border));
+  border-left: var(--wf-surface-border-left-width, 0px) solid var(--wf-surface-border-left-color, var(--wf-color-border));
+  border-radius: var(--wf-surface-radius, 0px);
+  box-shadow: var(--wf-surface-shadow, none);
+  opacity: var(--wf-surface-opacity, 1);
+  padding: var(--wf-surface-padding-top, 0) var(--wf-surface-padding-right, 0) var(--wf-surface-padding-bottom, 0) var(--wf-surface-padding-left, 0);
+  box-sizing: border-box;
 }
 .wf-pane-host[data-pane-edit-draggable="true"] {
   cursor: grab;

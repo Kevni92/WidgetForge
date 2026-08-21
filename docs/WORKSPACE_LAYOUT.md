@@ -42,3 +42,11 @@ Produktive Surface-Styles und temporäre Editor-Affordances bleiben getrennt:
 Beim Verlassen des Edit Mode werden die `data-layout-selection`-Marker entfernt. Interne Buttons, Inputs und Tabs behalten dagegen ihren eigenen `:focus-visible`- beziehungsweise Active-State.
 
 Der Layout Inspector ist Editor-Chrome außerhalb der Floating-Layoutfläche. Sein UI-State (`docked`, `floating` oder `minimized` sowie die Floating-Position) wird deshalb separat als laufender `WorkspaceHost`-Session-State gehalten. Inspector-Bewegungen und Moduswechsel werden nicht in Workspace-/Window-History, Geometrie oder Layout-Snapshots geschrieben; beim Wechsel der Auswahl bleibt dieser State erhalten.
+
+## Persistente Surface-Styles
+
+`LayoutSurfaceStyle` ist das gemeinsame, serialisierbare Flächenmodell für Windows, Docks und Panes. Es beschreibt ausschließlich die produktive Oberfläche: Hintergrund (`theme`, `transparent` oder `custom`), vier unabhängig konfigurierbare Rahmen, Radius, vierseitiges Padding, Opazität und Schatten (`none`, `sm`, `md`, `lg`). Arbiträre CSS-Strings gehören nicht zum Modell.
+
+Bei einem Window überschreibt ein gesetzter Surface-Style die rollen- und Chrome-basierte Surface-Basis. Editor-Auswahl, Fokus-Markierung und Layout-Affordances bleiben davon getrennt. Ist `surfaceStyle` nicht gesetzt, bleiben die bisherigen Theme- und Chrome-Defaults unverändert. Window-, Dock- und Pane-Snapshots klonen und persistieren den Style gemeinsam mit ihrem Besitzer; dadurch bleibt er auch über Restore, Undo/Redo und Pane-Mutationen stabil.
+
+Panes akzeptieren die bisherigen `background`-/`backgroundColor`-Felder weiterhin. Sie werden im Renderpfad in das gemeinsame Surface-Modell projiziert. Wenn zusätzlich `settings.surfaceStyle` vorhanden ist, hat dieser Vorrang; neue Persistenz sollte daher den typisierten Surface-Style verwenden.

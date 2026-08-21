@@ -1,3 +1,5 @@
+import { createLayoutSurfaceStyle, type LayoutSurfaceStyle } from './layout-surface-style'
+
 export type WindowLayer = 'normal' | 'always-on-top'
 export type WindowHeaderMode = 'always' | 'focused' | 'hover' | 'hidden'
 export type WindowRole = 'normal' | 'utility' | 'modal' | 'overlay'
@@ -27,6 +29,7 @@ export interface WindowOptions {
   readonly maximizable: boolean
   readonly closable: boolean
   readonly opacity: number
+  readonly surfaceStyle?: LayoutSurfaceStyle
   readonly header: WindowHeaderMode
   readonly chrome: WindowChromeMode
   readonly glass: boolean
@@ -114,7 +117,12 @@ export function createWindowOptions(override: WindowOptionsOverride = {}): Windo
   if (merged.layer !== 'normal' && merged.layer !== 'always-on-top') throw new WindowOptionsError(`unknown window layer "${String(merged.layer)}"`)
   if (!['always', 'focused', 'hover', 'hidden'].includes(merged.header)) throw new WindowOptionsError(`unknown window header mode "${String(merged.header)}"`)
   if (!['default', 'borderless', 'none'].includes(merged.chrome)) throw new WindowOptionsError(`unknown window chrome mode "${String(merged.chrome)}"`)
-  if (!Number.isFinite(merged.opacity) || merged.opacity < 0 || merged.opacity > 1) throw new WindowOptionsError('window opacity must be between 0 and 1')
+  let surfaceStyle: LayoutSurfaceStyle | undefined
+  try { surfaceStyle = override.surfaceStyle ? createLayoutSurfaceStyle(override.surfaceStyle) : undefined } catch (error) {
+    throw new WindowOptionsError(error instanceof Error ? error.message : 'invalid window surface style')
+  }
+  const opacity = surfaceStyle?.opacity ?? merged.opacity
+  if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) throw new WindowOptionsError('window opacity must be between 0 and 1')
 
   const icon = optionalText(override.icon, 'window icon')
   const badge = optionalText(override.badge, 'window badge')
@@ -127,13 +135,18 @@ export function createWindowOptions(override: WindowOptionsOverride = {}): Windo
     minimizable: merged.minimizable,
     maximizable: merged.maximizable,
     closable: merged.closable,
-    opacity: merged.opacity,
+    opacity,
     header: merged.header,
     chrome: merged.chrome,
     glass: merged.glass,
     ...(icon ? { icon } : {}),
     ...(badge ? { badge } : {}),
     ...(status ? { status } : {}),
+    ...(surfaceStyle ? { surfaceStyle } : {}),
     headerActions: normalizeHeaderActions(override.headerActions),
   }
+}
+
+export function cloneWindowOptions(options: WindowOptions): WindowOptions {
+  return createWindowOptions(options)
 }

@@ -2,11 +2,12 @@ import { clonePaneTree, validatePaneTree, type PaneNode, type PaneParameters } f
 import { assertPaneCapabilities } from './widget-capabilities'
 import type { WidgetRegistry } from './widget-registry'
 import type { WindowGeometry, WindowSize, WindowSizeConstraints } from './window-geometry'
-import type { WindowOptions } from './window-options'
+import { cloneWindowOptions, type WindowOptions } from './window-options'
+import { createLayoutSurfaceStyle, type LayoutSurfaceStyle } from './layout-surface-style'
 
 export type DockId = string
 export type DockPosition = 'top' | 'bottom' | 'left' | 'right'
-export type DockChangeKind = 'add' | 'remove' | 'pane' | 'thickness'
+export type DockChangeKind = 'add' | 'remove' | 'pane' | 'thickness' | 'style'
 
 export interface DockRestoreWindow {
   readonly instanceId: string
@@ -24,6 +25,7 @@ export interface DockState {
   readonly minThickness: number
   readonly maxThickness: number | null
   readonly resizable: boolean
+  readonly surfaceStyle?: LayoutSurfaceStyle
   readonly restoreWindow?: DockRestoreWindow
 }
 
@@ -35,6 +37,7 @@ export interface AddDockRequest {
   minThickness?: number
   maxThickness?: number
   resizable?: boolean
+  surfaceStyle?: LayoutSurfaceStyle
   restoreWindow?: DockRestoreWindow
 }
 
@@ -65,7 +68,7 @@ function normalizeThickness(value:number,min:number,max:number|null):number{
   if(!Number.isFinite(value)||value<0)throw new DockDefinitionError('dock thickness must be a finite non-negative number')
   return Math.max(min,max===null?value:Math.min(max,value))
 }
-function cloneDock(dock:DockState):DockState{return{...dock,rootPane:clonePaneTree(dock.rootPane),...(dock.restoreWindow?{restoreWindow:{...dock.restoreWindow,geometry:{position:{...dock.restoreWindow.geometry.position},size:{...dock.restoreWindow.geometry.size}},constraints:{minSize:{...dock.restoreWindow.constraints.minSize},maxSize:dock.restoreWindow.constraints.maxSize?{...dock.restoreWindow.constraints.maxSize}:null},options:{...dock.restoreWindow.options}}}: {})}}
+function cloneDock(dock:DockState):DockState{return{...dock,rootPane:clonePaneTree(dock.rootPane),...(dock.surfaceStyle?{surfaceStyle:createLayoutSurfaceStyle(dock.surfaceStyle)}:{}),...(dock.restoreWindow?{restoreWindow:{...dock.restoreWindow,geometry:{position:{...dock.restoreWindow.geometry.position},size:{...dock.restoreWindow.geometry.size}},constraints:{minSize:{...dock.restoreWindow.constraints.minSize},maxSize:dock.restoreWindow.constraints.maxSize?{...dock.restoreWindow.constraints.maxSize}:null},options:cloneWindowOptions(dock.restoreWindow.options)}}: {})}}
 
 export class DockManager{
   private docks:DockState[]=[]
@@ -78,12 +81,15 @@ export class DockManager{
     if(this.docks.some((dock)=>dock.id===request.id))throw new DuplicateDockError(request.id)
     const min=request.minThickness??0;const max=request.maxThickness??null
     if(!Number.isFinite(min)||min<0||max!==null&&(!Number.isFinite(max)||max<min))throw new DockDefinitionError('invalid dock thickness constraints')
-    const dock:DockState={id:request.id,position:request.position,rootPane:normalizeDockPane(this.registry,request.pane),thickness:normalizeThickness(request.thickness,min,max),minThickness:min,maxThickness:max,resizable:request.resizable??true,...(request.restoreWindow?{restoreWindow:{...request.restoreWindow,geometry:{position:{...request.restoreWindow.geometry.position},size:{...request.restoreWindow.geometry.size}},constraints:{minSize:{...request.restoreWindow.constraints.minSize},maxSize:request.restoreWindow.constraints.maxSize?{...request.restoreWindow.constraints.maxSize}:null},options:{...request.restoreWindow.options}}}: {})}
+    let surfaceStyle: LayoutSurfaceStyle | undefined
+    try { surfaceStyle = request.surfaceStyle ? createLayoutSurfaceStyle(request.surfaceStyle) : undefined } catch (error) { throw new DockDefinitionError(error instanceof Error ? error.message : 'invalid dock surface style') }
+    const dock:DockState={id:request.id,position:request.position,rootPane:normalizeDockPane(this.registry,request.pane),thickness:normalizeThickness(request.thickness,min,max),minThickness:min,maxThickness:max,resizable:request.resizable??true,...(surfaceStyle?{surfaceStyle}:{}),...(request.restoreWindow?{restoreWindow:{...request.restoreWindow,geometry:{position:{...request.restoreWindow.geometry.position},size:{...request.restoreWindow.geometry.size}},constraints:{minSize:{...request.restoreWindow.constraints.minSize},maxSize:request.restoreWindow.constraints.maxSize?{...request.restoreWindow.constraints.maxSize}:null},options:cloneWindowOptions(request.restoreWindow.options)}}: {})}
     this.docks=[...this.docks,dock];this.emit('add',dock.id);return cloneDock(dock)
   }
   remove(id:DockId):void{if(!this.docks.some((dock)=>dock.id===id))throw new UnknownDockError(id);this.docks=this.docks.filter((dock)=>dock.id!==id);this.emit('remove',id)}
   setRootPane(id:DockId,pane:PaneNode):DockState{const current=this.get(id);const updated:{readonly [K in keyof DockState]:DockState[K]}={...current,rootPane:normalizeDockPane(this.registry,pane)};this.docks=this.docks.map((dock)=>dock.id===id?updated:dock);this.emit('pane',id);return cloneDock(updated)}
   setThickness(id:DockId,thickness:number):DockState{const current=this.get(id);const next=normalizeThickness(thickness,current.minThickness,current.maxThickness);if(next===current.thickness)return current;const updated={...current,thickness:next};this.docks=this.docks.map((dock)=>dock.id===id?updated:dock);this.emit('thickness',id);return cloneDock(updated)}
+  setSurfaceStyle(id:DockId,surfaceStyle:LayoutSurfaceStyle|undefined):DockState{const current=this.get(id);let normalized:LayoutSurfaceStyle|undefined;try{normalized=surfaceStyle?createLayoutSurfaceStyle(surfaceStyle):undefined}catch(error){throw new DockDefinitionError(error instanceof Error?error.message:'invalid dock surface style')}const updated={...current,...(normalized?{surfaceStyle:normalized}:{})};if(!normalized)delete (updated as {surfaceStyle?:LayoutSurfaceStyle}).surfaceStyle;this.docks=this.docks.map((dock)=>dock.id===id?updated:dock);this.emit('style',id);return cloneDock(updated)}
   subscribe(listener:DockListener):()=>void{this.listeners.add(listener);return()=>this.listeners.delete(listener)}
   private emit(kind:DockChangeKind,dockId:DockId):void{const change={kind,dockId,docks:this.list()};for(const listener of [...this.listeners])listener(change)}
 }

@@ -38,6 +38,21 @@ describe('PaneHost', () => {
     expect(mounts).toBe(3)
   })
 
+  it('renders explicit surface styles and maps legacy pane backgrounds through the same style path', () => {
+    const Probe = defineComponent({ template: '<span>probe</span>' })
+    const registry = createWidgetRegistry([defineWidget({ id: 'test.surface-pane', title: 'Surface', component: Probe })])
+    const styled = createWidgetPane({ id: 'styled', widgetId: 'test.surface-pane', settings: { surfaceStyle: { background: { mode: 'custom', color: '#202830' }, border: { right: { enabled: true, width: 3 } }, padding: { top: 5 }, shadow: 'md' } } })
+    const legacy = createWidgetPane({ id: 'legacy', widgetId: 'test.surface-pane', settings: { background: 'surface-raised' } })
+    const root = createSplitPane({ id: 'root', axis: 'horizontal', children: [styled, legacy] })
+    const wrapper = mount(PaneHost, { props: { pane: root, registry } })
+    const styledElement = wrapper.get('[data-pane-id="styled"]')
+    expect(styledElement.attributes('data-surface-style')).toBe('true')
+    expect(styledElement.attributes('style')).toContain('--wf-surface-border-right-width: 3px')
+    expect(styledElement.attributes('style')).toContain('--wf-surface-padding-top: 5px')
+    expect(wrapper.get('[data-pane-id="legacy"]').attributes('data-surface-style')).toBe('true')
+    expect(wrapper.get('[data-pane-id="legacy"]').attributes('style')).toContain('--wf-surface-background: var(--wf-color-surface-raised)')
+  })
+
   it('emits resized split weights and cleans the pointer session on unmount', async () => {
     const Probe = defineComponent({ template: '<span>probe</span>' })
     const registry = createWidgetRegistry([defineWidget({ id: 'test.resize-pane', title: 'Probe', component: Probe })])

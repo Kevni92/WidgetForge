@@ -22,6 +22,22 @@ describe('window options', () => {
     expect(() => createWindowOptions({ opacity: 1.2 })).toThrow(WindowOptionsError)
   })
 
+  it('persists typed surface styles, clones them at the manager boundary and renders their CSS variables', () => {
+    const manager = createWindowManager(registry())
+    const sourceStyle = { background: { mode: 'custom' as const, color: '#101820' }, border: { top: { enabled: true, width: 2 } }, padding: { left: 10 }, opacity: 0.68, shadow: 'sm' as const }
+    manager.open({ widgetId: 'test.normal', instanceId: 'styled', options: { surfaceStyle: sourceStyle } })
+    const opened = manager.get('styled')
+    expect(opened.options.opacity).toBe(0.68)
+    expect(opened.options.surfaceStyle).toEqual(sourceStyle)
+    expect(opened.options.surfaceStyle).not.toBe(sourceStyle)
+    const wrapper = mount(WindowManagerHost, { props: { manager, registry: registry() } })
+    expect(wrapper.get('.wf-window-shell').attributes('style')).toContain('--wf-surface-background')
+    expect(wrapper.get('.wf-window-shell').attributes('style')).toContain('--wf-surface-border-top-width: 2px')
+    manager.setOptions('styled', { surfaceStyle: { background: { mode: 'transparent' } } })
+    expect(manager.get('styled').options.surfaceStyle).toEqual({ background: { mode: 'transparent' } })
+    wrapper.unmount()
+  })
+
   it('keeps always-on-top windows above normal windows even when a normal window receives focus', () => {
     const manager = createWindowManager(registry())
     const normalA = manager.open({ widgetId: 'test.normal', instanceId: 'normal-a' })
