@@ -2,6 +2,7 @@ import { defineComponent, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { createDockManager } from '../src/core/dock-manager'
+import { createWidgetPane } from '../src/core/pane'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
@@ -262,6 +263,7 @@ describe('WorkspaceHost edit mode', () => {
     await nextTick()
     expect(edit.state.selection?.paneId).toBe('window.root')
     expect(wrapper.get('.wf-pane-host').attributes('data-pane-selected')).toBe('true')
+    expect(wrapper.get('.wf-pane-host').attributes('data-layout-selection')).toBe('selected')
 
     pane.dispatchEvent(new MouseEvent('contextmenu', { clientX: 100, clientY: 100, bubbles: true, cancelable: true }))
     await nextTick()
@@ -271,6 +273,51 @@ describe('WorkspaceHost edit mode', () => {
     await nextTick()
     expect(edit.isPaneLocked({ owner: { kind: 'window', id: 'window' }, paneId: 'window.root' })).toBe(true)
     expect(wrapper.get('.wf-pane-host').attributes('data-pane-layout-locked')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('keeps locked window focus separate from editor selection and removes the overlay on exit', async () => {
+    const { registry, windows, docks, edit } = setup('edit')
+    windows.lockWindow('window', 'api')
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+    const frame = wrapper.get('.wf-window-frame[data-window-instance-id="window"]')
+    const shell = wrapper.get('.wf-window-shell')
+
+    await frame.trigger('pointerdown')
+    await nextTick()
+    expect(shell.attributes('data-focused')).toBe('true')
+    expect(shell.attributes('data-window-visual-focused')).toBe('false')
+    expect(shell.classes()).not.toContain('wf-window-shell--focused')
+    expect(frame.attributes('data-layout-selection')).toBe('selected')
+
+    edit.setMode('normal')
+    await nextTick()
+    expect(frame.attributes('data-layout-selection')).toBeUndefined()
+    expect(wrapper.find('[data-window-selected="true"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('marks dock selection independently from pane activity and clears editor markers', async () => {
+    const registry = createWidgetRegistry([defineWidget({ id: 'dock.widget', title: 'Dock', component: Widget })])
+    const windows = createWindowManager(registry)
+    const docks = createDockManager(registry)
+    const edit = createWorkspaceEditController({ mode: 'edit' })
+    docks.add({ id: 'topnav', position: 'top', pane: createWidgetPane({ id: 'topnav-pane', widgetId: 'dock.widget' }), thickness: 72 })
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+    const dock = wrapper.get('[data-dock-id="topnav"]')
+    const pane = wrapper.get('[data-dock-id="topnav"] .wf-pane-host[data-pane-id="topnav-pane"]')
+
+    expect(dock.attributes('data-layout-selection')).toBe('unselected')
+    await pane.trigger('pointerdown')
+    await nextTick()
+    expect(dock.attributes('data-layout-selection')).toBe('selected')
+    expect(pane.attributes('data-layout-selection')).toBe('selected')
+    expect(pane.attributes('data-pane-active')).toBe('true')
+
+    edit.setMode('normal')
+    await nextTick()
+    expect(dock.attributes('data-layout-selection')).toBeUndefined()
+    expect(pane.attributes('data-layout-selection')).toBeUndefined()
     wrapper.unmount()
   })
 

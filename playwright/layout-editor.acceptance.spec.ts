@@ -168,6 +168,26 @@ test('runs the real Edit → Select → Connect → Resize → Inspector → Wor
   await expect(page.locator('[data-layout-content-details]')).toBeVisible()
 })
 
+test('keeps locked edge surfaces visually stable in normal mode and overlays selection only in edit mode', async ({ page }) => {
+  await loadFixture(page)
+  for (const instanceId of ['left-menu', 'right-menu']) {
+    const host = frame(page, instanceId)
+    const shell = host.locator('.wf-window-shell')
+    await expect(host).toHaveAttribute('data-window-layout-locked', 'true')
+    await shell.click()
+    await expect(shell).toHaveAttribute('data-focused', 'true')
+    await expect(shell).toHaveAttribute('data-window-visual-focused', 'false')
+    await expect(host).not.toHaveAttribute('data-layout-selection')
+  }
+
+  await enterEditMode(page)
+  await selectWindow(page, 'left-menu')
+  await expect(frame(page, 'left-menu')).toHaveAttribute('data-layout-selection', 'selected')
+  await expect(frame(page, 'left-menu').locator('.wf-window-shell')).toHaveAttribute('data-window-visual-focused', 'false')
+  await page.locator('[data-workspace-edit-toggle]').click()
+  await expect(frame(page, 'left-menu')).not.toHaveAttribute('data-layout-selection')
+})
+
 test('covers keyboard targeting, workspace edge constraints, invalid input, cancel, and cycle prevention', async ({ page }, info) => {
   await loadFixture(page)
   await enterEditMode(page)
