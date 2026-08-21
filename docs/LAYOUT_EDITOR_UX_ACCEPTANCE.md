@@ -39,3 +39,26 @@ The viewport matrix is defined in `playwright/layout-editor.acceptance.spec.ts`.
 | Accessibility basics | Pass: controls have accessible names, keyboard targets use a listbox/option pattern, status messages use `role=status`, and focus-visible styles remain present. |
 
 The acceptance flow also exposed and fixed two interaction edge cases: a successful pointer connection no longer opens the keyboard picker from the follow-up click, and History restore ignores incomplete intermediate manager snapshots while windows are reopened.
+
+## Issue #204 extension
+
+The same public fixture now covers the final Inspector-mobility, SurfaceStyle, and layout-editor polish acceptance pass:
+
+- static Topnav/Left Menu chrome stays separate from edit selection; a workspace-bottom constraint does not convert a window into a dock or reflow the static chrome;
+- dock, window, and directly selected pane styles remain scoped to their host, including custom backgrounds, single-side borders, padding link/unlink, radius, shadow, and reset;
+- window constraints remain independent from SurfaceStyles through resize and reload, including the 20 px Center Canvas → Right Menu gap;
+- atomic border history, undo/redo, keyboard Inspector controls, minimized/floating/docked Inspector states, sharp editor chrome, and dimmed content are exercised;
+- dark and light theme checkpoints, 1440×900, 1024×768, and 720×600 viewport coverage are retained.
+
+The extended suite contains 16 tests and produces 19 named checkpoints (the original 01–10 plus 11–19 for workspace-bottom targeting, Topnav/Left Menu styling, final normal mode, pane/dock styling, window styling with constraints, keyboard/dimming, and the light theme). The fixture still uses only the public consumer API and its existing persistence path.
+
+### Issue #204 heuristic review
+
+| Heuristic | Result |
+| --- | --- |
+| Hierarchy and visibility | Pass: the edit toolbar, Inspector selection kind, tabs, host-scoped style controls, relation lines, and dimmed content make the active editing context explicit. |
+| Discoverability | Pass: dock/pane/window selection, Styles, constraint targets, mobility controls, and reset expose named, keyboard-reachable controls. |
+| Precision and feedback | Pass: exact border/padding values, 20 px constraint distance, resize preservation, preview/commit, and atomic history are asserted. |
+| Non-obstruction | Pass: the Inspector remains reachable at narrow width, bounds stay contained, and only content is blurred/dimmed while editor chrome stays sharp. |
+| Consistency | Pass: the same SurfaceStyle contract is exercised for window, dock, and pane hosts and remains independent from layout constraints. |
+| Recovery and persistence | Pass: reset, undo/redo, minimize/restore/dock, reload, and dark/light checkpoints retain predictable state. |
