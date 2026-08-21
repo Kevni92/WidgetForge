@@ -59,7 +59,7 @@ import { observeElementSize } from "./observe-element-size";
 import { handleWorkspaceHistoryShortcut } from "./workspace-history-shortcuts";
 import WindowManagerHost from "./WindowManagerHost.vue";
 import WindowLayoutDialog, { type WindowLayoutDialogPreview, type WindowLayoutDialogSave } from './WindowLayoutDialog.vue'
-import WorkspaceSelectionActions from './WorkspaceSelectionActions.vue'
+import LayoutInspector from './LayoutInspector.vue'
 import { provideWidgetDocumentationForHost } from './documentation-context'
 
 interface Props {
@@ -191,6 +191,7 @@ const layoutResizeSession = shallowRef<LayoutResizeSession | null>(null);
 const keyboardConstraintEdge = ref<WindowLayoutEdge | null>(null);
 const layoutResizeActive = ref(false);
 const selectedConstraint = shallowRef<SelectedConstraint | null>(null);
+const inspectorTransactionActive = ref(false);
 const constraintEdges: readonly WindowLayoutEdge[] = ['top', 'right', 'bottom', 'left'];
 const layoutResizeHandles: readonly LayoutResizeHandle[] = ['top', 'right', 'bottom', 'left', 'top-left', 'top-right', 'bottom-right', 'bottom-left'];
 let disposeSize: (() => void) | null = null;
@@ -284,6 +285,10 @@ function selectConstraint(relation: LayoutRelation): void {
     targetId: relation.targetId,
     targetEdge: relation.targetEdge,
   };
+}
+function selectInspectorConstraint(edge: WindowLayoutEdge): void {
+  const relation = layoutRelations.value.find((candidate) => candidate.sourceId === selectedWindow.value?.instanceId && candidate.sourceEdge === edge);
+  if (relation) selectConstraint(relation);
 }
 const selectedConstraintLabel = computed(() => {
   const constraint = selectedConstraint.value;
@@ -1461,6 +1466,7 @@ function toggleEditMode(): void {
   editController.setMode(editState.value.mode === 'edit' ? 'normal' : 'edit')
 }
 function resetEditTransients(): void {
+  cancelInspectorEdit();
   finishLayoutResize();
   finishConstraintLink();
   keyboardConstraintEdge.value = null;
@@ -1489,6 +1495,17 @@ function previewRectStyle(preview: WindowLayoutDialogPreview): Record<string, st
 function updateLayoutPreview(preview: WindowLayoutDialogPreview | null): void {
   layoutPreview.value = preview;
 }
+function beginInspectorEdit(): void {
+  if (inspectorTransactionActive.value) return;
+  history?.beginTransaction();
+  inspectorTransactionActive.value = true;
+}
+function cancelInspectorEdit(): void {
+  if (!inspectorTransactionActive.value) return;
+  history?.cancelTransaction();
+  inspectorTransactionActive.value = false;
+  layoutPreview.value = null;
+}
 function focusWindowShell(instanceId: string): void {
   void nextTick(() => {
     const frame = [...(root.value?.querySelectorAll<HTMLElement>('.wf-window-frame[data-window-instance-id]') ?? [])].find((element) => element.dataset.windowInstanceId === instanceId);
@@ -1516,11 +1533,23 @@ function unlockSelectedWindow(instanceId: string): void {
 }
 function applyLayoutDialog(value: WindowLayoutDialogSave): void {
   const window = layoutDialogWindow.value;
-  if (!window) return;
+  const selected = selectedWindow.value;
+  const target = window ?? selected;
+  if (!target) return;
   layoutPreview.value = null;
-  if (value.layoutSpec) windowManager.setLayoutSpec(window.instanceId, value.layoutSpec, floatingSize.value, 'user');
-  else if (window.layoutLocked) windowManager.setLayoutSpec(window.instanceId, createAbsoluteWindowLayoutSpec(value.geometry), floatingSize.value, 'user', 'materialized');
-  else windowManager.setGeometry(window.instanceId, value.geometry, 'user');
+  try {
+    const container = windowManager.getResponsiveContainer() ?? floatingSize.value;
+    if (value.layoutSpec) windowManager.setLayoutSpec(target.instanceId, value.layoutSpec, container, 'user', target.layoutSpecState);
+    else if (target.layoutLocked) windowManager.setLayoutSpec(target.instanceId, createAbsoluteWindowLayoutSpec(value.geometry), container, 'user', 'materialized');
+    else windowManager.setGeometry(target.instanceId, value.geometry, 'user');
+    if (inspectorTransactionActive.value) {
+      history?.commitTransaction();
+      inspectorTransactionActive.value = false;
+    }
+  } catch {
+    cancelInspectorEdit();
+    return;
+  }
   layoutDialogWindow.value = null;
   editController.selectPane(null);
 }
@@ -1724,18 +1753,22 @@ onBeforeUnmount(() => {
       <line v-if="constraintLinkLine()" class="wf-window-layout-relation--active" :x1="constraintLinkLine()?.x1" :y1="constraintLinkLine()?.y1" :x2="constraintLinkLine()?.x2" :y2="constraintLinkLine()?.y2" data-window-constraint-drag-line />
     </svg>
     <button v-if="selectedConstraint && selectedConstraintLabel" class="wf-window-constraint-remove" data-window-constraint-remove type="button" :aria-label="`Remove constraint ${selectedConstraintLabel}`" @click="removeSelectedConstraint">Remove {{ selectedConstraintLabel }}</button>
-    <WorkspaceSelectionActions
-      v-if="editMode && selectedWindow"
-      :instance-id="selectedWindow.instanceId"
-      :title="selectedWindow.title"
-      :locked="selectedWindow.layoutLocked"
-      :geometry="selectedWindow.geometry"
+    <LayoutInspector
+      v-if="editMode"
+      :window="selectedWindow"
+      :windows="windowStates"
+      :container="floatingSize"
       :surface="selectedWindowStatus?.surface"
       :rule="selectedWindowStatus?.rule"
-      :snap-zone="selectedWindow.snap?.zone"
+      :selected-constraint-edge="selectedConstraint?.sourceInstanceId === selectedWindow?.instanceId ? selectedConstraint?.sourceEdge ?? null : null"
       @lock="lockSelectedWindow"
       @unlock="unlockSelectedWindow"
       @layout="openLayoutDialog"
+      @preview="updateLayoutPreview"
+      @save="applyLayoutDialog"
+      @edit-start="beginInspectorEdit"
+      @cancel="cancelInspectorEdit"
+      @constraint-select="selectInspectorConstraint"
     />
     <div
       class="wf-workspace-host__floating"

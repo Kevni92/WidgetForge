@@ -37,6 +37,7 @@ describe('WorkspaceHost edit mode', () => {
     expect(edit.state.mode).toBe('edit')
     expect(wrapper.get('[data-workspace-edit-status]').text()).toBe('Layout editing')
     expect(wrapper.get('[data-workspace-edit-toggle]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-layout-inspector-empty]').text()).toContain('Select a window')
     expect(wrapper.find('[data-layout-edit-interaction-layer]').exists()).toBe(true)
     expect(wrapper.get('.wf-window-shell__content').attributes('inert')).toBeDefined()
     expect(wrapper.get('.wf-window-shell__content').attributes('data-layout-content')).toBe('dimmed')
@@ -55,6 +56,36 @@ describe('WorkspaceHost edit mode', () => {
     expect(wrapper.get('[data-workspace-edit-toggle]').attributes('aria-pressed')).toBe('false')
     expect(wrapper.get('.wf-window-shell__content').attributes('inert')).toBeUndefined()
     wrapper.unmount()
+  })
+
+  it('edits free geometry and direct constraint distance in the stable layout inspector', async () => {
+    const free = setup('edit')
+    const freeWrapper = mount(WorkspaceHost, { props: { windows: free.windows, docks: free.docks, registry: free.registry, edit: free.edit }, attachTo: document.body })
+    await freeWrapper.get('.wf-pane-host[data-pane-id="window.root"]').trigger('pointerdown')
+    await nextTick()
+    await freeWrapper.get('[data-layout-inspector-x]').setValue('120')
+    await freeWrapper.get('[data-layout-inspector-x]').trigger('blur')
+    await nextTick()
+    expect(free.windows.get('window').geometry.position.x).toBe(120)
+    freeWrapper.unmount()
+
+    const constrained = setup('edit')
+    constrained.windows.open({ widgetId: 'edit.widget', instanceId: 'target', position: { x: 400, y: 30 }, size: { width: 220, height: 180 } })
+    constrained.windows.setLayoutSpec('window', {
+      horizontal: { end: { target: { kind: 'window', instanceId: 'target', edge: 'left' } }, size: { value: 300, unit: 'px' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, size: { value: 200, unit: 'px' } },
+    }, { width: 800, height: 600 }, 'api', 'active')
+    const constrainedWrapper = mount(WorkspaceHost, { props: { windows: constrained.windows, docks: constrained.docks, registry: constrained.registry, edit: constrained.edit }, attachTo: document.body })
+    await constrainedWrapper.get('.wf-pane-host[data-pane-id="window.root"]').trigger('pointerdown')
+    await nextTick()
+    await constrainedWrapper.get('[data-window-layout-relation]').trigger('click')
+    expect(constrainedWrapper.get('[data-window-constraint-card="right"]').classes()).toContain('wf-layout-inspector__constraint--selected')
+    await constrainedWrapper.get('[data-layout-constraint-offset="right"]').setValue('20')
+    await constrainedWrapper.get('[data-layout-constraint-offset="right"]').trigger('blur')
+    await nextTick()
+    expect(constrained.windows.get('window').layoutSpec?.horizontal.end).toMatchObject({ target: { kind: 'window', instanceId: 'target', edge: 'left' }, offset: { value: -20, unit: 'px' } })
+    expect(constrained.windows.get('window').layoutSpecState).toBe('active')
+    constrainedWrapper.unmount()
   })
 
   it('renders four connector handles and commits a valid pointer connection as one active rule', async () => {
