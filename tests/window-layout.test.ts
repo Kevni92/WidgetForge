@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { convertWindowLayoutValue, createAbsoluteWindowLayoutSpec, createWindowLayoutSpecFromSnap, deriveWindowLayoutAxisMode, deriveWindowLayoutStatus, findWindowLayoutDependents, resolveWindowLayoutSpecs, validateWindowLayoutReferences, WindowLayoutValidationError, type ResponsiveLayoutWindow } from '../src/core/window-layout'
+import { convertWindowLayoutValue, createAbsoluteWindowLayoutSpec, createWindowLayoutConstraintDraft, createWindowLayoutSpecFromSnap, deriveWindowLayoutAxisMode, deriveWindowLayoutStatus, findWindowLayoutDependents, removeWindowLayoutConstraint, resolveWindowLayoutSpecs, setWindowLayoutConstraint, validateWindowLayoutReferences, WindowLayoutValidationError, type ResponsiveLayoutWindow } from '../src/core/window-layout'
 import type { WindowGeometry } from '../src/core/window-geometry'
 
 function windowState(instanceId: string, geometry: WindowGeometry, layoutSpec?: ResponsiveLayoutWindow['layoutSpec']): ResponsiveLayoutWindow {
@@ -126,5 +126,33 @@ describe('responsive window layout resolver', () => {
       vertical: { size: { value: 50, unit: 'percent' } },
     })
     expect(createWindowLayoutSpecFromSnap('right-two-thirds')).toMatchObject({ horizontal: { size: { unit: 'percent' } } })
+  })
+
+  it('creates directional edge constraints without over-defining an axis', () => {
+    const geometry = { position: { x: 120, y: 40 }, size: { width: 220, height: 140 } }
+    const right = setWindowLayoutConstraint(null, geometry, 'right', { kind: 'window', instanceId: 'menu', edge: 'left' })
+    expect(right.horizontal).toEqual({ end: { target: { kind: 'window', instanceId: 'menu', edge: 'left' }, offset: { value: 0, unit: 'px' } }, size: { value: 220, unit: 'px' } })
+    expect(deriveWindowLayoutAxisMode(right.horizontal)).toBe('end-size')
+
+    const stretch = setWindowLayoutConstraint(right, geometry, 'left', { kind: 'workspace', edge: 'left' })
+    expect(stretch.horizontal.start?.target).toEqual({ kind: 'workspace', edge: 'left' })
+    expect(stretch.horizontal.end?.target).toEqual({ kind: 'window', instanceId: 'menu', edge: 'left' })
+    expect(stretch.horizontal.size).toBeUndefined()
+    expect(deriveWindowLayoutAxisMode(stretch.horizontal)).toBe('stretch')
+
+    const removed = removeWindowLayoutConstraint(stretch, geometry, 'left')
+    expect(removed.horizontal).toEqual({ end: stretch.horizontal.end, size: { value: 220, unit: 'px' } })
+    const materialized = removeWindowLayoutConstraint(right, geometry, 'right')
+    expect(materialized.horizontal).toEqual({ start: { target: { kind: 'workspace', edge: 'left' }, offset: { value: 120, unit: 'px' } }, size: { value: 220, unit: 'px' } })
+  })
+
+  it('validates direct-constraint drafts against self references and cycles', () => {
+    const source = windowState('source', { position: { x: 0, y: 0 }, size: { width: 100, height: 80 } })
+    const target = windowState('target', { position: { x: 200, y: 0 }, size: { width: 100, height: 80 } })
+    expect(() => createWindowLayoutConstraintDraft([source, target], 'source', 'right', { kind: 'window', instanceId: 'source', edge: 'left' })).toThrowError(/cannot reference itself/)
+
+    const forward = createWindowLayoutConstraintDraft([source, target], 'source', 'right', { kind: 'window', instanceId: 'target', edge: 'left' })
+    expect(forward.horizontal.end?.target).toEqual({ kind: 'window', instanceId: 'target', edge: 'left' })
+    expect(() => createWindowLayoutConstraintDraft([{ ...source, layoutSpec: forward }, target], 'target', 'left', { kind: 'window', instanceId: 'source', edge: 'right' })).toThrowError(/dependency cycle/)
   })
 })

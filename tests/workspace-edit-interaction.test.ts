@@ -1,6 +1,6 @@
 import { defineComponent, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createDockManager } from '../src/core/dock-manager'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
@@ -53,6 +53,58 @@ describe('WorkspaceHost edit mode', () => {
     expect(wrapper.find('[data-workspace-edit-status]').exists()).toBe(false)
     expect(wrapper.get('[data-workspace-edit-toggle]').attributes('aria-pressed')).toBe('false')
     expect(wrapper.get('.wf-window-shell__content').attributes('inert')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('renders four connector handles and commits a valid pointer connection as one active rule', async () => {
+    const { registry, windows, docks, edit } = setup('edit')
+    windows.open({ widgetId: 'edit.widget', instanceId: 'target', position: { x: 400, y: 30 }, size: { width: 220, height: 180 } })
+    const originalRect = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains('wf-workspace-host') || this.hasAttribute('data-workspace-floating')) return { x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 600, width: 800, height: 600, toJSON: () => ({}) }
+      if (this.dataset.windowInstanceId === 'window') return { x: 100, y: 30, top: 30, left: 100, right: 320, bottom: 210, width: 220, height: 180, toJSON: () => ({}) }
+      if (this.dataset.windowInstanceId === 'target') return { x: 400, y: 30, top: 30, left: 400, right: 620, bottom: 210, width: 220, height: 180, toJSON: () => ({}) }
+      return originalRect.call(this)
+    })
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+    await wrapper.get('.wf-pane-host[data-pane-id="window.root"]').trigger('pointerdown')
+    await nextTick()
+    expect(wrapper.findAll('[data-window-constraint-handle]')).toHaveLength(4)
+    expect(wrapper.get('[data-window-constraint-handle="right"]').attributes('aria-label')).toBe('Connect right edge')
+    await wrapper.get('[data-window-constraint-handle="right"]').trigger('click')
+    expect(wrapper.get('[data-window-constraint-keyboard-picker]').text()).toContain('Edit · target · left')
+    await wrapper.get('.wf-window-constraint-keyboard-picker__cancel').trigger('click')
+
+    pointer(wrapper.get('[data-window-constraint-handle="right"]').element, 'pointerdown', 320, 120)
+    globalThis.window.dispatchEvent(new MouseEvent('pointermove', { clientX: 400, clientY: 120, bubbles: true }))
+    await nextTick()
+    expect(wrapper.find('[data-window-constraint-drag-line]').exists()).toBe(true)
+    expect(wrapper.find('[data-window-constraint-target]').attributes('data-window-constraint-target-id')).toBe('target')
+    globalThis.window.dispatchEvent(new MouseEvent('pointerup', { clientX: 400, clientY: 120, bubbles: true }))
+    await nextTick()
+    expect(windows.get('window').layoutSpec?.horizontal.end?.target).toEqual({ kind: 'window', instanceId: 'target', edge: 'left' })
+    expect(windows.get('window').layoutSpecState).toBe('active')
+    expect(wrapper.find('[data-window-constraint-drag-line]').exists()).toBe(false)
+    wrapper.unmount()
+    vi.restoreAllMocks()
+  })
+
+  it('selects and removes an existing direct constraint without removing the remaining axis layout', async () => {
+    const { registry, windows, docks, edit } = setup('edit')
+    windows.open({ widgetId: 'edit.widget', instanceId: 'target', position: { x: 400, y: 30 }, size: { width: 220, height: 180 } })
+    windows.setLayoutSpec('window', {
+      horizontal: { start: { target: { kind: 'window', instanceId: 'target', edge: 'right' } }, size: { value: 300, unit: 'px' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, size: { value: 200, unit: 'px' } },
+    }, { width: 800, height: 600 }, 'api', 'active')
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+    await wrapper.get('.wf-pane-host[data-pane-id="window.root"]').trigger('pointerdown')
+    await nextTick()
+    await wrapper.get('[data-window-layout-relation]').trigger('click')
+    expect(wrapper.get('[data-window-constraint-remove]').text()).toContain('Remove left')
+    await wrapper.get('[data-window-constraint-remove]').trigger('click')
+    await nextTick()
+    expect(windows.get('window').layoutSpec?.horizontal).toEqual({ start: { target: { kind: 'workspace', edge: 'left' }, offset: { value: 620, unit: 'px' } }, size: { value: 300, unit: 'px' } })
+    expect(wrapper.find('[data-window-constraint-remove]').exists()).toBe(false)
     wrapper.unmount()
   })
 

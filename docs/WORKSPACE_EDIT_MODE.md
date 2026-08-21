@@ -12,6 +12,8 @@ WidgetForge trennt normale Nutzung und Layout-Bearbeitung explizit.
 
 Im persistenten Edit Mode liegt eine eigene, nicht persistierte Interaction-Layer über dem Window-Content. Sie nimmt Pointer-Selection und strukturelles Pane-Dragging entgegen; sie ist keine Quelle für DOM-Geometrie oder Layout-State. Der fachliche Widget-Content wird mit semantischem Dimming zurückgenommen und per `inert` aus dem Fokus-/Aktionspfad genommen. Editor-Chrome, Inspector und Window-Host-Selection bleiben interaktiv. Unselected-, Hovered- und Selected-Hosts besitzen getrennte visuelle Marker. Window-Hosts sind im Edit Mode keyboard-fokussierbar; `Escape` verwirft nur aktive transiente Aktionen, während `Done` den gesamten Modus beendet und Selection-/Preview-Zustände bereinigt.
 
+Ausgewählte Windows zeigen vier getrennte Connector-Handles. Ein Drag auf einen Handle erzeugt zunächst nur einen validierten Draft: horizontale und vertikale Kanten werden getrennt geprüft, Self-/Cycle-/Cross-Axis-Ziele werden verworfen und eine Ghost-Geometrie folgt dem letzten gültigen Target. Erst der Drop schreibt über die pure Core-Operation `setWindowLayoutConstraint` einen Anchor mit `0 px`; bei zwei gegenüberliegenden Anchors wird die Size abgeleitet. Direkte Verbindungen werden als aktive responsive Regel markiert, damit der bestehende Resolver sie auch bei Workspace-Resize erneut auflöst. Die Connector-Linie ist eine Projektion dieses States und keine eigene State-Quelle.
+
 ## Interaktionsgrenzen
 
 Der Layout-Lock blockiert Window Move/Resize/Snap/Docking, Pane-Reparenting, Tab-Reordering, Split-Resize und Dock-Resize. DOM ist dabei nie State-Wahrheit; die Hosts nutzen den Edit-State lediglich als Interaktions-Gate.

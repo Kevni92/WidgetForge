@@ -167,6 +167,19 @@ describe('WindowManager', () => {
     expect(manager.get('sidebar').geometry.position).toEqual({ x: 40, y: 50 })
   })
 
+  it('reflows an unlocked window when a direct canvas constraint is active', () => {
+    const manager = createWindowManager(createRegistry())
+    manager.open({ widgetId: 'test.market', instanceId: 'canvas', position: { x: 40, y: 50 }, size: { width: 180, height: 120 } })
+    manager.setLayoutSpec('canvas', {
+      horizontal: { start: { target: { kind: 'workspace', edge: 'left' } }, size: { value: 25, unit: 'percent' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, size: { value: 50, unit: 'percent' } },
+    }, { width: 800, height: 600 }, 'user', 'active')
+
+    expect(manager.get('canvas')).toMatchObject({ layoutLocked: false, layoutSpecState: 'active', geometry: { position: { x: 0, y: 0 }, size: { width: 200, height: 300 } } })
+    manager.resolveResponsiveLayouts({ width: 1200, height: 700 }, 'api')
+    expect(manager.get('canvas').geometry).toEqual({ position: { x: 0, y: 0 }, size: { width: 300, height: 350 } })
+  })
+
   it('tracks snap adoption, dormant rules and materialized free geometry', () => {
     const manager = createWindowManager(createRegistry())
     manager.open({ widgetId: 'test.market', instanceId: 'stateful', position: { x: 40, y: 40 }, size: { width: 240, height: 160 } })
