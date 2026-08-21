@@ -40,3 +40,5 @@ Produktive Surface-Styles und temporäre Editor-Affordances bleiben getrennt:
 - `data-pane-locked` und `data-window-layout-locked` beschreiben Lock-Zustände; sie sind keine Focus- oder Selection-Zustände.
 
 Beim Verlassen des Edit Mode werden die `data-layout-selection`-Marker entfernt. Interne Buttons, Inputs und Tabs behalten dagegen ihren eigenen `:focus-visible`- beziehungsweise Active-State.
+
+Der Layout Inspector ist Editor-Chrome außerhalb der Floating-Layoutfläche. Sein UI-State (`docked`, `floating` oder `minimized` sowie die Floating-Position) wird deshalb separat als laufender `WorkspaceHost`-Session-State gehalten. Inspector-Bewegungen und Moduswechsel werden nicht in Workspace-/Window-History, Geometrie oder Layout-Snapshots geschrieben; beim Wechsel der Auswahl bleibt dieser State erhalten.

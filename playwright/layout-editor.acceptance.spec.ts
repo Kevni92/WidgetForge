@@ -95,6 +95,10 @@ async function checkpoint(page: Page, info: TestInfo, name: string): Promise<voi
   await page.screenshot({ path: info.outputPath(`screenshots/${name}.png`), fullPage: true })
 }
 
+function overlaps(left: { x: number; y: number; width: number; height: number }, right: { x: number; y: number; width: number; height: number }): boolean {
+  return left.x < right.x + right.width && left.x + left.width > right.x && left.y < right.y + right.height && left.y + left.height > right.y
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     if (sessionStorage.getItem('widgetforge.layout-acceptance-test-initialized') === 'true') return
@@ -186,6 +190,65 @@ test('keeps locked edge surfaces visually stable in normal mode and overlays sel
   await expect(frame(page, 'left-menu').locator('.wf-window-shell')).toHaveAttribute('data-window-visual-focused', 'false')
   await page.locator('[data-workspace-edit-toggle]').click()
   await expect(frame(page, 'left-menu')).not.toHaveAttribute('data-layout-selection')
+})
+
+test('moves, minimizes, restores, and clamps the editor inspector without changing workspace geometry', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 768 })
+  await loadFixture(page)
+  await enterEditMode(page)
+  await selectWindow(page, 'center-window')
+
+  const inspector = page.locator('[data-layout-inspector]')
+  await expect(inspector).toHaveAttribute('data-layout-inspector-mode', 'docked')
+  const initialInspectorBox = await inspector.boundingBox()
+  const rightMenuBox = await frame(page, 'right-menu').boundingBox()
+  if (!initialInspectorBox || !rightMenuBox) throw new Error('Inspector geometry was not measurable')
+  expect(overlaps(initialInspectorBox, rightMenuBox)).toBe(true)
+
+  const grip = page.locator('[data-layout-inspector-grip]')
+  await page.locator('[data-layout-inspector-dock]').click()
+  await expect(inspector).toHaveAttribute('data-layout-inspector-mode', 'floating')
+  const floatingBefore = await inspector.boundingBox()
+  const gripBox = await grip.boundingBox()
+  if (!floatingBefore || !gripBox) throw new Error('Floating inspector geometry was not measurable')
+  await page.mouse.move(gripBox.x + gripBox.width / 2, gripBox.y + gripBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(gripBox.x - 500, gripBox.y - 100, { steps: 10 })
+  await page.mouse.up()
+  const floatingAfter = await inspector.boundingBox()
+  if (!floatingAfter) throw new Error('Moved inspector geometry was not measurable')
+  expect(floatingAfter.x).toBeLessThan(floatingBefore.x - 200)
+  expect(floatingAfter.x).toBeGreaterThanOrEqual(0)
+  expect(floatingAfter.y).toBeGreaterThanOrEqual(0)
+
+  await selectWindow(page, 'right-menu')
+  await expect(page.locator('[data-selected-window-id]')).toHaveText('right-menu')
+  await expect(inspector).toHaveAttribute('data-layout-inspector-mode', 'floating')
+  await page.locator('[data-layout-inspector-minimize]').click()
+  await expect(inspector).toHaveAttribute('data-layout-inspector-mode', 'minimized')
+  const minimizedBox = await inspector.boundingBox()
+  if (!minimizedBox) throw new Error('Minimized inspector geometry was not measurable')
+  expect(minimizedBox.width).toBeLessThan(180)
+
+  await frame(page, 'left-menu').locator('[data-layout-edit-interaction-layer]').click({ position: { x: 80, y: 100 } })
+  await expect(frame(page, 'left-menu')).toHaveAttribute('data-layout-selection', 'selected')
+  await expect(inspector).toHaveAttribute('data-layout-inspector-mode', 'minimized')
+  await page.locator('[data-layout-inspector-restore]').click()
+  await expect(inspector).toHaveAttribute('data-layout-inspector-mode', 'floating')
+  await expect(page.locator('[data-selected-window-id]')).toHaveText('left-menu')
+  await page.locator('[data-layout-inspector-dock]').click()
+  await expect(inspector).toHaveAttribute('data-layout-inspector-mode', 'docked')
+
+  for (const viewport of [{ width: 1024, height: 768 }, { width: 720, height: 600 }]) {
+    await page.setViewportSize(viewport)
+    await expect(inspector).toBeVisible()
+    const box = await inspector.boundingBox()
+    if (!box) throw new Error('Responsive inspector geometry was not measurable')
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width)
+    expect(box.y).toBeGreaterThanOrEqual(0)
+    await expect(page.locator('body')).toHaveJSProperty('scrollWidth', viewport.width)
+  }
 })
 
 test('covers keyboard targeting, workspace edge constraints, invalid input, cancel, and cycle prevention', async ({ page }, info) => {

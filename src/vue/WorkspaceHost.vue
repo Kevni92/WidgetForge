@@ -72,6 +72,8 @@ interface Props {
   edit?: WorkspaceEditController | undefined;
   contextMenu?: ContextMenuController | undefined;
 }
+type LayoutInspectorMode = 'docked' | 'floating' | 'minimized';
+interface LayoutInspectorFloatingPosition { readonly x: number; readonly y: number }
 interface PaneDragSession {
   readonly sourceOwner: WorkspacePaneOwner;
   readonly sourcePaneId: string;
@@ -191,6 +193,8 @@ const layoutResizeActive = ref(false);
 const selectedConstraint = shallowRef<SelectedConstraint | null>(null);
 const suppressConstraintClick = ref(false);
 const inspectorTransactionActive = ref(false);
+const inspectorMode = ref<LayoutInspectorMode>('docked');
+const inspectorFloatingPosition = shallowRef<LayoutInspectorFloatingPosition | undefined>(undefined);
 const constraintEdges: readonly WindowLayoutEdge[] = ['top', 'right', 'bottom', 'left'];
 const layoutResizeHandles: readonly LayoutResizeHandle[] = ['top', 'right', 'bottom', 'left', 'top-left', 'top-right', 'bottom-right', 'bottom-left'];
 let disposeSize: (() => void) | null = null;
@@ -1507,6 +1511,12 @@ function cancelInspectorEdit(): void {
   inspectorTransactionActive.value = false;
   layoutPreview.value = null;
 }
+function updateInspectorMode(mode: LayoutInspectorMode): void {
+  inspectorMode.value = mode;
+}
+function updateInspectorFloatingPosition(position: LayoutInspectorFloatingPosition): void {
+  inspectorFloatingPosition.value = position;
+}
 function focusWindowShell(instanceId: string): void {
   void nextTick(() => {
     const frame = [...(root.value?.querySelectorAll<HTMLElement>('.wf-window-frame[data-window-instance-id]') ?? [])].find((element) => element.dataset.windowInstanceId === instanceId);
@@ -1763,6 +1773,8 @@ onBeforeUnmount(() => {
       :surface="selectedWindowStatus?.surface"
       :rule="selectedWindowStatus?.rule"
       :selected-constraint-edge="selectedConstraint?.sourceInstanceId === selectedWindow?.instanceId ? selectedConstraint?.sourceEdge ?? null : null"
+      :mode="inspectorMode"
+      :floating-position="inspectorFloatingPosition"
       @lock="lockSelectedWindow"
       @unlock="unlockSelectedWindow"
       @layout="openLayoutDialog"
@@ -1771,6 +1783,8 @@ onBeforeUnmount(() => {
       @edit-start="beginInspectorEdit"
       @cancel="cancelInspectorEdit"
       @constraint-select="selectInspectorConstraint"
+      @mode-change="updateInspectorMode"
+      @floating-position-change="updateInspectorFloatingPosition"
     />
     <div
       class="wf-workspace-host__floating"
