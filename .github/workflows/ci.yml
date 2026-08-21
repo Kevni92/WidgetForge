@@ -62,3 +62,19 @@ jobs:
 
       - name: Build playground
         run: npm run build --prefix playground
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright UX acceptance
+        run: npm run test:e2e
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-ux-acceptance
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore

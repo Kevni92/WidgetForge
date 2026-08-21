@@ -131,8 +131,8 @@ export class WorkspaceHistory {
   }
 
   private onWindowChange(change: WindowManagerChange): void {
+    if (this.applying) return
     const next = this.capture()
-    if (this.applying) { this.current = next; return }
     if (change.kind === 'focus' || (change.kind === 'geometry' && change.origin === 'api')) {
       this.current = next
       if (this.transactionStart !== null && change.kind === 'focus') this.transactionStart = next
@@ -142,8 +142,8 @@ export class WorkspaceHistory {
   }
 
   private onChange(): void {
+    if (this.applying) return
     const next = this.capture()
-    if (this.applying) { this.current = next; return }
     this.record(next)
   }
 

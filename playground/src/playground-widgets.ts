@@ -8,6 +8,7 @@ import PlanetSummaryWidget from './widgets/PlanetSummaryWidget.vue'
 import ProductionWidget from './widgets/ProductionWidget.vue'
 import WorkspaceCommandBarWidget from './widgets/WorkspaceCommandBarWidget.vue'
 import WorkspaceTopbarWidget from './widgets/WorkspaceTopbarWidget.vue'
+import LayoutAcceptanceWidget from './widgets/LayoutAcceptanceWidget.vue'
 
 type DemoLinkedSelection = { followSelection: boolean; pinnedSelection: string | null }
 function isLinkedSelection(value: unknown): value is DemoLinkedSelection {
@@ -59,7 +60,8 @@ export const overlayCommandWidget = defineWidget({ id: 'demo.overlay-command', t
 export const modalReviewWidget = defineWidget({ id: 'demo.modal-review', title: 'Critical Operations Review', description: 'Review critical operational decisions in a modal window.', component: AlertsWidget, capabilities: { multipleInstances: false, dockable: false, tabCompatible: false, supportsCompactMode: false }, window: { defaultSize: { width: 520, height: 360 }, minSize: { width: 380, height: 260 }, options: { role: 'modal', chrome: 'borderless', resizable: false } } })
 export const workspaceTopbarWidget = defineWidget({ id: 'demo.workspace-topbar', title: 'Workspace Navigation', description: 'Navigate the demo workspace and its common views.', component: WorkspaceTopbarWidget, capabilities: { multipleInstances: false, dockable: true, tabCompatible: false, supportsCompactMode: true } })
 export const workspaceCommandBarWidget = defineWidget({ id: 'demo.workspace-commandbar', title: 'Command Console', description: 'Demonstrate command-driven workspace navigation.', component: WorkspaceCommandBarWidget, capabilities: { multipleInstances: false, dockable: true, tabCompatible: false, supportsCompactMode: true } })
+export const layoutAcceptanceWidget = defineWidget({ id: 'demo.layout-acceptance', title: 'Layout Acceptance Surface', description: 'A named surface used by the playground layout editor acceptance flow.', component: LayoutAcceptanceWidget, parameters: { region: { type: 'string', required: true, description: 'Acceptance surface region.', example: 'center' }, description: { type: 'string', required: true, description: 'Short description shown in the surface.', example: 'Canvas window' } }, capabilities: { multipleInstances: true, dockable: false, tabCompatible: false, supportsCompactMode: false }, window: { defaultSize: { width: 320, height: 390 }, minSize: { width: 140, height: 220 } } })
 export const helpWidget = defineWidget({ id: HELP_WIDGET_ID, title: 'Help & Reference', description: 'Browse the widgets and commands available in this workspace.', component: HelpWidget, capabilities: { multipleInstances: true, dockable: true, tabCompatible: true, supportsCompactMode: true }, window: { defaultSize: { width: 760, height: 560 }, minSize: { width: 320, height: 240 } } })
 
-export const playgroundWidgets = [planetSummaryWidget,marketTickerWidget,productionWidget,inventoryWidget,ordersWidget,liveMetricWidget,alertsWidget,overlayCommandWidget,modalReviewWidget,workspaceTopbarWidget,workspaceCommandBarWidget,helpWidget]
+export const playgroundWidgets = [planetSummaryWidget,marketTickerWidget,productionWidget,inventoryWidget,ordersWidget,liveMetricWidget,alertsWidget,overlayCommandWidget,modalReviewWidget,workspaceTopbarWidget,workspaceCommandBarWidget,layoutAcceptanceWidget,helpWidget]
 export const playgroundWidgetRegistry = createWidgetRegistry(playgroundWidgets)

@@ -191,6 +191,7 @@ const layoutResizeSession = shallowRef<LayoutResizeSession | null>(null);
 const keyboardConstraintEdge = ref<WindowLayoutEdge | null>(null);
 const layoutResizeActive = ref(false);
 const selectedConstraint = shallowRef<SelectedConstraint | null>(null);
+const suppressConstraintClick = ref(false);
 const inspectorTransactionActive = ref(false);
 const constraintEdges: readonly WindowLayoutEdge[] = ['top', 'right', 'bottom', 'left'];
 const layoutResizeHandles: readonly LayoutResizeHandle[] = ['top', 'right', 'bottom', 'left', 'top-left', 'top-right', 'bottom-right', 'bottom-left'];
@@ -487,6 +488,10 @@ const constraintKeyboardOptions = computed<readonly ConstraintKeyboardOption[]>(
   });
 });
 function startConstraintKeyboardSelection(edge: WindowLayoutEdge): void {
+  if (suppressConstraintClick.value) {
+    suppressConstraintClick.value = false;
+    return;
+  }
   if (!editState.value.editActive || layoutLocked.value || !selectedWindow.value) return;
   keyboardConstraintEdge.value = edge;
 }
@@ -565,6 +570,7 @@ function finishConstraintLink(cancel = true): void {
 function commitConstraintLink(): void {
   const link = constraintLink.value;
   if (!link?.started || !link.target) { finishConstraintLink(); return; }
+  suppressConstraintClick.value = true;
   try {
     const spec = createWindowLayoutConstraintDraft(windowStates.value, link.sourceInstanceId, link.sourceEdge, link.target.target);
     windowManager.setLayoutSpec(link.sourceInstanceId, spec, floatingSize.value, 'user', 'active');
@@ -1535,11 +1541,12 @@ function applyLayoutDialog(value: WindowLayoutDialogSave): void {
   const window = layoutDialogWindow.value;
   const selected = selectedWindow.value;
   const target = window ?? selected;
+  const preserveInspectorSelection = window === null && inspectorTransactionActive.value;
   if (!target) return;
   layoutPreview.value = null;
   try {
     const container = windowManager.getResponsiveContainer() ?? floatingSize.value;
-    if (value.layoutSpec) windowManager.setLayoutSpec(target.instanceId, value.layoutSpec, container, 'user', target.layoutSpecState);
+    if (value.layoutSpec) windowManager.setLayoutSpec(target.instanceId, value.layoutSpec, container, 'user', preserveInspectorSelection ? 'active' : target.layoutSpecState);
     else if (target.layoutLocked) windowManager.setLayoutSpec(target.instanceId, createAbsoluteWindowLayoutSpec(value.geometry), container, 'user', 'materialized');
     else windowManager.setGeometry(target.instanceId, value.geometry, 'user');
     if (inspectorTransactionActive.value) {
@@ -1551,7 +1558,7 @@ function applyLayoutDialog(value: WindowLayoutDialogSave): void {
     return;
   }
   layoutDialogWindow.value = null;
-  editController.selectPane(null);
+  if (!preserveInspectorSelection) editController.selectPane(null);
 }
 function executePaneMenu(
   item: ContextMenuItem,
@@ -1876,7 +1883,7 @@ onBeforeUnmount(() => {
 .wf-window-layout-resize-handle--top-left, .wf-window-layout-resize-handle--bottom-right { cursor: nwse-resize; }
 .wf-window-layout-resize-handle--top-right, .wf-window-layout-resize-handle--bottom-left { cursor: nesw-resize; }
 .wf-window-layout-resize-handle:hover { background: var(--wf-color-selected); opacity: .35; }
-.wf-window-constraint-keyboard-picker { position: absolute; top: calc(var(--wf-space-sm) + var(--wf-size-control-height) + var(--wf-space-xs)); right: var(--wf-space-sm); z-index: calc(var(--wf-layer-overlay) + 2); display: grid; min-width: 240px; max-width: min(320px, calc(100% - var(--wf-space-md))); gap: var(--wf-space-xs); padding: var(--wf-space-sm); border: 1px solid var(--wf-color-border-floating); border-radius: var(--wf-radius-md); background: var(--wf-color-surface-floating); box-shadow: var(--wf-shadow-md); color: var(--wf-color-text); }
+.wf-window-constraint-keyboard-picker { position: absolute; top: calc(var(--wf-space-sm) + var(--wf-size-control-height) + var(--wf-space-xs)); right: var(--wf-space-sm); z-index: calc(var(--wf-layer-overlay) + 4); display: grid; min-width: 240px; max-width: min(320px, calc(100% - var(--wf-space-md))); gap: var(--wf-space-xs); padding: var(--wf-space-sm); border: 1px solid var(--wf-color-border-floating); border-radius: var(--wf-radius-md); background: var(--wf-color-surface-floating); box-shadow: var(--wf-shadow-md); color: var(--wf-color-text); }
 .wf-window-constraint-keyboard-picker button { min-height: var(--wf-size-control-height-compact); padding: 0 var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-raised); color: var(--wf-color-text); font: inherit; font-size: var(--wf-font-size-xs); text-align: left; cursor: pointer; }
 .wf-window-constraint-keyboard-picker button:hover, .wf-window-constraint-keyboard-picker button:focus-visible { background: var(--wf-color-selected); border-color: var(--wf-color-focus); }
 .wf-window-constraint-keyboard-picker button:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 1px; }

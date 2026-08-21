@@ -97,7 +97,7 @@ function targetLabel(anchor: WindowLayoutAnchor): string {
   if (anchor.target.kind === 'workspace') return `Workspace · ${anchor.target.edge}`
   const targetId = anchor.target.instanceId
   const target = props.windows.find((window) => window.instanceId === targetId)
-  return target ? `${target.title} · ${target.instanceId}` : targetId
+  return target ? `${target.title} · ${target.instanceId} · ${anchor.target.edge}` : `${targetId} · ${anchor.target.edge}`
 }
 function isOpposite(source: WindowLayoutEdge, target: WindowLayoutEdge): boolean {
   return (source === 'left' && target === 'right') || (source === 'right' && target === 'left') || (source === 'top' && target === 'bottom') || (source === 'bottom' && target === 'top')
@@ -319,6 +319,11 @@ function onFocusOut(event: FocusEvent): void {
   if (next instanceof Node && root.value?.contains(next)) return
   commitEdit()
 }
+function commitOnBlur(event: FocusEvent): void {
+  const next = event.relatedTarget
+  if (next instanceof Node && root.value?.contains(next)) return
+  commitEdit()
+}
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') { event.preventDefault(); cancelEdit() }
   if (event.key === 'Enter' && (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)) { event.preventDefault(); commitEdit() }
@@ -339,7 +344,7 @@ defineExpose({ cancelEdit })
 </script>
 
 <template>
-  <aside ref="root" class="wf-layout-inspector" :class="{ 'wf-layout-inspector--collapsed': collapsed }" data-workspace-selection-actions data-layout-inspector aria-label="Layout Inspector" @focusout="onFocusOut" @blur.capture="commitEdit" @keydown="onKeydown">
+  <aside ref="root" class="wf-layout-inspector" :class="{ 'wf-layout-inspector--collapsed': collapsed }" data-workspace-selection-actions data-layout-inspector aria-label="Layout Inspector" @focusout="onFocusOut" @blur.capture="commitOnBlur" @keydown="onKeydown">
     <template v-if="currentWindow">
       <header class="wf-layout-inspector__header">
         <div class="wf-layout-inspector__identity"><strong data-selected-window-title>{{ currentWindow.title }}</strong><small data-selected-window-id>{{ currentWindow.instanceId }}</small></div>
@@ -363,7 +368,7 @@ defineExpose({ cancelEdit })
 </template>
 
 <style scoped>
-.wf-layout-inspector { position: absolute; top: var(--wf-space-sm); right: var(--wf-space-sm); bottom: var(--wf-space-sm); z-index: calc(var(--wf-layer-overlay) + 3); display: grid; align-content: start; width: min(360px, calc(100% - var(--wf-space-md))); gap: var(--wf-space-sm); padding: var(--wf-space-md); overflow: auto; border: 1px solid var(--wf-color-border-floating); border-radius: var(--wf-radius-md); background: var(--wf-color-surface-floating); box-shadow: var(--wf-shadow-md); color: var(--wf-color-text); }
+.wf-layout-inspector { position: absolute; top: calc(var(--wf-space-sm) + var(--wf-size-control-height) + var(--wf-space-xs)); right: var(--wf-space-sm); bottom: var(--wf-space-sm); z-index: calc(var(--wf-layer-overlay) + 3); display: grid; align-content: start; width: min(360px, calc(100% - var(--wf-space-md))); gap: var(--wf-space-sm); padding: var(--wf-space-md); overflow: auto; border: 1px solid var(--wf-color-border-floating); border-radius: var(--wf-radius-md); background: var(--wf-color-surface-floating); box-shadow: var(--wf-shadow-md); color: var(--wf-color-text); }
 .wf-layout-inspector__header, .wf-layout-inspector__actions, .wf-layout-inspector__constraint header { display: flex; align-items: center; justify-content: space-between; gap: var(--wf-space-xs); }
 .wf-layout-inspector__header-actions { display: grid; justify-items: end; gap: var(--wf-space-2xs); }
 .wf-layout-inspector--collapsed { width: auto; min-width: 180px; bottom: auto; }
