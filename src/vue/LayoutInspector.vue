@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { normalizeWindowGeometry, type WindowGeometry, type WindowSize } from '../core/window-geometry'
 import { cloneWindowLayoutSpec, convertWindowLayoutValue, deriveWindowLayoutAxisMode, removeWindowLayoutConstraint, resolveWindowLayoutSpecs, setWindowLayoutConstraint, type WindowLayoutAnchor, type WindowLayoutAxis, type WindowLayoutAxisMode, type WindowLayoutEdge, type WindowLayoutSpec } from '../core/window-layout'
 import type { WindowState } from '../core/window-manager'
@@ -12,6 +12,8 @@ interface Props {
   readonly surface?: string | undefined
   readonly rule?: string | undefined
   readonly selectedConstraintEdge?: WindowLayoutEdge | null | undefined
+  readonly mode?: InspectorMode | undefined
+  readonly floatingPosition?: InspectorFloatingPosition | undefined
 }
 
 const props = defineProps<Props>()
@@ -24,8 +26,13 @@ const emit = defineEmits<{
   editStart: []
   cancel: []
   constraintSelect: [edge: WindowLayoutEdge]
+  modeChange: [mode: InspectorMode]
+  floatingPositionChange: [position: InspectorFloatingPosition]
 }>()
 
+type InspectorMode = 'docked' | 'floating' | 'minimized'
+type InspectorExpandedMode = Exclude<InspectorMode, 'minimized'>
+interface InspectorFloatingPosition { readonly x: number; readonly y: number }
 type DraftUnit = 'px' | 'percent'
 type DraftValue = { value: string; unit: DraftUnit }
 type DraftField = 'x' | 'y' | 'width' | 'height'
@@ -36,8 +43,20 @@ const root = ref<HTMLElement | null>(null)
 const draftSpec = ref<WindowLayoutSpec | null>(null)
 const draftGeometry = ref<WindowGeometry | null>(null)
 const editing = ref(false)
-const collapsed = ref(false)
 const errorMessage = ref('')
+const inspectorMode = ref<InspectorMode>(props.mode ?? 'docked')
+const lastExpandedMode = ref<InspectorExpandedMode>(inspectorMode.value === 'floating' ? 'floating' : 'docked')
+const floatingPosition = ref<InspectorFloatingPosition>({ x: props.floatingPosition?.x ?? 16, y: props.floatingPosition?.y ?? 56 })
+const header = ref<HTMLElement | null>(null)
+const restoreControl = ref<HTMLButtonElement | null>(null)
+interface DragSession {
+  readonly pointerId: number | undefined
+  readonly startX: number
+  readonly startY: number
+  readonly startPosition: InspectorFloatingPosition
+}
+let dragSession: DragSession | null = null
+let disposeDrag: (() => void) | null = null
 const constraintDrafts = reactive<Record<WindowLayoutEdge, DraftValue>>({
   top: { value: '0', unit: 'px' },
   right: { value: '0', unit: 'px' },
@@ -47,6 +66,12 @@ const constraintDrafts = reactive<Record<WindowLayoutEdge, DraftValue>>({
 const freeDraft = reactive<Record<DraftField, string>>({ x: '0', y: '0', width: '0', height: '0' })
 
 const currentWindow = computed(() => props.window)
+const inspectorStyle = computed<Record<string, string>>(() => {
+  if (inspectorMode.value === 'floating' || (inspectorMode.value === 'minimized' && lastExpandedMode.value === 'floating')) {
+    return { left: `${floatingPosition.value.x}px`, top: `${floatingPosition.value.y}px`, right: 'auto', bottom: 'auto' }
+  }
+  return {}
+})
 const activeSpec = computed(() => draftSpec.value ?? currentWindow.value?.layoutSpec ?? null)
 const isResponsive = computed(() => activeSpec.value !== null)
 const surfaceLabel = computed(() => ({ floating: 'Floating', snapped: 'Snapped', locked: 'Locked layout' }[props.surface ?? (currentWindow.value?.layoutLocked ? 'locked' : currentWindow.value?.snap ? 'snapped' : 'floating')] ?? 'Floating'))
@@ -325,6 +350,7 @@ function commitOnBlur(event: FocusEvent): void {
   commitEdit()
 }
 function onKeydown(event: KeyboardEvent): void {
+  if (cancelInspectorDrag(event)) return
   if (event.key === 'Escape') { event.preventDefault(); cancelEdit() }
   if (event.key === 'Enter' && (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)) { event.preventDefault(); commitEdit() }
 }
@@ -332,6 +358,130 @@ function anchorDisplayLabel(edge: WindowLayoutEdge): string { return isOpposite(
 function sizeReadOnly(axis: WindowLayoutAxis): boolean { return modeFor(axis) === 'stretch' || modeFor(axis) === 'free' }
 function positionReadOnly(): boolean { return isResponsive.value }
 function axisModeLabel(axis: WindowLayoutAxis): string { return modeFor(axis) === 'free' ? 'Free geometry' : modeFor(axis) === 'stretch' ? 'Stretch · calculated size' : modeFor(axis) === 'start-size' ? 'Start + size' : 'End + size' }
+function editorElement(): HTMLElement | null {
+  return root.value?.parentElement ?? null
+}
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value))
+}
+function clampFloatingPosition(position: InspectorFloatingPosition): InspectorFloatingPosition {
+  const inspector = root.value
+  const editor = editorElement()
+  if (!inspector || !editor) return { x: position.x, y: position.y }
+  const editorRect = editor.getBoundingClientRect()
+  const inspectorRect = inspector.getBoundingClientRect()
+  if (editorRect.width <= 0 || editorRect.height <= 0) return { x: position.x, y: position.y }
+  const width = inspectorRect.width || 360
+  const height = inspectorRect.height || 240
+  const headerHeight = header.value?.getBoundingClientRect().height || 44
+  const margin = 8
+  const maxX = Math.max(margin, editorRect.width - width - margin)
+  const maxY = Math.max(margin, editorRect.height - Math.min(height, headerHeight) - margin)
+  return { x: clamp(position.x, margin, maxX), y: clamp(position.y, margin, maxY) }
+}
+function emitFloatingPosition(position: InspectorFloatingPosition): void {
+  const next = clampFloatingPosition(position)
+  floatingPosition.value = next
+  emit('floatingPositionChange', next)
+}
+function positionFromRenderedInspector(): InspectorFloatingPosition {
+  const inspector = root.value
+  const editor = editorElement()
+  if (!inspector || !editor) return floatingPosition.value
+  const inspectorRect = inspector.getBoundingClientRect()
+  const editorRect = editor.getBoundingClientRect()
+  if (inspectorRect.width <= 0 || inspectorRect.height <= 0 || editorRect.width <= 0 || editorRect.height <= 0) return floatingPosition.value
+  return { x: inspectorRect.left - editorRect.left, y: inspectorRect.top - editorRect.top }
+}
+function defaultFloatingPosition(): InspectorFloatingPosition {
+  const editor = editorElement()
+  const inspector = root.value
+  if (!editor || !inspector) return floatingPosition.value
+  const editorRect = editor.getBoundingClientRect()
+  const inspectorRect = inspector.getBoundingClientRect()
+  if (editorRect.width <= 0 || editorRect.height <= 0 || inspectorRect.width <= 0) return floatingPosition.value
+  return clampFloatingPosition({ x: editorRect.width - inspectorRect.width - 16, y: inspectorRect.top - editorRect.top })
+}
+function setInspectorMode(next: InspectorMode): void {
+  if (next !== 'minimized') lastExpandedMode.value = next
+  inspectorMode.value = next
+  emit('modeChange', next)
+  if (next === 'minimized') {
+    nextTick(() => restoreControl.value?.focus())
+  } else {
+    nextTick(() => header.value?.focus())
+  }
+}
+function toggleDockMode(): void {
+  if (inspectorMode.value === 'floating') {
+    setInspectorMode('docked')
+    return
+  }
+  if (inspectorMode.value === 'docked') {
+    emitFloatingPosition(defaultFloatingPosition())
+    setInspectorMode('floating')
+  }
+}
+function toggleMinimized(): void {
+  if (inspectorMode.value === 'minimized') setInspectorMode(lastExpandedMode.value)
+  else setInspectorMode('minimized')
+}
+function beginInspectorDrag(event: PointerEvent): void {
+  if (inspectorMode.value !== 'floating' || event.button !== 0) return
+  const target = event.target
+  if (target instanceof Element && target.closest('button, input, select, textarea, a, [data-layout-inspector-action]')) return
+  const captureTarget = event.currentTarget instanceof HTMLElement ? event.currentTarget : header.value
+  if (!captureTarget) return
+  event.preventDefault()
+  event.stopPropagation()
+  const pointerId = typeof event.pointerId === 'number' ? event.pointerId : undefined
+  const rendered = positionFromRenderedInspector()
+  const session: DragSession = { pointerId, startX: event.clientX, startY: event.clientY, startPosition: rendered }
+  dragSession = session
+  const matches = (next: PointerEvent): boolean => pointerId === undefined || typeof next.pointerId !== 'number' || next.pointerId === pointerId
+  const move = (next: PointerEvent): void => {
+    if (!matches(next)) return
+    emitFloatingPosition({ x: session.startPosition.x + next.clientX - session.startX, y: session.startPosition.y + next.clientY - session.startY })
+  }
+  const end = (next: PointerEvent): void => {
+    if (!matches(next)) return
+    if (next.type !== 'pointerup') emitFloatingPosition(session.startPosition)
+    cleanup()
+  }
+  const lost = (): void => { emitFloatingPosition(session.startPosition); cleanup() }
+  const cleanup = (): void => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', end)
+    window.removeEventListener('pointercancel', end)
+    window.removeEventListener('blur', cancel)
+    captureTarget.removeEventListener('lostpointercapture', lost)
+    if (pointerId !== undefined && typeof captureTarget.releasePointerCapture === 'function') {
+      try { captureTarget.releasePointerCapture(pointerId) } catch { /* optional */ }
+    }
+    dragSession = null
+    disposeDrag = null
+  }
+  const cancel = (): void => { emitFloatingPosition(session.startPosition); cleanup() }
+  disposeDrag = cleanup
+  if (pointerId !== undefined && typeof captureTarget.setPointerCapture === 'function') {
+    try { captureTarget.setPointerCapture(pointerId) } catch { /* optional */ }
+  }
+  captureTarget.addEventListener('lostpointercapture', lost)
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', end)
+  window.addEventListener('pointercancel', end)
+  window.addEventListener('blur', cancel)
+}
+function cancelInspectorDrag(event: KeyboardEvent): boolean {
+  if (!dragSession || event.key !== 'Escape') return false
+  event.preventDefault()
+  emitFloatingPosition(dragSession.startPosition)
+  disposeDrag?.()
+  return true
+}
+function clampInspectorAfterResize(): void {
+  if (inspectorMode.value === 'floating') emitFloatingPosition(floatingPosition.value)
+}
 function initialize(): void {
   draftSpec.value = null; draftGeometry.value = null; editing.value = false; errorMessage.value = ''
   syncDraftFields()
@@ -339,18 +489,37 @@ function initialize(): void {
 
 watch(() => props.window?.instanceId, initialize, { immediate: true })
 watch(() => props.window, () => { if (!editing.value) syncDraftFields() }, { deep: true })
+watch(() => props.mode, (next) => {
+  if (next && next !== inspectorMode.value) inspectorMode.value = next
+  if (next === 'floating' || next === 'docked') lastExpandedMode.value = next
+})
+watch(() => props.floatingPosition, (next) => {
+  if (next) floatingPosition.value = { x: next.x, y: next.y }
+}, { deep: true })
+onMounted(() => window.addEventListener('resize', clampInspectorAfterResize))
+onBeforeUnmount(() => {
+  disposeDrag?.()
+  window.removeEventListener('resize', clampInspectorAfterResize)
+})
 
 defineExpose({ cancelEdit })
 </script>
 
 <template>
-  <aside ref="root" class="wf-layout-inspector" :class="{ 'wf-layout-inspector--collapsed': collapsed }" data-workspace-selection-actions data-layout-inspector aria-label="Layout Inspector" @focusout="onFocusOut" @blur.capture="commitOnBlur" @keydown="onKeydown">
-    <template v-if="currentWindow">
-      <header class="wf-layout-inspector__header">
-        <div class="wf-layout-inspector__identity"><strong data-selected-window-title>{{ currentWindow.title }}</strong><small data-selected-window-id>{{ currentWindow.instanceId }}</small></div>
-        <div class="wf-layout-inspector__header-actions"><div class="wf-layout-inspector__status" data-window-layout-status><span data-window-layout-surface>{{ surfaceLabel }}</span><span aria-hidden="true">·</span><span data-window-layout-rule>{{ ruleLabel }}</span></div><button type="button" data-layout-inspector-toggle :aria-expanded="collapsed ? 'false' : 'true'" aria-label="Toggle Layout Inspector" @click="collapsed = !collapsed">{{ collapsed ? 'Open' : 'Collapse' }}</button></div>
+  <aside ref="root" class="wf-layout-inspector" :class="{ 'wf-layout-inspector--collapsed': inspectorMode === 'minimized', 'wf-layout-inspector--floating': inspectorMode === 'floating', 'wf-layout-inspector--minimized': inspectorMode === 'minimized' }" :style="inspectorStyle" :data-layout-inspector-mode="inspectorMode" data-workspace-selection-actions data-layout-inspector aria-label="Layout Inspector" @focusout="onFocusOut" @blur.capture="commitOnBlur" @keydown="onKeydown">
+    <template v-if="inspectorMode === 'minimized'">
+      <div class="wf-layout-inspector__minimized" data-layout-inspector-minimized>
+        <button ref="restoreControl" type="button" data-layout-inspector-toggle data-layout-inspector-restore aria-label="Restore layout inspector" @click="toggleMinimized"><span aria-hidden="true">☷</span><span class="wf-layout-inspector__minimized-label">Inspector</span></button>
+        <small class="wf-layout-inspector__minimized-selection" data-selected-window-id aria-live="polite">{{ currentWindow?.instanceId ?? '' }}</small>
+      </div>
+    </template>
+    <template v-else>
+      <header ref="header" class="wf-layout-inspector__header" data-layout-inspector-header tabindex="-1" @pointerdown="beginInspectorDrag">
+        <div class="wf-layout-inspector__identity"><span class="wf-layout-inspector__grip" data-layout-inspector-grip role="button" tabindex="0" aria-label="Move layout inspector" aria-describedby="layout-inspector-mobility-help">⠿</span><div><strong v-if="currentWindow" data-selected-window-title>{{ currentWindow.title }}</strong><strong v-else>Layout Inspector</strong><small v-if="currentWindow" data-selected-window-id>{{ currentWindow.instanceId }}</small></div></div>
+        <div class="wf-layout-inspector__header-actions"><div v-if="currentWindow" class="wf-layout-inspector__status" data-window-layout-status><span data-window-layout-surface>{{ surfaceLabel }}</span><span aria-hidden="true">·</span><span data-window-layout-rule>{{ ruleLabel }}</span></div><button type="button" data-layout-inspector-dock :aria-label="inspectorMode === 'floating' ? 'Dock layout inspector to right' : 'Undock layout inspector'" @click="toggleDockMode">{{ inspectorMode === 'floating' ? 'Dock' : 'Undock' }}</button><button type="button" data-layout-inspector-toggle data-layout-inspector-minimize aria-expanded="true" aria-label="Minimize layout inspector" @click="toggleMinimized">Minimize</button></div>
       </header>
-      <template v-if="!collapsed">
+      <p id="layout-inspector-mobility-help" class="wf-layout-inspector__mobility-help">Drag the header to move the floating inspector.</p>
+      <template v-if="currentWindow">
       <div class="wf-layout-inspector__actions">
         <button class="wf-workspace-selection-actions__layout" type="button" data-window-selection-layout :aria-label="`Advanced layout for ${currentWindow.title}`" @click="emit('layout', currentWindow.instanceId)">Advanced layout…</button>
         <button class="wf-workspace-selection-actions__toggle" type="button" data-window-selection-lock :aria-pressed="currentWindow.layoutLocked ? 'true' : 'false'" :aria-label="`${currentWindow.layoutLocked ? 'Unlock' : 'Lock'} window ${currentWindow.title}`" :title="`${currentWindow.layoutLocked ? 'Unlock' : 'Lock'} window ${currentWindow.title}`" @click="currentWindow.layoutLocked ? emit('unlock', currentWindow.instanceId) : emit('lock', currentWindow.instanceId)">{{ currentWindow.layoutLocked ? 'Unlock' : 'Lock' }}</button>
@@ -362,16 +531,26 @@ defineExpose({ cancelEdit })
       <fieldset v-for="(edges, axis) in { horizontal: horizontalEdges, vertical: verticalEdges }" :key="axis" :data-layout-inspector-constraints="axis"><legend>{{ axis === 'horizontal' ? 'Horizontal' : 'Vertical' }} constraints</legend><p class="wf-layout-inspector__mode" :data-layout-axis-mode="axis">{{ axisModeLabel(axis) }}</p><template v-for="edge in edges" :key="edge"><article v-if="anchorFor(edge)" class="wf-layout-inspector__constraint" :class="{ 'wf-layout-inspector__constraint--selected': selectedConstraintEdge === edge }" :data-window-constraint-card="edge" @click="emit('constraintSelect', edge)"><header><strong>{{ edge }} edge</strong><span>{{ anchorDisplayLabel(edge) }}</span></header><small class="wf-layout-inspector__target-label" data-layout-constraint-target-label>{{ targetLabel(anchorFor(edge)!) }}</small><label>Target <select :data-layout-constraint-target="edge" :value="`${targetValue(anchorFor(edge)!) }:${targetEdgeValue(edge)}`" @focus="startEdit" @change="updateTarget(edge, $event)"><option v-for="option in targetOptions(edge)" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><label>Target edge <select :data-layout-constraint-target-edge="edge" :value="targetEdgeValue(edge)" @focus="startEdit" @change="updateTargetEdge(edge, $event)"><option v-for="targetEdge in (edgeAxis(edge) === 'horizontal' ? horizontalEdges : verticalEdges)" :key="targetEdge" :value="targetEdge">{{ targetEdge }}</option></select></label><label>{{ anchorDisplayLabel(edge) }} <input :data-layout-constraint-offset="edge" type="number" step="any" :value="rounded(displayValue(edge))" @focus="startEdit" @input="updateDistance(edge, $event)" /><select :data-layout-constraint-unit="edge" :value="constraintDrafts[edge].unit" @focus="startEdit" @change="updateDistanceUnit(edge, $event)"><option value="px">px</option><option value="percent">%</option></select></label><button type="button" :data-layout-constraint-disconnect="edge" @click.stop="disconnect(edge)">Remove {{ edge }} constraint</button></article></template><p v-if="!edges.some((edge) => anchorFor(edge))" class="wf-layout-inspector__empty">No direct constraints on this axis.</p></fieldset>
       <fieldset data-layout-inspector-minmax><legend>Size constraints</legend><dl><div><dt>Min W × H</dt><dd>{{ currentWindow.constraints.minSize.width }} × {{ currentWindow.constraints.minSize.height }} px</dd></div><div><dt>Max W × H</dt><dd>{{ currentWindow.constraints.maxSize ? `${currentWindow.constraints.maxSize.width} × ${currentWindow.constraints.maxSize.height} px` : 'none' }}</dd></div></dl></fieldset>
       </template>
+      <div v-else class="wf-layout-inspector__empty-state" data-layout-inspector-empty>Select a window to edit its layout.</div>
     </template>
-    <div v-else class="wf-layout-inspector__empty-state" data-layout-inspector-empty>Select a window to edit its layout.</div>
   </aside>
 </template>
 
 <style scoped>
-.wf-layout-inspector { position: absolute; top: calc(var(--wf-space-sm) + var(--wf-size-control-height) + var(--wf-space-xs)); right: var(--wf-space-sm); bottom: var(--wf-space-sm); z-index: calc(var(--wf-layer-overlay) + 3); display: grid; align-content: start; width: min(360px, calc(100% - var(--wf-space-md))); gap: var(--wf-space-sm); padding: var(--wf-space-md); overflow: auto; border: 1px solid var(--wf-color-border-floating); border-radius: var(--wf-radius-md); background: var(--wf-color-surface-floating); box-shadow: var(--wf-shadow-md); color: var(--wf-color-text); }
+.wf-layout-inspector { position: absolute; top: calc(var(--wf-space-sm) + var(--wf-size-control-height) + var(--wf-space-xs)); right: var(--wf-space-sm); bottom: var(--wf-space-sm); z-index: calc(var(--wf-layer-overlay) + 3); box-sizing: border-box; display: grid; align-content: start; width: min(360px, calc(100% - var(--wf-space-md))); max-width: calc(100% - var(--wf-space-md)); gap: var(--wf-space-sm); padding: var(--wf-space-md); overflow: auto; border: 1px solid var(--wf-color-border-floating); border-radius: var(--wf-radius-md); background: var(--wf-color-surface-floating); box-shadow: var(--wf-shadow-md); color: var(--wf-color-text); }
+.wf-layout-inspector--floating { right: auto; bottom: auto; max-height: calc(100% - var(--wf-space-md)); }
 .wf-layout-inspector__header, .wf-layout-inspector__actions, .wf-layout-inspector__constraint header { display: flex; align-items: center; justify-content: space-between; gap: var(--wf-space-xs); }
-.wf-layout-inspector__header-actions { display: grid; justify-items: end; gap: var(--wf-space-2xs); }
-.wf-layout-inspector--collapsed { width: auto; min-width: 180px; bottom: auto; }
+.wf-layout-inspector__header { cursor: default; }
+.wf-layout-inspector--floating .wf-layout-inspector__header { cursor: move; touch-action: none; }
+.wf-layout-inspector__header-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--wf-space-2xs); }
+.wf-layout-inspector__grip { display: inline-grid; width: var(--wf-size-icon-button-size); height: var(--wf-size-icon-button-size); place-items: center; color: var(--wf-color-text-muted); font-size: var(--wf-font-size-md); cursor: move; }
+.wf-layout-inspector__grip:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 1px; }
+.wf-layout-inspector__mobility-help { margin: calc(var(--wf-space-xs) * -1) 0 0; color: var(--wf-color-text-muted); font-size: var(--wf-font-size-xs); }
+.wf-layout-inspector--minimized { top: calc(var(--wf-space-sm) + var(--wf-size-control-height) + var(--wf-space-xs)); right: var(--wf-space-sm); bottom: auto; width: auto; min-width: 0; padding: var(--wf-space-2xs); overflow: visible; }
+.wf-layout-inspector--collapsed { width: auto; min-width: 0; bottom: auto; }
+.wf-layout-inspector__minimized { display: inline-flex; }
+.wf-layout-inspector__minimized button { display: inline-flex; align-items: center; gap: var(--wf-space-2xs); min-width: var(--wf-size-control-height); min-height: var(--wf-size-control-height); padding: 0 var(--wf-space-xs); }
+.wf-layout-inspector__minimized-selection { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .wf-layout-inspector__identity { display: grid; min-width: 0; gap: var(--wf-space-2xs); }
 .wf-layout-inspector__identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wf-layout-inspector__identity small, .wf-layout-inspector__status, .wf-layout-inspector__mode, .wf-layout-inspector__empty, .wf-layout-inspector__constraint header span { color: var(--wf-color-text-muted); font-size: var(--wf-font-size-xs); }
@@ -394,5 +573,5 @@ defineExpose({ cancelEdit })
 .wf-layout-inspector dd { margin: 0; }
 .wf-layout-inspector output { color: var(--wf-color-text-muted); }
 .wf-layout-inspector__empty-state { display: grid; min-height: 120px; place-items: center; color: var(--wf-color-text-muted); text-align: center; }
-@media (max-width: 720px) { .wf-layout-inspector { width: min(360px, calc(100% - var(--wf-space-md))); } }
+@media (max-width: 720px) { .wf-layout-inspector { width: min(360px, calc(100% - var(--wf-space-md))); } .wf-layout-inspector__minimized-label { display: none; } }
 </style>
