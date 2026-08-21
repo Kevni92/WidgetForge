@@ -216,6 +216,26 @@ describe('Fullscreen Playground App', () => {
     }
   })
 
+  it('projects dock and nested pane selection into the Object and Styles inspector tabs', async () => {
+    const wrapper = mount(App, { attachTo: document.body })
+    await wrapper.get('[data-demo-action="edit"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    await wrapper.get('[data-dock-id="workspace-top"]').trigger('pointerdown')
+    await wrapper.vm.$nextTick()
+    const inspector = wrapper.get('[data-workspace-selection-actions]')
+    expect(inspector.get('[data-layout-inspector-selection-kind]').text()).toContain('DOCK · workspace-top')
+    await inspector.get('[data-layout-inspector-tab="styles"]').trigger('click')
+    expect(inspector.find('[data-layout-inspector-styles]').exists()).toBe(true)
+
+    await wrapper.get('[data-pane-id="operations-stack"]').trigger('pointerdown')
+    await wrapper.vm.$nextTick()
+    expect(inspector.get('[data-layout-inspector-selection-kind]').text()).toContain('PANE · operations-stack')
+    await inspector.get('[data-layout-inspector-tab="object"]').trigger('click')
+    expect(inspector.find('[data-layout-inspector-pane-object]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('switches Default, Trading and Operations presets without resetting shared domain data', async () => {
     const wrapper = mount(App)
     vi.advanceTimersByTime(1_200)

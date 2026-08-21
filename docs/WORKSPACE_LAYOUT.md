@@ -43,6 +43,14 @@ Beim Verlassen des Edit Mode werden die `data-layout-selection`-Marker entfernt.
 
 Der Layout Inspector ist Editor-Chrome außerhalb der Floating-Layoutfläche. Sein UI-State (`docked`, `floating` oder `minimized` sowie die Floating-Position) wird deshalb separat als laufender `WorkspaceHost`-Session-State gehalten. Inspector-Bewegungen und Moduswechsel werden nicht in Workspace-/Window-History, Geometrie oder Layout-Snapshots geschrieben; beim Wechsel der Auswahl bleibt dieser State erhalten.
 
+## Object- und Styles-Inspector
+
+Im Edit Mode projiziert der Layout Inspector die aktuelle Host-Auswahl in zwei semantische Tabs: `Object` zeigt die Eigenschaften des ausgewählten Windows, Docks oder Panes, `Styles` bearbeitet den gemeinsamen `LayoutSurfaceStyle`. Die Tabs sind als WAI-ARIA-Tablist umgesetzt und per `ArrowLeft`/`ArrowRight` sowie `Home`/`End` bedienbar. Der Tab-Zustand ist reiner Inspector-UI-State und verändert weder Workspace-Auswahl noch Layout.
+
+Die Auswahl bleibt im `WorkspaceEditController` getrennt nach Window, Dock und Pane. Jede Auswahl enthält eine stabile Host-Art und ID; bei einem Pane kommen Owner-Art und Owner-ID hinzu. Der Inspector besitzt diese Auswahl nicht selbst, sondern erhält sie als Projektion und gibt Style-Intents an den `WorkspaceHost` zurück. Dadurch können Window-, Dock- und Pane-Styles über dieselbe UI geändert werden, ohne Widgets oder konkrete Spieldomänen zu kennen.
+
+Style-Eingaben werden während der Eingabe live angewendet. Der `WorkspaceHost` öffnet dafür eine gemeinsame History-Transaktion; Blur/Enter beziehungsweise ein direktes Toggle/Select committen genau eine Änderung, Escape verwirft die gesamte Vorschau. Das gilt auch für Docks und verschachtelte Panes. Gesperrte Hosts bleiben im Edit Mode für Style-Änderungen auswählbar; die temporäre Editor-Outline bleibt dabei unabhängig vom produktiven Surface-Style.
+
 ## Persistente Surface-Styles
 
 `LayoutSurfaceStyle` ist das gemeinsame, serialisierbare Flächenmodell für Windows, Docks und Panes. Es beschreibt ausschließlich die produktive Oberfläche: Hintergrund (`theme`, `transparent` oder `custom`), vier unabhängig konfigurierbare Rahmen, Radius, vierseitiges Padding, Opazität und Schatten (`none`, `sm`, `md`, `lg`). Arbiträre CSS-Strings gehören nicht zum Modell.

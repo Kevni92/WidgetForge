@@ -321,6 +321,33 @@ describe('WorkspaceHost edit mode', () => {
     wrapper.unmount()
   })
 
+  it('selects a dock surface for Dock editing and commits style previews as one history entry', async () => {
+    const registry = createWidgetRegistry([defineWidget({ id: 'dock.widget', title: 'Dock', component: Widget })])
+    const windows = createWindowManager(registry)
+    const docks = createDockManager(registry)
+    const edit = createWorkspaceEditController({ mode: 'edit' })
+    docks.add({ id: 'topnav', position: 'top', pane: createWidgetPane({ id: 'topnav-pane', widgetId: 'dock.widget' }), thickness: 72 })
+    const history = createWorkspaceHistory(windows, docks)
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit, history }, attachTo: document.body })
+
+    await wrapper.get('[data-dock-id="topnav"]').trigger('pointerdown')
+    await nextTick()
+    expect(edit.state.dockSelection).toEqual({ id: 'topnav' })
+    expect(wrapper.get('[data-layout-inspector-selection-kind]').text()).toContain('DOCK · topnav')
+
+    await wrapper.get('[data-layout-inspector-tab="styles"]').trigger('click')
+    await wrapper.get('[data-style-opacity]').setValue('60')
+    await wrapper.get('[data-style-opacity]').setValue('40')
+    expect(docks.get('topnav').surfaceStyle?.opacity).toBe(0.4)
+    expect(history.state.undoDepth).toBe(0)
+    await wrapper.get('[data-style-opacity]').trigger('blur')
+    expect(history.state.undoDepth).toBe(1)
+    expect(history.undo()).toBe(true)
+    expect(docks.get('topnav').surfaceStyle).toBeUndefined()
+    history.dispose()
+    wrapper.unmount()
+  })
+
   it('shows a window inspector with identity, geometry, state and a direct layout action', async () => {
     const { registry, windows, docks, edit } = setup('edit')
     const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })

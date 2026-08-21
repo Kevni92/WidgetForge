@@ -192,6 +192,24 @@ test('keeps locked edge surfaces visually stable in normal mode and overlays sel
   await expect(frame(page, 'left-menu')).not.toHaveAttribute('data-layout-selection')
 })
 
+test('selects the Topnav dock and Left Menu window through the unified inspector selection', async ({ page }) => {
+  await loadFixture(page)
+  await enterEditMode(page)
+
+  await page.locator('[data-dock-id="topnav"]').dispatchEvent('pointerdown')
+  await expect(page.locator('[data-layout-inspector-selection-kind]')).toHaveText('DOCK · topnav')
+  await page.locator('[data-layout-inspector-tab="styles"]').click()
+  await expect(page.locator('[data-layout-inspector-styles]')).toBeVisible()
+  await page.locator('[data-style-background-mode]').selectOption('transparent')
+  await expect(page.locator('[data-dock-id="topnav"]')).toHaveAttribute('style', /--wf-surface-background: transparent/)
+
+  await selectWindow(page, 'left-menu')
+  await expect(page.locator('[data-layout-inspector-selection-kind]')).toHaveText('WINDOW · left-menu')
+  await expect(page.locator('[data-layout-inspector-styles]')).toBeVisible()
+  await page.locator('[data-layout-inspector-tab="object"]').click()
+  await expect(page.locator('[data-layout-inspector-object="window"]')).toBeVisible()
+})
+
 test('moves, minimizes, restores, and clamps the editor inspector without changing workspace geometry', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 768 })
   await loadFixture(page)

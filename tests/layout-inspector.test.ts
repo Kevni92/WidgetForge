@@ -1,6 +1,9 @@
 import { defineComponent, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { createDockManager } from '../src/core/dock-manager'
+import { createPaneInspectorSelection, createDockInspectorSelection, createWindowInspectorSelection } from '../src/core/layout-inspector'
+import { createWidgetPane } from '../src/core/pane'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
@@ -27,6 +30,74 @@ describe('LayoutInspector', () => {
     const wrapper = mount(LayoutInspector, { props: { window: null, windows: windows.list(), container: { width: 800, height: 600 } } })
     expect(wrapper.get('[data-layout-inspector-empty]').text()).toContain('Select a window')
     expect(wrapper.find('[data-window-geometry]').exists()).toBe(false)
+  })
+
+  it('adapts window, dock and pane hosts to stable inspector identities', () => {
+    const { registry, windows } = setup()
+    const window = windows.get('source')
+    const dockManager = createDockManager(registry)
+    dockManager.add({ id: 'topnav', position: 'top', thickness: 48, pane: createWidgetPane({ id: 'topnav-root', widgetId: 'inspector.widget' }) })
+    const dock = dockManager.get('topnav')
+    const pane = createWidgetPane({ id: 'market.tabs', widgetId: 'inspector.widget' })
+
+    expect(createWindowInspectorSelection(window)).toMatchObject({ kind: 'window', id: 'source', label: 'Inspector' })
+    expect(createDockInspectorSelection(dock)).toMatchObject({ kind: 'dock', id: 'topnav', label: 'topnav' })
+    expect(createPaneInspectorSelection(pane, 'dock', 'topnav')).toMatchObject({ kind: 'pane', id: 'market.tabs', label: 'market.tabs', ownerKind: 'dock', ownerId: 'topnav' })
+  })
+
+  it('keeps Object as the default tab and exposes keyboard-accessible Styles editing', async () => {
+    const { windows } = setup()
+    windows.setOptions('source', {
+      surfaceStyle: {
+        background: { mode: 'custom', color: '#123456' },
+        border: { top: { enabled: true, width: 1, color: '#abcdef' } },
+        padding: { top: 4, right: 4, bottom: 4, left: 4 },
+        borderRadius: 6,
+        opacity: 0.75,
+        shadow: 'sm',
+      },
+    }, 'api')
+    const selection = createWindowInspectorSelection(windows.get('source'))
+    const wrapper = mount(LayoutInspector, { props: { window: windows.get('source'), selection, windows: windows.list(), container: { width: 800, height: 600 } } })
+
+    expect(wrapper.get('[data-layout-inspector-tab="object"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.find('[data-layout-inspector-object="window"]').exists()).toBe(true)
+    await wrapper.get('[data-layout-inspector-tabs]').trigger('keydown', { key: 'ArrowRight' })
+    await nextTick()
+    expect(wrapper.get('[data-layout-inspector-tab="styles"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-layout-inspector-tab="styles"]').attributes('tabindex')).toBe('0')
+    expect(wrapper.find('[data-layout-inspector-styles]').exists()).toBe(true)
+    expect(wrapper.get('[data-style-background-mode]').element).toHaveProperty('value', 'custom')
+
+    await wrapper.get('[data-style-border-side="right"]').trigger('click')
+    expect(wrapper.emitted('styleSave')?.at(-1)?.[0]).toMatchObject({ border: { right: { enabled: true } } })
+    await wrapper.get('[data-style-opacity]').setValue('50')
+    expect(wrapper.emitted('stylePreview')?.at(-1)?.[0]).toMatchObject({ opacity: 0.5 })
+    await wrapper.get('[data-style-opacity]').trigger('blur')
+    expect(wrapper.emitted('styleSave')?.at(-1)?.[0]).toMatchObject({ opacity: 0.5 })
+
+    await wrapper.get('[data-style-padding-linked]').trigger('click')
+    await wrapper.get('[data-style-padding-side="left"]').setValue('12')
+    await wrapper.get('[data-style-padding-side="left"]').trigger('blur')
+    expect(wrapper.emitted('styleSave')?.at(-1)?.[0]).toMatchObject({ padding: { top: 4, right: 4, bottom: 4, left: 12 } })
+    await wrapper.get('[data-style-reset]').trigger('click')
+    expect(wrapper.emitted('styleSave')?.at(-1)?.[0]).toBeUndefined()
+  })
+
+  it('renders dock and pane object projections with explicit host headers', () => {
+    const { registry, windows } = setup()
+    const dockManager = createDockManager(registry)
+    dockManager.add({ id: 'topnav', position: 'top', thickness: 48, pane: createWidgetPane({ id: 'topnav-root', widgetId: 'inspector.widget' }) })
+    const dock = dockManager.get('topnav')
+    const dockWrapper = mount(LayoutInspector, { props: { window: null, selection: createDockInspectorSelection(dock), windows: windows.list(), container: { width: 800, height: 600 } } })
+    expect(dockWrapper.get('[data-layout-inspector-selection-kind]').text()).toContain('DOCK · topnav')
+    expect(dockWrapper.get('[data-layout-inspector-dock-object]').text()).toContain('48 px')
+
+    const paneWrapper = mount(LayoutInspector, { props: { window: null, selection: createPaneInspectorSelection(dock.rootPane, 'dock', dock.id), windows: windows.list(), container: { width: 800, height: 600 } } })
+    expect(paneWrapper.get('[data-layout-inspector-selection-kind]').text()).toContain('PANE · topnav-root')
+    expect(paneWrapper.get('[data-layout-inspector-pane-object]').text()).toContain('widget')
+    dockWrapper.unmount()
+    paneWrapper.unmount()
   })
 
   it('marks stretch size as calculated and emits a structured distance edit', async () => {

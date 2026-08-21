@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { markRaw, onBeforeUnmount, shallowRef } from 'vue'
-import { WorkspaceHost, createDockManager, createWorkspaceEditController, createWorkspaceHistory, createWindowManager, restoreWorkspace, serializeWorkspace } from 'widgetforge'
+import { WorkspaceHost, createDockManager, createWidgetPane, createWorkspaceEditController, createWorkspaceHistory, createWindowManager, restoreWorkspace, serializeWorkspace } from 'widgetforge'
 import { playgroundWidgetRegistry } from './playground-widgets'
 
 const STORAGE_KEY = 'widgetforge.playground.layout-acceptance.v1'
@@ -9,6 +9,7 @@ const docks = markRaw(createDockManager(playgroundWidgetRegistry))
 const edit = markRaw(createWorkspaceEditController())
 
 function seedWorkspace(): void {
+  docks.add({ id: 'topnav', position: 'top', thickness: 54, minThickness: 48, maxThickness: 72, resizable: true, pane: createWidgetPane({ id: 'topnav-pane', widgetId: 'demo.live-metric', parameters: { resourceId: 'grid-power' } }) })
   const rightX = Math.max(530, window.innerWidth - 198)
   const centerWidth = Math.min(620, Math.max(260, rightX - 210))
   windows.open({
