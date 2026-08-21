@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { convertWindowLayoutValue, createAbsoluteWindowLayoutSpec, createWindowLayoutConstraintDraft, createWindowLayoutSpecFromSnap, deriveWindowLayoutAxisMode, deriveWindowLayoutStatus, findWindowLayoutDependents, removeWindowLayoutConstraint, resolveWindowLayoutSpecs, setWindowLayoutConstraint, validateWindowLayoutReferences, WindowLayoutValidationError, type ResponsiveLayoutWindow } from '../src/core/window-layout'
+import { convertWindowLayoutValue, createAbsoluteWindowLayoutSpec, createWindowLayoutConstraintDraft, createWindowLayoutSpecFromSnap, deriveWindowLayoutAxisMode, deriveWindowLayoutStatus, findWindowLayoutDependents, removeWindowLayoutConstraint, resizeWindowLayoutSpec, resolveWindowLayoutSpecs, setWindowLayoutConstraint, validateWindowLayoutReferences, WindowLayoutValidationError, type ResponsiveLayoutWindow } from '../src/core/window-layout'
 import type { WindowGeometry } from '../src/core/window-geometry'
 
 function windowState(instanceId: string, geometry: WindowGeometry, layoutSpec?: ResponsiveLayoutWindow['layoutSpec']): ResponsiveLayoutWindow {
@@ -154,5 +154,42 @@ describe('responsive window layout resolver', () => {
     const forward = createWindowLayoutConstraintDraft([source, target], 'source', 'right', { kind: 'window', instanceId: 'target', edge: 'left' })
     expect(forward.horizontal.end?.target).toEqual({ kind: 'window', instanceId: 'target', edge: 'left' })
     expect(() => createWindowLayoutConstraintDraft([{ ...source, layoutSpec: forward }, target], 'target', 'left', { kind: 'window', instanceId: 'source', edge: 'right' })).toThrowError(/dependency cycle/)
+  })
+
+  it('maps constraint-aware resize gestures for every horizontal axis mode', () => {
+    const container = { width: 800, height: 600 }
+    const constraints = { minSize: { width: 100, height: 80 }, maxSize: { width: 500, height: 400 } }
+    const startSpec = { horizontal: { start: { target: { kind: 'workspace' as const, edge: 'left' as const }, offset: { value: 20, unit: 'px' as const } }, size: { value: 200, unit: 'px' as const } }, vertical: { start: { target: { kind: 'workspace' as const, edge: 'top' as const } }, size: { value: 100, unit: 'px' as const } } }
+    const startGeometry = { position: { x: 20, y: 0 }, size: { width: 200, height: 100 } }
+    expect(resolveWindowLayoutSpecs([{ ...windowState('start', startGeometry, resizeWindowLayoutSpec(startSpec, startGeometry, 'right', 40, container, constraints)) }], container).get('start')).toEqual({ position: { x: 20, y: 0 }, size: { width: 240, height: 100 } })
+    expect(resolveWindowLayoutSpecs([{ ...windowState('start', startGeometry, resizeWindowLayoutSpec(startSpec, startGeometry, 'left', 30, container, constraints)) }], container).get('start')).toEqual({ position: { x: 50, y: 0 }, size: { width: 170, height: 100 } })
+    const clampedStart = resizeWindowLayoutSpec(startSpec, startGeometry, 'left', 1000, container, constraints)
+    expect(resolveWindowLayoutSpecs([{ ...windowState('start', startGeometry, clampedStart) }], container).get('start')).toEqual({ position: { x: 120, y: 0 }, size: { width: 100, height: 100 } })
+
+    const endSpec = { horizontal: { end: { target: { kind: 'workspace' as const, edge: 'right' as const }, offset: { value: -20, unit: 'px' as const } }, size: { value: 200, unit: 'px' as const } }, vertical: startSpec.vertical }
+    const endGeometry = { position: { x: 580, y: 0 }, size: { width: 200, height: 100 } }
+    expect(resolveWindowLayoutSpecs([{ ...windowState('end', endGeometry, resizeWindowLayoutSpec(endSpec, endGeometry, 'left', -30, container, constraints)) }], container).get('end')).toEqual({ position: { x: 550, y: 0 }, size: { width: 230, height: 100 } })
+    expect(resolveWindowLayoutSpecs([{ ...windowState('end', endGeometry, resizeWindowLayoutSpec(endSpec, endGeometry, 'right', 40, container, constraints)) }], container).get('end')).toEqual({ position: { x: 580, y: 0 }, size: { width: 240, height: 100 } })
+
+    const stretchSpec = { horizontal: { start: startSpec.horizontal.start, end: endSpec.horizontal.end }, vertical: startSpec.vertical }
+    const stretchGeometry = { position: { x: 20, y: 0 }, size: { width: 760, height: 100 } }
+    const leftStretch = resizeWindowLayoutSpec(stretchSpec, stretchGeometry, 'left', 30, container, constraints)
+    expect(leftStretch.horizontal.size).toBeUndefined()
+    expect(resolveWindowLayoutSpecs([{ ...windowState('stretch', stretchGeometry, leftStretch) }], container).get('stretch')).toEqual({ position: { x: 50, y: 0 }, size: { width: 730, height: 100 } })
+    const rightStretch = resizeWindowLayoutSpec(stretchSpec, stretchGeometry, 'right', -30, container, constraints)
+    expect(resolveWindowLayoutSpecs([{ ...windowState('stretch', stretchGeometry, rightStretch) }], container).get('stretch')).toEqual({ position: { x: 20, y: 0 }, size: { width: 730, height: 100 } })
+  })
+
+  it('preserves percent units and applies vertical offset/size changes', () => {
+    const container = { width: 800, height: 600 }
+    const constraints = { minSize: { width: 20, height: 20 }, maxSize: null }
+    const percentSpec = { horizontal: { start: { target: { kind: 'workspace' as const, edge: 'left' as const }, offset: { value: 10, unit: 'percent' as const } }, size: { value: 25, unit: 'percent' as const } }, vertical: { start: { target: { kind: 'workspace' as const, edge: 'top' as const }, offset: { value: 10, unit: 'percent' as const } }, size: { value: 100, unit: 'px' as const } } }
+    const geometry = { position: { x: 80, y: 60 }, size: { width: 200, height: 100 } }
+    const widthDraft = resizeWindowLayoutSpec(percentSpec, geometry, 'right', 40, container, constraints)
+    expect(widthDraft.horizontal.size).toEqual({ value: 30, unit: 'percent' })
+    const heightDraft = resizeWindowLayoutSpec(percentSpec, geometry, 'top', 20, container, constraints)
+    expect(heightDraft.vertical.start?.offset).toEqual({ value: 13.333333333333334, unit: 'percent' })
+    expect(heightDraft.vertical.size).toEqual({ value: 80, unit: 'px' })
+    expect(resolveWindowLayoutSpecs([{ ...windowState('percent', geometry, heightDraft) }], container).get('percent')).toEqual({ position: { x: 80, y: 80 }, size: { width: 200, height: 80 } })
   })
 })

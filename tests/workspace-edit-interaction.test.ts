@@ -5,6 +5,7 @@ import { createDockManager } from '../src/core/dock-manager'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
+import { createWorkspaceHistory } from '../src/core/workspace-history'
 import { createWorkspaceEditController } from '../src/core/workspace-edit'
 import WorkspaceHost from '../src/vue/WorkspaceHost.vue'
 
@@ -105,6 +106,85 @@ describe('WorkspaceHost edit mode', () => {
     await nextTick()
     expect(windows.get('window').layoutSpec?.horizontal).toEqual({ start: { target: { kind: 'workspace', edge: 'left' }, offset: { value: 620, unit: 'px' } }, size: { value: 300, unit: 'px' } })
     expect(wrapper.find('[data-window-constraint-remove]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('resizes the selected layout frame through separate edge and corner zones with one commit', async () => {
+    const { registry, windows, docks, edit } = setup('edit')
+    const history = createWorkspaceHistory(windows, docks)
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit, history }, attachTo: document.body })
+    await wrapper.get('.wf-pane-host[data-pane-id="window.root"]').trigger('pointerdown')
+    await nextTick()
+    expect(wrapper.findAll('[data-window-layout-resize-handle]')).toHaveLength(8)
+    expect(wrapper.find('[data-window-constraint-handle="right"]').exists()).toBe(true)
+    const before = windows.get('window')
+    const resizeHandle = wrapper.get('[data-window-layout-resize-handle="right"]').element
+    pointer(resizeHandle, 'pointerdown', 320, 130)
+    globalThis.window.dispatchEvent(new MouseEvent('pointermove', { clientX: 360, clientY: 130, bubbles: true }))
+    await nextTick()
+    expect(wrapper.find('[data-layout-preview-overlay]').exists()).toBe(true)
+    expect(windows.get('window').geometry).toEqual(before.geometry)
+    expect(windows.get('window').layoutSpec).toBeUndefined()
+    globalThis.window.dispatchEvent(new MouseEvent('pointerup', { clientX: 360, clientY: 130, bubbles: true }))
+    await nextTick()
+    expect(windows.get('window').geometry.size.width).toBe(340)
+    expect(windows.get('window').layoutSpecState).toBe('active')
+    expect(history.state.undoDepth).toBe(1)
+    expect(wrapper.find('[data-layout-preview-overlay]').exists()).toBe(false)
+    expect(history.undo()).toBe(true)
+    expect(windows.get('window').layoutSpec).toBeUndefined()
+    expect(windows.get('window').geometry).toEqual(before.geometry)
+    expect(history.redo()).toBe(true)
+    expect(windows.get('window').layoutSpecState).toBe('active')
+    wrapper.unmount()
+    history.dispose()
+  })
+
+  it('keeps responsive targets and units while previewing a constrained resize', async () => {
+    const { registry, windows, docks, edit } = setup('edit')
+    windows.open({ widgetId: 'edit.widget', instanceId: 'target', position: { x: 400, y: 30 }, size: { width: 220, height: 180 } })
+    windows.setLayoutSpec('window', {
+      horizontal: { start: { target: { kind: 'workspace', edge: 'left' } }, size: { value: 25, unit: 'percent' } },
+      vertical: { start: { target: { kind: 'workspace', edge: 'top' } }, size: { value: 200, unit: 'px' } },
+    }, { width: 800, height: 600 }, 'api', 'active')
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+    await wrapper.get('.wf-pane-host[data-pane-id="window.root"]').trigger('pointerdown')
+    await nextTick()
+    const before = windows.get('window')
+    pointer(wrapper.get('[data-window-layout-resize-handle="right"]').element, 'pointerdown', 220, 130)
+    globalThis.window.dispatchEvent(new MouseEvent('pointermove', { clientX: 300, clientY: 130, bubbles: true }))
+    await nextTick()
+    expect(wrapper.find('[data-window-layout-relation]').exists()).toBe(true)
+    expect(windows.get('window').layoutSpec).toEqual(before.layoutSpec)
+    globalThis.window.dispatchEvent(new MouseEvent('pointerup', { clientX: 300, clientY: 130, bubbles: true }))
+    await nextTick()
+    expect(windows.get('window').layoutSpec?.horizontal.start?.target).toEqual({ kind: 'workspace', edge: 'left' })
+    expect(windows.get('window').layoutSpec?.horizontal.size).toEqual({ value: 35, unit: 'percent' })
+    wrapper.unmount()
+  })
+
+  it('allows editor resize for locked windows and rolls back on Escape', async () => {
+    const { registry, windows, docks, edit } = setup('edit')
+    windows.lockWindow('window', 'api')
+    const wrapper = mount(WorkspaceHost, { props: { windows, docks, registry, edit }, attachTo: document.body })
+    await wrapper.get('.wf-window-frame[data-window-instance-id="window"]').trigger('pointerdown')
+    await nextTick()
+    expect(wrapper.findAll('[data-window-layout-resize-handle]')).toHaveLength(8)
+    const before = windows.get('window')
+    pointer(wrapper.get('[data-window-layout-resize-handle="bottom-right"]').element, 'pointerdown', 320, 230)
+    globalThis.window.dispatchEvent(new MouseEvent('pointermove', { clientX: 380, clientY: 290, bubbles: true }))
+    await nextTick()
+    expect(wrapper.find('[data-layout-preview-overlay]').exists()).toBe(true)
+    expect(windows.get('window').geometry).toEqual(before.geometry)
+    globalThis.window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(wrapper.find('[data-layout-preview-overlay]').exists()).toBe(false)
+    expect(windows.get('window').geometry).toEqual(before.geometry)
+    expect(windows.get('window').layoutSpec).toEqual(before.layoutSpec)
+    expect(windows.get('window').layoutLocked).toBe(true)
+    edit.setMode('normal')
+    await nextTick()
+    expect(wrapper.find('[data-window-layout-resize-handle]').exists()).toBe(false)
     wrapper.unmount()
   })
 
