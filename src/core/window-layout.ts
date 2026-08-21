@@ -336,10 +336,11 @@ export function setWindowLayoutConstraint(
   geometry: WindowGeometry,
   sourceEdge: WindowLayoutEdge,
   target: WindowLayoutTarget,
+  offset: WindowLayoutLength = { value: 0, unit: 'px' },
 ): WindowLayoutSpec {
   const axis = axisForEdge(sourceEdge)
   const sourceIsStart = sourceEdge === 'left' || sourceEdge === 'top'
-  const anchor: WindowLayoutAnchor = { target: { ...target }, offset: { value: 0, unit: 'px' } }
+  const anchor: WindowLayoutAnchor = { target: { ...target }, offset: cloneLength(offset) }
   const currentAxis = currentSpec
     ? cloneAxis(axis === 'horizontal' ? currentSpec.horizontal : currentSpec.vertical)
     : null
