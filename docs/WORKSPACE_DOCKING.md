@@ -22,16 +22,11 @@ Die Drop-Erkennung und Preview-Geometrie sind pure Core-Funktionen. Die Vue-Schi
 
 Während eines normalen Window-Drags prüft `WindowManagerHost` andere sichtbare Windows unter dem Pointer. Ein gültiges Ziel zeigt eine Drop-Preview. Beim Pointer-Up wird der Root-Pane des Quellfensters in den Zielbaum übernommen und das Quellfenster geschlossen. Snap und Window-Docking sind gegenseitig exklusiv; ein aktives Window-Drop-Ziel hat Vorrang vor Edge-Snap.
 
-## Floating Window an Workspace-Kante verankern
+## Workspace-Kanten und Docks
 
-Ein normales oder Utility-Window kann über das generische Window-Chrome an eine der vier Workspace-Kanten verankert werden. Die Aktion ist in einem gelockten Workspace sowie für Modal- und Overlay-Rollen nicht verfügbar. Die Auswahl erzeugt einen normalen `Dock` mit dem unveränderten Root-Pane; es gibt keinen zweiten Navbar-/Sidebar-State.
+Floating Windows werden im Layout Edit Mode über Workspace-Edge-Constraints an Kanten ausgerichtet. Diese Constraints bleiben responsive Window-Layout und erzeugen keinen Dock-State. Die normale Window-Chrome enthält deshalb keinen Befehl zur Umwandlung eines Floating Windows in ein Dock.
 
-- `top` und `bottom` übernehmen die Fensterhöhe als Dock-Dicke, `left` und `right` die Fensterbreite,
-- Fenster-Min-/Max-Constraints werden als Dock-Min-/Max-Dicke übernommen,
-- mehrere Docks an derselben Kante werden deterministisch in Registrierungsreihenfolge gestapelt,
-- der Dock-State enthält die serialisierbaren Rückkehrdaten des ursprünglichen Fensters.
-
-`anchorWindowToDock()` und `detachDockToWindow()` validieren jeweils den vollständigen Workspace-Snapshot und rollen bei einem Fehler zurück. `WorkspaceHost` umschließt beide Aktionen mit genau einer History-Transaktion. Beim Anchoring verschwinden Window-Move, Resize und Window-Chrome; im permanenten Edit-Mode bietet das Kontextmenü am vollständigen Dock-Root den Rückweg zum Floating Window an. Pane-IDs und Widget-`instanceId`s bleiben dabei erhalten. Persistierte Docks können deshalb auch nach einem Reload wieder in ihr ursprüngliches Fenster zurückgeführt werden.
+Ein `Dock` wird ausschließlich als explizite strukturelle Workspace-Fläche registriert. Docks haben keinen Window-Fokus oder Window-Chrome und behalten ihren Root-Pane sowie ihre Resize-/Persistenzregeln. Der produktive Rückweg eines vollständigen Docks zum Floating Window bleibt als `detachDockToWindow()` beziehungsweise als Dock-Kontextmenü im permanenten Edit Mode verfügbar. Dabei bleiben Pane-IDs und Widget-`instanceId`s erhalten.
 
 ## Pane-Edit-Mode
 

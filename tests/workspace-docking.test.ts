@@ -5,9 +5,8 @@ import { createDockManager } from '../src/core/dock-manager'
 import { defineWidget } from '../src/core/widget'
 import { createWidgetRegistry } from '../src/core/widget-registry'
 import { createWindowManager } from '../src/core/window-manager'
-import { captureWorkspace, restoreWorkspace, serializeWorkspace } from '../src/core/workspace'
+import { defaultWindowOptions } from '../src/core/window-options'
 import {
-  anchorWindowToDock,
   detachDockToWindow,
   detectWorkspaceDropZone,
   dockWindowIntoWindow,
@@ -78,66 +77,17 @@ describe('workspace docking core', () => {
     expect(findPane(result.rootPane, 'window-split')?.kind).toBe('split')
   })
 
-  it.each(['top', 'bottom', 'left', 'right'] as const)('anchors and detaches the same window pane at the %s edge', (position) => {
+  it('detaches an explicitly registered dock to a floating window and preserves its pane', () => {
     const manager = createWindowManager(registry)
     const docks = createDockManager(registry)
-    const opened = manager.openPane({ pane: leaf(`anchor-${position}`), instanceId: `anchor-${position}`, title: 'Anchorable', position: { x: 42, y: 36 }, size: { width: 500, height: 260 }, minSize: { width: 240, height: 180 }, maxSize: { width: 600, height: 300 } })
-    const paneId = opened.rootPane.id
-    const widgetInstanceId = opened.rootPane.kind === 'widget' ? opened.rootPane.instanceId : null
+    const pane = leaf('registered-dock')
+    docks.add({ id: 'registered-dock', position: 'right', pane, thickness: 220, restoreWindow: { instanceId: 'restored-window', title: 'Restored', geometry: { position: { x: 42, y: 36 }, size: { width: 500, height: 260 } }, constraints: { minSize: { width: 240, height: 180 }, maxSize: { width: 600, height: 300 } }, options: { ...defaultWindowOptions } } })
 
-    const dock = anchorWindowToDock(manager, docks, { instanceId: opened.instanceId, position })
-    expect(manager.list()).toEqual([])
-    expect(dock.position).toBe(position)
-    expect(dock.thickness).toBe(position === 'top' || position === 'bottom' ? 260 : 500)
-    expect(dock.minThickness).toBe(position === 'top' || position === 'bottom' ? 180 : 240)
-    expect(dock.maxThickness).toBe(position === 'top' || position === 'bottom' ? 300 : 600)
-    expect(dock.rootPane.id).toBe(paneId)
-    expect(dock.rootPane.kind === 'widget' ? dock.rootPane.instanceId : null).toBe(widgetInstanceId)
-
-    const detached = detachDockToWindow(manager, docks, { dockId: dock.id })
+    const detached = detachDockToWindow(manager, docks, { dockId: 'registered-dock' })
     expect(docks.list()).toEqual([])
-    expect(detached.instanceId).toBe(opened.instanceId)
-    expect(detached.title).toBe('Anchorable')
-    expect(detached.geometry).toEqual(opened.geometry)
-    expect(detached.rootPane.id).toBe(paneId)
-    expect(detached.rootPane.kind === 'widget' ? detached.rootPane.instanceId : null).toBe(widgetInstanceId)
-  })
-
-  it('uses deterministic dock ids and persists the floating restore metadata', () => {
-    const manager = createWindowManager(registry)
-    const docks = createDockManager(registry)
-    docks.add({ id: 'anchor-window-dock', position: 'top', pane: leaf('existing'), thickness: 32 })
-    manager.openPane({ pane: leaf('anchor-window'), instanceId: 'anchor-window', title: 'Persist me', size: { width: 410, height: 220 } })
-
-    const dock = anchorWindowToDock(manager, docks, { instanceId: 'anchor-window', position: 'bottom' })
-    expect(dock.id).toBe('anchor-window-dock-2')
-    const serialized = serializeWorkspace(manager, docks)
-    const target = createWindowManager(registry)
-    const targetDocks = createDockManager(registry)
-    expect(restoreWorkspace(target, serialized, targetDocks).valid).toBe(true)
-    expect(targetDocks.get(dock.id).restoreWindow?.instanceId).toBe('anchor-window')
-    expect(captureWorkspace(target, targetDocks).docks.find((item) => item.id === dock.id)?.restoreWindow?.geometry.size).toEqual({ width: 410, height: 220 })
-  })
-
-  it('rejects modal windows before changing workspace state', () => {
-    const manager = createWindowManager(registry)
-    const docks = createDockManager(registry)
-    manager.open({ widgetId: 'dock.a', instanceId: 'modal-window', options: { role: 'modal' } })
-
-    expect(() => anchorWindowToDock(manager, docks, { instanceId: 'modal-window', position: 'top' })).toThrow(/role/)
-    expect(manager.list().map((window) => window.instanceId)).toEqual(['modal-window'])
-    expect(docks.list()).toEqual([])
-  })
-
-  it('rolls back when the source widget is not dockable', () => {
-    const onlyFloating = defineWidget({ id: 'dock.floating-only', title: 'Floating only', component: Widget, capabilities: { dockable: false } })
-    const localRegistry = createWidgetRegistry([onlyFloating])
-    const manager = createWindowManager(localRegistry)
-    const docks = createDockManager(localRegistry)
-    manager.open({ widgetId: onlyFloating.id, instanceId: 'floating-only' })
-
-    expect(() => anchorWindowToDock(manager, docks, { instanceId: 'floating-only', position: 'left' })).toThrow()
-    expect(manager.list().map((window) => window.instanceId)).toEqual(['floating-only'])
-    expect(docks.list()).toEqual([])
+    expect(detached.instanceId).toBe('restored-window')
+    expect(detached.title).toBe('Restored')
+    expect(detached.geometry).toEqual({ position: { x: 42, y: 36 }, size: { width: 500, height: 260 } })
+    expect(detached.rootPane.id).toBe('registered-dock')
   })
 })

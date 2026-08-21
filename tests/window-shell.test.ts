@@ -162,15 +162,18 @@ describe('WindowShell', () => {
     expect(shell.classes()).not.toContain('wf-window-shell--chrome-none')
   })
 
-  it('offers all four workspace edges through the generic dock action', async () => {
+  it('does not expose the removed window-to-dock action and keeps regular actions', async () => {
     const registry = createWidgetRegistry()
     const wrapper = mount(WindowShell, {
-      props: { registry, widgetId: 'dockable.widget', instanceId: 'dockable-window', title: 'Dockable', dockable: true },
+      props: { registry, widgetId: 'window-actions.widget', instanceId: 'window-actions', title: 'Window actions', minimizable: true, closable: true },
     })
 
-    await wrapper.get('.wf-window-shell__dock').trigger('click')
-    expect(wrapper.findAll('[data-window-dock-position]')).toHaveLength(4)
-    await wrapper.get('[data-window-dock-position="right"]').trigger('click')
-    expect(wrapper.emitted('dock')?.[0]).toEqual(['right'])
+    expect(wrapper.find('[aria-label="Anchor window to workspace"]').exists()).toBe(false)
+    expect(wrapper.find('.wf-window-shell__dock').exists()).toBe(false)
+    expect(wrapper.find('[data-window-dock-position]').exists()).toBe(false)
+    await wrapper.get('.wf-window-shell__minimize').trigger('click')
+    expect(wrapper.emitted('minimize')?.[0]?.[0]).toEqual({ instanceId: 'window-actions' })
+    await wrapper.get('.wf-window-shell__close').trigger('click')
+    expect(wrapper.emitted('close')?.[0]?.[0]).toEqual({ instanceId: 'window-actions' })
   })
 })
