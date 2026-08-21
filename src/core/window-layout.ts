@@ -362,6 +362,82 @@ export function setWindowLayoutConstraint(
     : { horizontal: base.horizontal, vertical: nextAxis }
 }
 
+function shiftLayoutAnchor(anchor: WindowLayoutAnchor, delta: number, available: number): WindowLayoutAnchor {
+  const offset = anchor.offset ?? { value: 0, unit: 'px' as const }
+  const convertedDelta = convertWindowLayoutValue(delta, 'px', offset.unit, available)
+  return { ...cloneAnchor(anchor), offset: { value: offset.value + convertedDelta, unit: offset.unit } }
+}
+
+function constrainedAxisSize(axis: WindowLayoutAxis, requested: number, geometry: WindowGeometry, constraints: WindowSizeConstraints): number {
+  const size = axis === 'horizontal' ? { width: requested, height: geometry.size.height } : { width: geometry.size.width, height: requested }
+  return axis === 'horizontal' ? constrainSize(size, constraints).width : constrainSize(size, constraints).height
+}
+
+function resizeLength(value: number, unit: WindowLayoutUnit, available: number): WindowLayoutLength {
+  return { value: convertWindowLayoutValue(value, 'px', unit, available), unit }
+}
+
+/**
+ * Map an editor resize gesture to the existing declarative layout contract.
+ * DOM geometry is deliberately not involved: callers provide the resolved
+ * geometry, and the returned spec can be resolved as a transient preview or
+ * committed as one layout operation.
+ */
+export function resizeWindowLayoutSpec(
+  currentSpec: WindowLayoutSpec,
+  geometry: WindowGeometry,
+  sourceEdge: WindowLayoutEdge,
+  delta: number,
+  container: WindowSize,
+  constraints: WindowSizeConstraints,
+): WindowLayoutSpec {
+  if (!Number.isFinite(delta)) throw new Error('layout resize delta must be finite')
+  const axis = axisForEdge(sourceEdge)
+  const available = axis === 'horizontal' ? container.width : container.height
+  if (!Number.isFinite(available) || available <= 0) throw new Error('layout resize requires a positive workspace axis')
+  const sourceIsStart = sourceEdge === 'left' || sourceEdge === 'top'
+  const currentAxis = cloneAxis(axis === 'horizontal' ? currentSpec.horizontal : currentSpec.vertical)
+  const mode = deriveWindowLayoutAxisMode(currentAxis)
+  const physicalSize = axis === 'horizontal' ? geometry.size.width : geometry.size.height
+  const sizeLength = currentAxis.size && currentAxis.size !== 'auto' ? currentAxis.size : { value: physicalSize, unit: 'px' as const }
+  const sizePixels = axisLength(sizeLength, available)
+  let nextAxis: WindowLayoutAxisSpec
+
+  if (mode === 'stretch') {
+    const anchor = sourceIsStart ? currentAxis.start : currentAxis.end
+    if (!anchor) throw new Error(`${axis} stretch resize requires both anchors`)
+    nextAxis = sourceIsStart
+      ? { start: shiftLayoutAnchor(anchor, delta, available), ...(currentAxis.end ? { end: cloneAnchor(currentAxis.end) } : {}) }
+      : { ...(currentAxis.start ? { start: cloneAnchor(currentAxis.start) } : {}), end: shiftLayoutAnchor(anchor, delta, available) }
+  } else if (mode === 'start-size') {
+    const anchor = currentAxis.start
+    if (!anchor) throw new Error(`${axis} start-size resize requires a start anchor`)
+    if (sourceIsStart) {
+      const nextSizePixels = constrainedAxisSize(axis, sizePixels - delta, geometry, constraints)
+      const appliedDelta = sizePixels - nextSizePixels
+      nextAxis = { start: shiftLayoutAnchor(anchor, appliedDelta, available), size: resizeLength(nextSizePixels, sizeLength.unit, available) }
+    } else {
+      const nextSizePixels = constrainedAxisSize(axis, sizePixels + delta, geometry, constraints)
+      nextAxis = { start: cloneAnchor(anchor), size: resizeLength(nextSizePixels, sizeLength.unit, available) }
+    }
+  } else {
+    const anchor = currentAxis.end
+    if (!anchor) throw new Error(`${axis} end-size resize requires an end anchor`)
+    if (sourceIsStart) {
+      const nextSizePixels = constrainedAxisSize(axis, sizePixels - delta, geometry, constraints)
+      nextAxis = { end: cloneAnchor(anchor), size: resizeLength(nextSizePixels, sizeLength.unit, available) }
+    } else {
+      const nextSizePixels = constrainedAxisSize(axis, sizePixels + delta, geometry, constraints)
+      const appliedDelta = nextSizePixels - sizePixels
+      nextAxis = { end: shiftLayoutAnchor(anchor, appliedDelta, available), size: resizeLength(nextSizePixels, sizeLength.unit, available) }
+    }
+  }
+
+  return axis === 'horizontal'
+    ? { horizontal: nextAxis, vertical: cloneAxis(currentSpec.vertical) }
+    : { horizontal: cloneAxis(currentSpec.horizontal), vertical: nextAxis }
+}
+
 /**
  * Remove one direct edge relationship while keeping the current physical
  * geometry representable by the remaining axis anchors.

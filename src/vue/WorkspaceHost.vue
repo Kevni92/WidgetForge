@@ -30,7 +30,7 @@ import type { CommandRegistry } from "../core/commands";
 import type { WidgetRegistry } from "../core/widget-registry";
 import type { WindowGeometry, WindowSize } from "../core/window-geometry";
 import type { WindowManager, WindowState } from "../core/window-manager";
-import { createAbsoluteWindowLayoutSpec, createWindowLayoutConstraintDraft, deriveWindowLayoutStatus, removeWindowLayoutConstraint, resolveWindowLayoutSpecs, type WindowLayoutEdge, type WindowLayoutStatus, type WindowLayoutTarget } from '../core/window-layout'
+import { createAbsoluteWindowLayoutSpec, createWindowLayoutConstraintDraft, deriveWindowLayoutStatus, removeWindowLayoutConstraint, resizeWindowLayoutSpec, resolveWindowLayoutSpecs, type WindowLayoutEdge, type WindowLayoutStatus, type WindowLayoutTarget } from '../core/window-layout'
 import {
   createPaneEditContextMenuItems,
   createWorkspaceEditController,
@@ -124,6 +124,7 @@ type PointerSessionKind =
   | "pane-resize"
   | "pane-drag"
   | "tab-reorder";
+type LayoutResizeHandle = WindowLayoutEdge | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 interface ConstraintDropTarget {
   readonly target: WindowLayoutTarget;
   readonly x: number;
@@ -142,6 +143,19 @@ interface ConstraintLinkState {
 }
 interface ConstraintKeyboardOption { readonly target: WindowLayoutTarget; readonly label: string }
 interface SelectedConstraint { readonly sourceInstanceId: string; readonly sourceEdge: WindowLayoutEdge; readonly targetId: string; readonly targetEdge: WindowLayoutEdge }
+interface LayoutResizeSession {
+  readonly sourceInstanceId: string;
+  readonly handle: LayoutResizeHandle;
+  readonly pointerId: number | undefined;
+  readonly captureTarget: HTMLElement;
+  readonly startX: number;
+  readonly startY: number;
+  readonly startGeometry: WindowGeometry;
+  readonly startSpec: ReturnType<typeof createAbsoluteWindowLayoutSpec>;
+  readonly container: WindowSize;
+  readonly started: boolean;
+  readonly preview: WindowLayoutDialogPreview | null;
+}
 interface HistoryPointerSession {
   readonly kind: PointerSessionKind;
   readonly pointerId: number | undefined;
@@ -173,13 +187,17 @@ const tabReorderPreview = shallowRef<TabReorderPreview | null>(null);
 const layoutDialogWindow = shallowRef<ReturnType<WindowManager['get']> | null>(null);
 const layoutPreview = shallowRef<WindowLayoutDialogPreview | null>(null);
 const constraintLink = shallowRef<ConstraintLinkState | null>(null);
+const layoutResizeSession = shallowRef<LayoutResizeSession | null>(null);
 const keyboardConstraintEdge = ref<WindowLayoutEdge | null>(null);
+const layoutResizeActive = ref(false);
 const selectedConstraint = shallowRef<SelectedConstraint | null>(null);
 const constraintEdges: readonly WindowLayoutEdge[] = ['top', 'right', 'bottom', 'left'];
+const layoutResizeHandles: readonly LayoutResizeHandle[] = ['top', 'right', 'bottom', 'left', 'top-left', 'top-right', 'bottom-right', 'bottom-left'];
 let disposeSize: (() => void) | null = null;
 let disposePaneDrag: (() => void) | null = null;
 let disposeTabReorder: (() => void) | null = null;
 let disposeConstraintLink: (() => void) | null = null;
+let disposeLayoutResize: (() => void) | null = null;
 let pointerSession: HistoryPointerSession | null = null;
 let dropSequence = 0;
 let suppressClick = false;
@@ -243,7 +261,7 @@ const layoutRelations = computed<readonly LayoutRelation[]>(() => {
     ]
     return anchors.flatMap(([sourceEdge, anchor]) => {
       if (!anchor) return []
-      if (anchor.target.kind === 'workspace' && (source.layoutSpecState !== 'active' || previewSource)) return []
+      if (anchor.target.kind === 'workspace' && (source.layoutSpecState !== 'active' || (previewSource && !layoutResizeActive.value))) return []
       const sourcePoint = edgePoint(sourceGeometry, sourceEdge)
       const targetPoint = anchor.target.kind === 'window'
         ? (() => {
@@ -287,6 +305,122 @@ function removeSelectedConstraint(): void {
   } catch {
     history?.cancelTransaction();
   }
+}
+
+function layoutResizeContainer(window: WindowState): WindowSize {
+  const known = windowManager.getResponsiveContainer();
+  if (known && known.width > 0 && known.height > 0) return known;
+  if (floatingSize.value.width > 0 && floatingSize.value.height > 0) return floatingSize.value;
+  return {
+    width: Math.max(1, window.geometry.position.x + window.geometry.size.width),
+    height: Math.max(1, window.geometry.position.y + window.geometry.size.height),
+  };
+}
+function layoutResizePreviewFor(session: LayoutResizeSession, clientX: number, clientY: number): WindowLayoutDialogPreview {
+  const deltaX = clientX - session.startX;
+  const deltaY = clientY - session.startY;
+  let spec = session.startSpec;
+  if (session.handle === 'left' || session.handle === 'right' || session.handle === 'top-left' || session.handle === 'top-right' || session.handle === 'bottom-left' || session.handle === 'bottom-right') {
+    const edge = session.handle === 'left' || session.handle.endsWith('left') ? 'left' : 'right';
+    spec = resizeWindowLayoutSpec(spec, session.startGeometry, edge, deltaX, session.container, windowStates.value.find((window) => window.instanceId === session.sourceInstanceId)?.constraints ?? { minSize: { width: 0, height: 0 }, maxSize: null });
+  }
+  if (session.handle === 'top' || session.handle === 'bottom' || session.handle === 'top-left' || session.handle === 'top-right' || session.handle === 'bottom-left' || session.handle === 'bottom-right') {
+    const edge = session.handle === 'top' || session.handle.startsWith('top') ? 'top' : 'bottom';
+    spec = resizeWindowLayoutSpec(spec, session.startGeometry, edge, deltaY, session.container, windowStates.value.find((window) => window.instanceId === session.sourceInstanceId)?.constraints ?? { minSize: { width: 0, height: 0 }, maxSize: null });
+  }
+  const resolved = resolveWindowLayoutSpecs(windowStates.value.map((window) => window.instanceId === session.sourceInstanceId ? { ...window, layoutSpec: spec } : window), session.container);
+  const geometry = resolved.get(session.sourceInstanceId);
+  if (!geometry) throw new Error('Window geometry could not be resolved')
+  return { sourceInstanceId: session.sourceInstanceId, layoutSpec: spec, geometry };
+}
+function clearLayoutResizePreview(): void {
+  const active = layoutResizeActive.value;
+  layoutResizeSession.value = null;
+  layoutResizeActive.value = false;
+  if (active) layoutPreview.value = null;
+}
+function finishLayoutResize(cancel = true): void {
+  if (!layoutResizeSession.value) return;
+  if (cancel) history?.cancelTransaction();
+  disposeLayoutResize?.();
+  disposeLayoutResize = null;
+  clearLayoutResizePreview();
+}
+function commitLayoutResize(): void {
+  const session = layoutResizeSession.value;
+  if (!session?.started || !session.preview?.layoutSpec) { finishLayoutResize(); return; }
+  try {
+    windowManager.setLayoutSpec(session.sourceInstanceId, session.preview.layoutSpec, session.container, 'user', 'active');
+    history?.commitTransaction();
+    finishLayoutResize(false);
+  } catch {
+    finishLayoutResize();
+  }
+}
+function layoutResizeHandleStyle(handle: LayoutResizeHandle): Record<string, string> {
+  const geometry = selectedWindow.value?.geometry;
+  if (!geometry) return {};
+  const x = layout.value.floating.x + geometry.position.x;
+  const y = layout.value.floating.y + geometry.position.y;
+  const width = geometry.size.width;
+  const height = geometry.size.height;
+  const edgeSize = 10;
+  const cornerSize = 16;
+  if (handle === 'top') return { left: `${x + cornerSize}px`, top: `${y - edgeSize / 2}px`, width: `${Math.max(0, width - cornerSize * 2)}px`, height: `${edgeSize}px` };
+  if (handle === 'right') return { left: `${x + width - edgeSize / 2}px`, top: `${y + cornerSize}px`, width: `${edgeSize}px`, height: `${Math.max(0, height - cornerSize * 2)}px` };
+  if (handle === 'bottom') return { left: `${x + cornerSize}px`, top: `${y + height - edgeSize / 2}px`, width: `${Math.max(0, width - cornerSize * 2)}px`, height: `${edgeSize}px` };
+  if (handle === 'left') return { left: `${x - edgeSize / 2}px`, top: `${y + cornerSize}px`, width: `${edgeSize}px`, height: `${Math.max(0, height - cornerSize * 2)}px` };
+  const left = handle.endsWith('left');
+  const top = handle.startsWith('top');
+  return { left: `${x + (left ? -cornerSize / 2 : width - cornerSize / 2)}px`, top: `${y + (top ? -cornerSize / 2 : height - cornerSize / 2)}px`, width: `${cornerSize}px`, height: `${cornerSize}px` };
+}
+function startLayoutResize(event: PointerEvent, handle: LayoutResizeHandle): void {
+  const captureTarget = event.currentTarget;
+  const source = selectedWindow.value;
+  if (!(captureTarget instanceof HTMLElement) || !source || !editState.value.editActive || layoutLocked.value || event.button !== 0 || source.instanceId !== captureTarget.dataset.windowLayoutResizeSource || !source.options.resizable) return;
+  event.preventDefault();
+  event.stopPropagation();
+  finishLayoutResize();
+  const pointerId = typeof event.pointerId === 'number' ? event.pointerId : undefined;
+  const container = layoutResizeContainer(source);
+  const session: LayoutResizeSession = { sourceInstanceId: source.instanceId, handle, pointerId, captureTarget, startX: event.clientX, startY: event.clientY, startGeometry: { position: { ...source.geometry.position }, size: { ...source.geometry.size } }, startSpec: source.layoutSpec ? source.layoutSpec : createAbsoluteWindowLayoutSpec(source.geometry), container, started: false, preview: null };
+  layoutResizeSession.value = session;
+  layoutResizeActive.value = true;
+  history?.beginTransaction();
+  if (pointerId !== undefined && typeof captureTarget.setPointerCapture === 'function') { try { captureTarget.setPointerCapture(pointerId); } catch { /* optional */ } }
+  const matches = (next: PointerEvent): boolean => pointerId === undefined || typeof next.pointerId !== 'number' || next.pointerId === pointerId;
+  const move = (next: PointerEvent): void => {
+    if (!matches(next)) return;
+    if (!session.started && Math.hypot(next.clientX - session.startX, next.clientY - session.startY) < 4) return;
+    try {
+      const preview = layoutResizePreviewFor(session, next.clientX, next.clientY);
+      layoutResizeSession.value = { ...session, started: true, preview };
+      layoutPreview.value = preview;
+    } catch {
+      layoutPreview.value = session.preview;
+    }
+  };
+  const cleanup = (): void => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', end);
+    window.removeEventListener('pointercancel', cancel);
+    captureTarget.removeEventListener('lostpointercapture', lost);
+    if (pointerId !== undefined && typeof captureTarget.releasePointerCapture === 'function') { try { captureTarget.releasePointerCapture(pointerId); } catch { /* optional */ } }
+    if (disposeLayoutResize === cleanup) disposeLayoutResize = null;
+  };
+  const end = (next: PointerEvent): void => {
+    if (!matches(next)) return;
+    if (next.type === 'pointerup') commitLayoutResize();
+    else finishLayoutResize();
+    cleanup();
+  };
+  const cancel = (): void => { finishLayoutResize(); cleanup(); };
+  const lost = (): void => { finishLayoutResize(); cleanup(); };
+  disposeLayoutResize = cleanup;
+  captureTarget.addEventListener('lostpointercapture', lost);
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', cancel);
 }
 
 function rectStyle(rect: {
@@ -1211,6 +1345,11 @@ function selectFromPointer(event: PointerEvent): void {
   if (!editState.value.editActive || layoutLocked.value) return;
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
+  const resizeHandle = target.closest<HTMLElement>('[data-window-layout-resize-handle]');
+  if (resizeHandle?.dataset.windowLayoutResizeSource) {
+    editController.selectWindow(resizeHandle.dataset.windowLayoutResizeSource);
+    return;
+  }
   const constraintHandle = target.closest<HTMLElement>('[data-window-constraint-handle]');
   if (constraintHandle?.dataset.windowConstraintSource) {
     editController.selectWindow(constraintHandle.dataset.windowConstraintSource);
@@ -1251,6 +1390,7 @@ function pointerSessionKind(event: PointerEvent): PointerSessionKind | null {
     layoutLocked.value
   )
     return null;
+  if (target.closest('[data-window-layout-resize-handle]')) return null;
   if (target.closest('[data-window-constraint-handle]')) return null;
   if (target.closest("[data-pane-divider-index]")) return "pane-resize";
   if (target.closest("[data-dock-resize]")) return "dock-resize";
@@ -1321,6 +1461,7 @@ function toggleEditMode(): void {
   editController.setMode(editState.value.mode === 'edit' ? 'normal' : 'edit')
 }
 function resetEditTransients(): void {
+  finishLayoutResize();
   finishConstraintLink();
   keyboardConstraintEdge.value = null;
   selectedConstraint.value = null;
@@ -1466,6 +1607,7 @@ function onWorkspaceKeyDown(event: KeyboardEvent): void {
 }
 function onGlobalKeyDown(event: KeyboardEvent): void {
   if (event.key === "Escape") {
+    finishLayoutResize();
     finishConstraintLink();
     finishPaneDrag();
     finishTabReorder();
@@ -1482,6 +1624,7 @@ function onKeyUp(event: KeyboardEvent): void {
   if (event.key === "Control") editController.setTemporaryEdit(false);
 }
 function onBlur(): void {
+  finishLayoutResize();
   finishConstraintLink();
   editController.setTemporaryEdit(false);
   finishPaneDrag();
@@ -1522,6 +1665,7 @@ onMounted(() => {
   window.addEventListener("lostpointercapture", onLostPointerCapture);
 });
 onBeforeUnmount(() => {
+  finishLayoutResize();
   finishConstraintLink();
   finishPaneDrag();
   finishTabReorder();
@@ -1566,6 +1710,9 @@ onBeforeUnmount(() => {
     </div>
     <div v-if="editMode && selectedWindow" class="wf-window-constraint-handles" data-window-constraint-handles aria-label="Window constraint handles">
       <button v-for="edge in constraintEdges" :key="edge" class="wf-window-constraint-handle" :style="constraintHandleStyle(edge)" :data-window-constraint-handle="edge" :data-window-constraint-source="selectedWindow.instanceId" :aria-label="`Connect ${edge} edge`" type="button" @pointerdown="startConstraintLink($event, edge)" @click.stop="startConstraintKeyboardSelection(edge)"><span aria-hidden="true">{{ edge === 'top' ? '↑' : edge === 'right' ? '→' : edge === 'bottom' ? '↓' : '←' }}</span></button>
+    </div>
+    <div v-if="editMode && selectedWindow && selectedWindow.options.resizable" class="wf-window-layout-resize-handles" data-window-layout-resize-handles aria-label="Window resize zones">
+      <div v-for="handle in layoutResizeHandles" :key="handle" class="wf-window-layout-resize-handle" :class="`wf-window-layout-resize-handle--${handle}`" :style="layoutResizeHandleStyle(handle)" :data-window-layout-resize-handle="handle" :data-window-layout-resize-source="selectedWindow.instanceId" :aria-label="`Resize ${handle}`" aria-hidden="true" @pointerdown="startLayoutResize($event, handle)" />
     </div>
     <div v-if="keyboardConstraintEdge" class="wf-window-constraint-keyboard-picker" data-window-constraint-keyboard-picker role="listbox" aria-label="Choose a constraint target">
       <strong>Connect {{ keyboardConstraintEdge }} edge</strong>
@@ -1689,6 +1836,13 @@ onBeforeUnmount(() => {
 .wf-window-constraint-handle { position: absolute; display: grid; width: var(--wf-size-icon-button-size); height: var(--wf-size-icon-button-size); transform: translate(-50%, -50%); place-items: center; padding: 0; border: 1px solid var(--wf-color-accent); border-radius: 50%; background: var(--wf-color-surface-floating); color: var(--wf-color-accent); font: inherit; font-size: var(--wf-font-size-sm); cursor: crosshair; pointer-events: auto; box-shadow: var(--wf-shadow-sm); }
 .wf-window-constraint-handle:hover, .wf-window-constraint-handle:focus-visible { background: var(--wf-color-selected); color: var(--wf-color-focus); }
 .wf-window-constraint-handle:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
+.wf-window-layout-resize-handles { position: absolute; inset: 0; z-index: calc(var(--wf-layer-overlay) - 1); pointer-events: none; }
+.wf-window-layout-resize-handle { position: absolute; display: block; pointer-events: auto; background: transparent; touch-action: none; }
+.wf-window-layout-resize-handle--top, .wf-window-layout-resize-handle--bottom { cursor: ns-resize; }
+.wf-window-layout-resize-handle--left, .wf-window-layout-resize-handle--right { cursor: ew-resize; }
+.wf-window-layout-resize-handle--top-left, .wf-window-layout-resize-handle--bottom-right { cursor: nwse-resize; }
+.wf-window-layout-resize-handle--top-right, .wf-window-layout-resize-handle--bottom-left { cursor: nesw-resize; }
+.wf-window-layout-resize-handle:hover { background: var(--wf-color-selected); opacity: .35; }
 .wf-window-constraint-keyboard-picker { position: absolute; top: calc(var(--wf-space-sm) + var(--wf-size-control-height) + var(--wf-space-xs)); right: var(--wf-space-sm); z-index: calc(var(--wf-layer-overlay) + 2); display: grid; min-width: 240px; max-width: min(320px, calc(100% - var(--wf-space-md))); gap: var(--wf-space-xs); padding: var(--wf-space-sm); border: 1px solid var(--wf-color-border-floating); border-radius: var(--wf-radius-md); background: var(--wf-color-surface-floating); box-shadow: var(--wf-shadow-md); color: var(--wf-color-text); }
 .wf-window-constraint-keyboard-picker button { min-height: var(--wf-size-control-height-compact); padding: 0 var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-raised); color: var(--wf-color-text); font: inherit; font-size: var(--wf-font-size-xs); text-align: left; cursor: pointer; }
 .wf-window-constraint-keyboard-picker button:hover, .wf-window-constraint-keyboard-picker button:focus-visible { background: var(--wf-color-selected); border-color: var(--wf-color-focus); }
