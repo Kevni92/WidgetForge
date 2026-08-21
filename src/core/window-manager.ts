@@ -53,14 +53,14 @@ function paneParameters(parameters: Readonly<Record<string, unknown>>): PanePara
 function normalizePane(registry: WidgetRegistry, pane: PaneNode): PaneNode { validatePaneTree(pane); if (pane.kind === 'widget') { if (isCommandLauncherPane(pane)) return clonePaneTree(pane); const resolved = registry.resolve(pane.widgetId, pane.parameters); return { ...clonePaneTree(pane), parameters: paneParameters(resolved.parameters) } } return { ...clonePaneTree(pane), children: pane.children.map((child) => normalizePane(registry, child)) } }
 function defaultPaneTitle(registry: WidgetRegistry, pane: PaneNode): string { return isCommandLauncherPane(pane) ? DEFAULT_LAUNCHER_WINDOW_TITLE : pane.kind === 'widget' ? registry.get(pane.widgetId).title : 'Workspace' }
 function rootWidgetId(window: WindowState): WidgetId | undefined { return window.rootPane.kind === 'widget' ? window.rootPane.widgetId : undefined }
-function activeLayoutCandidates(windows: readonly WindowState[]): WindowState[] { return windows.map((window) => window.layoutLocked ? window : { ...window, layoutSpec: null }) }
+function activeLayoutCandidates(windows: readonly WindowState[]): WindowState[] { return windows.map((window) => window.layoutLocked || window.layoutSpecState === 'active' ? window : { ...window, layoutSpec: null }) }
 function responsiveDependencyClosure(windows: readonly WindowState[], sourceInstanceIds: readonly WindowInstanceId[]): Set<WindowInstanceId> {
   const affected = new Set(sourceInstanceIds)
   let expanded = true
   while (expanded) {
     expanded = false
     for (const window of windows) {
-      if (!window.layoutLocked || !window.layoutSpec || affected.has(window.instanceId)) continue
+      if (!(window.layoutLocked || window.layoutSpecState === 'active') || !window.layoutSpec || affected.has(window.instanceId)) continue
       if (![...affected].some((instanceId) => layoutSpecReferencesWindow(window.layoutSpec as WindowLayoutSpec, instanceId))) continue
       affected.add(window.instanceId)
       expanded = true
@@ -73,9 +73,9 @@ function resolveActiveWindowLayouts(windows: readonly WindowState[], container: 
   const resolved = resolveWindowLayoutSpecs(activeLayoutCandidates(windows), container)
   const affected = sourceInstanceIds
     ? responsiveDependencyClosure(windows, sourceInstanceIds)
-    : new Set(windows.filter((window) => window.layoutLocked && window.layoutSpec).map((window) => window.instanceId))
+    : new Set(windows.filter((window) => (window.layoutLocked || window.layoutSpecState === 'active') && window.layoutSpec).map((window) => window.instanceId))
   return windows.map((window) => {
-    if (!window.layoutLocked || !window.layoutSpec || !affected.has(window.instanceId)) return window
+    if (!(window.layoutLocked || window.layoutSpecState === 'active') || !window.layoutSpec || !affected.has(window.instanceId)) return window
     const geometry = resolved.get(window.instanceId)
     return geometry ? { ...window, geometry: cloneGeometry(geometry) } : window
   })

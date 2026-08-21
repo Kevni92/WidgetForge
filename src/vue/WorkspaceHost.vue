@@ -30,7 +30,7 @@ import type { CommandRegistry } from "../core/commands";
 import type { WidgetRegistry } from "../core/widget-registry";
 import type { WindowGeometry, WindowSize } from "../core/window-geometry";
 import type { WindowManager, WindowState } from "../core/window-manager";
-import { createAbsoluteWindowLayoutSpec, deriveWindowLayoutStatus, type WindowLayoutEdge, type WindowLayoutStatus } from '../core/window-layout'
+import { createAbsoluteWindowLayoutSpec, createWindowLayoutConstraintDraft, deriveWindowLayoutStatus, removeWindowLayoutConstraint, resolveWindowLayoutSpecs, type WindowLayoutEdge, type WindowLayoutStatus, type WindowLayoutTarget } from '../core/window-layout'
 import {
   createPaneEditContextMenuItems,
   createWorkspaceEditController,
@@ -124,6 +124,24 @@ type PointerSessionKind =
   | "pane-resize"
   | "pane-drag"
   | "tab-reorder";
+interface ConstraintDropTarget {
+  readonly target: WindowLayoutTarget;
+  readonly x: number;
+  readonly y: number;
+  readonly edge: WindowLayoutEdge;
+  readonly targetInstanceId?: string;
+}
+interface ConstraintLinkState {
+  readonly sourceInstanceId: string;
+  readonly sourceEdge: WindowLayoutEdge;
+  readonly pointerId: number | undefined;
+  readonly captureTarget: HTMLElement;
+  readonly started: boolean;
+  readonly pointer: { readonly x: number; readonly y: number };
+  readonly target: ConstraintDropTarget | null;
+}
+interface ConstraintKeyboardOption { readonly target: WindowLayoutTarget; readonly label: string }
+interface SelectedConstraint { readonly sourceInstanceId: string; readonly sourceEdge: WindowLayoutEdge; readonly targetId: string; readonly targetEdge: WindowLayoutEdge }
 interface HistoryPointerSession {
   readonly kind: PointerSessionKind;
   readonly pointerId: number | undefined;
@@ -154,9 +172,14 @@ const paneDropPreview = shallowRef<PaneDropPreview | null>(null);
 const tabReorderPreview = shallowRef<TabReorderPreview | null>(null);
 const layoutDialogWindow = shallowRef<ReturnType<WindowManager['get']> | null>(null);
 const layoutPreview = shallowRef<WindowLayoutDialogPreview | null>(null);
+const constraintLink = shallowRef<ConstraintLinkState | null>(null);
+const keyboardConstraintEdge = ref<WindowLayoutEdge | null>(null);
+const selectedConstraint = shallowRef<SelectedConstraint | null>(null);
+const constraintEdges: readonly WindowLayoutEdge[] = ['top', 'right', 'bottom', 'left'];
 let disposeSize: (() => void) | null = null;
 let disposePaneDrag: (() => void) | null = null;
 let disposeTabReorder: (() => void) | null = null;
+let disposeConstraintLink: (() => void) | null = null;
 let pointerSession: HistoryPointerSession | null = null;
 let dropSequence = 0;
 let suppressClick = false;
@@ -185,30 +208,86 @@ const selectedWindow = computed<WindowState | null>(() => {
   return id ? windowStates.value.find((window) => window.instanceId === id) ?? null : null;
 });
 const selectedWindowStatus = computed<WindowLayoutStatus | null>(() => selectedWindow.value ? deriveWindowLayoutStatus(selectedWindow.value) : null)
-interface LayoutRelation { readonly sourceId: string; readonly targetId: string; readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number }
+interface LayoutRelation { readonly sourceId: string; readonly targetId: string; readonly sourceEdge: WindowLayoutEdge; readonly targetEdge: WindowLayoutEdge; readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number }
 function edgePoint(geometry: WindowGeometry, edge: WindowLayoutEdge): { x: number; y: number } {
   if (edge === 'left') return { x: geometry.position.x, y: geometry.position.y + geometry.size.height / 2 }
   if (edge === 'right') return { x: geometry.position.x + geometry.size.width, y: geometry.position.y + geometry.size.height / 2 }
   if (edge === 'top') return { x: geometry.position.x + geometry.size.width / 2, y: geometry.position.y }
   return { x: geometry.position.x + geometry.size.width / 2, y: geometry.position.y + geometry.size.height }
 }
+function workspaceEdgePoint(container: WindowSize, edge: WindowLayoutEdge): { x: number; y: number } {
+  if (edge === 'left') return { x: 0, y: container.height / 2 }
+  if (edge === 'right') return { x: container.width, y: container.height / 2 }
+  if (edge === 'top') return { x: container.width / 2, y: 0 }
+  return { x: container.width / 2, y: container.height }
+}
+function constraintSourceEdge(axis: 'horizontal' | 'vertical', side: 'start' | 'end'): WindowLayoutEdge {
+  if (axis === 'horizontal') return side === 'start' ? 'left' : 'right'
+  return side === 'start' ? 'top' : 'bottom'
+}
 const layoutRelations = computed<readonly LayoutRelation[]>(() => {
+  const selectedId = selectedWindow.value?.instanceId
+  if (!selectedId) return []
   const byId = new Map(windowStates.value.map((window) => [window.instanceId, window]))
   return windowStates.value.flatMap((source) => {
+    if (source.instanceId !== selectedId) return []
     const previewSource = layoutPreview.value?.sourceInstanceId === source.instanceId ? layoutPreview.value : null
     const spec = previewSource?.layoutSpec ?? source.layoutSpec
     if (!spec) return []
     const sourceGeometry = previewSource?.geometry ?? source.geometry
-    return [spec.horizontal.start, spec.horizontal.end, spec.vertical.start, spec.vertical.end].flatMap((anchor) => {
-      if (!anchor || anchor.target.kind !== 'window') return []
-      const target = byId.get(anchor.target.instanceId)
-      if (!target) return []
-      const targetGeometry = layoutPreview.value?.sourceInstanceId === target.instanceId ? layoutPreview.value.geometry : target.geometry
-      const sourcePoint = edgePoint(sourceGeometry, anchor.target.edge), targetPoint = edgePoint(targetGeometry, anchor.target.edge)
-      return [{ sourceId: source.instanceId, targetId: target.instanceId, x1: layout.value.floating.x + sourcePoint.x, y1: layout.value.floating.y + sourcePoint.y, x2: layout.value.floating.x + targetPoint.x, y2: layout.value.floating.y + targetPoint.y }]
+    const anchors: readonly [WindowLayoutEdge, typeof spec.horizontal.start | typeof spec.horizontal.end][] = [
+      [constraintSourceEdge('horizontal', 'start'), spec.horizontal.start],
+      [constraintSourceEdge('horizontal', 'end'), spec.horizontal.end],
+      [constraintSourceEdge('vertical', 'start'), spec.vertical.start],
+      [constraintSourceEdge('vertical', 'end'), spec.vertical.end],
+    ]
+    return anchors.flatMap(([sourceEdge, anchor]) => {
+      if (!anchor) return []
+      if (anchor.target.kind === 'workspace' && (source.layoutSpecState !== 'active' || previewSource)) return []
+      const sourcePoint = edgePoint(sourceGeometry, sourceEdge)
+      const targetPoint = anchor.target.kind === 'window'
+        ? (() => {
+          const target = byId.get(anchor.target.instanceId)
+          if (!target) return null
+          const targetGeometry = layoutPreview.value?.sourceInstanceId === target.instanceId ? layoutPreview.value.geometry : target.geometry
+          return edgePoint(targetGeometry, anchor.target.edge)
+        })()
+        : workspaceEdgePoint(floatingSize.value, anchor.target.edge)
+      if (!targetPoint) return []
+      const targetId = anchor.target.kind === 'window' ? anchor.target.instanceId : 'workspace'
+      return [{ sourceId: source.instanceId, targetId, sourceEdge, targetEdge: anchor.target.edge, x1: layout.value.floating.x + sourcePoint.x, y1: layout.value.floating.y + sourcePoint.y, x2: layout.value.floating.x + targetPoint.x, y2: layout.value.floating.y + targetPoint.y }]
     })
   })
 })
+function selectConstraint(relation: LayoutRelation): void {
+  selectedConstraint.value = {
+    sourceInstanceId: relation.sourceId,
+    sourceEdge: relation.sourceEdge,
+    targetId: relation.targetId,
+    targetEdge: relation.targetEdge,
+  };
+}
+const selectedConstraintLabel = computed(() => {
+  const constraint = selectedConstraint.value;
+  if (!constraint) return null;
+  const target = constraint.targetId === 'workspace' ? 'workspace' : windowStates.value.find((window) => window.instanceId === constraint.targetId)?.title ?? constraint.targetId;
+  return `${constraint.sourceEdge} → ${target} · ${constraint.targetEdge}`;
+});
+function removeSelectedConstraint(): void {
+  const constraint = selectedConstraint.value;
+  if (!constraint || layoutLocked.value) return;
+  const source = windowStates.value.find((window) => window.instanceId === constraint.sourceInstanceId);
+  if (!source?.layoutSpec) return;
+  try {
+    history?.beginTransaction();
+    const spec = removeWindowLayoutConstraint(source.layoutSpec, source.geometry, constraint.sourceEdge);
+    windowManager.setLayoutSpec(source.instanceId, spec, windowManager.getResponsiveContainer() ?? floatingSize.value, 'user', 'active');
+    history?.commitTransaction();
+    selectedConstraint.value = null;
+  } catch {
+    history?.cancelTransaction();
+  }
+}
 
 function rectStyle(rect: {
   x: number;
@@ -222,6 +301,183 @@ function rectStyle(rect: {
     width: `${rect.width}px`,
     height: `${rect.height}px`,
   };
+}
+function rootLocalPoint(clientX: number, clientY: number): { x: number; y: number } {
+  const rect = root.value?.getBoundingClientRect();
+  return rect ? { x: clientX - rect.left, y: clientY - rect.top } : { x: clientX, y: clientY };
+}
+function constraintHandleStyle(edge: WindowLayoutEdge): Record<string, string> {
+  const geometry = selectedWindow.value?.geometry;
+  if (!geometry) return {};
+  const x = layout.value.floating.x + geometry.position.x;
+  const y = layout.value.floating.y + geometry.position.y;
+  if (edge === 'left') return { left: `${x}px`, top: `${y + geometry.size.height / 2}px` };
+  if (edge === 'right') return { left: `${x + geometry.size.width}px`, top: `${y + geometry.size.height / 2}px` };
+  if (edge === 'top') return { left: `${x + geometry.size.width / 2}px`, top: `${y}px` };
+  return { left: `${x + geometry.size.width / 2}px`, top: `${y + geometry.size.height}px` };
+}
+function constraintLinePoint(edge: WindowLayoutEdge): { x: number; y: number } | null {
+  const geometry = selectedWindow.value?.geometry;
+  if (!geometry) return null;
+  const point = edgePoint(geometry, edge);
+  return { x: layout.value.floating.x + point.x, y: layout.value.floating.y + point.y };
+}
+function constraintLinkLine(): { x1: number; y1: number; x2: number; y2: number } | null {
+  const link = constraintLink.value;
+  const source = link ? constraintLinePoint(link.sourceEdge) : null;
+  if (!link || !source) return null;
+  return { x1: source.x, y1: source.y, x2: link.pointer.x, y2: link.pointer.y };
+}
+function constraintTargetMarkerStyle(target: ConstraintDropTarget): Record<string, string> {
+  if (target.edge === 'left' || target.edge === 'right') return { left: `${target.x - 2}px`, top: `${target.y - 18}px`, width: '4px', height: '36px' };
+  return { left: `${target.x - 18}px`, top: `${target.y - 2}px`, width: '36px', height: '4px' };
+}
+const constraintKeyboardOptions = computed<readonly ConstraintKeyboardOption[]>(() => {
+  const source = selectedWindow.value;
+  const sourceEdge = keyboardConstraintEdge.value;
+  if (!source || !sourceEdge) return [];
+  const edges: readonly WindowLayoutEdge[] = sourceEdge === 'left' || sourceEdge === 'right' ? ['left', 'right'] : ['top', 'bottom'];
+  const targets: Array<ConstraintKeyboardOption> = edges.map((edge) => ({ target: { kind: 'workspace', edge }, label: `Workspace · ${edge[0]?.toUpperCase()}${edge.slice(1)}` }));
+  for (const window of windowStates.value) {
+    if (window.instanceId === source.instanceId) continue;
+    for (const edge of edges) targets.push({ target: { kind: 'window', instanceId: window.instanceId, edge }, label: `${window.title} · ${window.instanceId} · ${edge}` });
+  }
+  return targets.filter((option) => {
+    try { createWindowLayoutConstraintDraft(windowStates.value, source.instanceId, sourceEdge, option.target); return true; }
+    catch { return false; }
+  });
+});
+function startConstraintKeyboardSelection(edge: WindowLayoutEdge): void {
+  if (!editState.value.editActive || layoutLocked.value || !selectedWindow.value) return;
+  keyboardConstraintEdge.value = edge;
+}
+function commitKeyboardConstraint(option: ConstraintKeyboardOption): void {
+  const source = selectedWindow.value;
+  const sourceEdge = keyboardConstraintEdge.value;
+  if (!source || !sourceEdge) return;
+  try {
+    history?.beginTransaction();
+    const spec = createWindowLayoutConstraintDraft(windowStates.value, source.instanceId, sourceEdge, option.target);
+    windowManager.setLayoutSpec(source.instanceId, spec, floatingSize.value, 'user', 'active');
+    history?.commitTransaction();
+    keyboardConstraintEdge.value = null;
+  } catch {
+    history?.cancelTransaction();
+  }
+}
+function constraintGhostStyle(): Record<string, string> | null {
+  const link = constraintLink.value;
+  if (!link?.target) return null;
+  const source = windowStates.value.find((window) => window.instanceId === link.sourceInstanceId);
+  if (!source) return null;
+  try {
+    const spec = createWindowLayoutConstraintDraft(windowStates.value, link.sourceInstanceId, link.sourceEdge, link.target.target);
+    const resolved = resolveWindowLayoutSpecs(windowStates.value.map((window) => window.instanceId === link.sourceInstanceId ? { ...window, layoutSpec: spec } : window), floatingSize.value);
+    const geometry = resolved.get(link.sourceInstanceId);
+    return geometry ? previewRectStyle({ sourceInstanceId: link.sourceInstanceId, geometry, layoutSpec: spec }) : null;
+  } catch {
+    return null;
+  }
+}
+function constraintTargetAtPoint(sourceInstanceId: string, sourceEdge: WindowLayoutEdge, clientX: number, clientY: number): ConstraintDropTarget | null {
+  const rootElement = root.value;
+  if (!rootElement) return null;
+  const axis = sourceEdge === 'left' || sourceEdge === 'right' ? 'horizontal' : 'vertical';
+  const rootRect = rootElement.getBoundingClientRect();
+  const hitDistance = 24;
+  const candidates: Array<ConstraintDropTarget & { distance: number }> = [];
+  const add = (target: WindowLayoutTarget, edge: WindowLayoutEdge, x: number, y: number, distance: number, targetInstanceId?: string): void => {
+    if (distance > hitDistance) return;
+    try { createWindowLayoutConstraintDraft(windowStates.value, sourceInstanceId, sourceEdge, target); }
+    catch { return; }
+    candidates.push({ target, edge, x, y, distance, ...(targetInstanceId ? { targetInstanceId } : {}) });
+  };
+  for (const frame of rootElement.querySelectorAll<HTMLElement>('.wf-window-frame[data-window-instance-id]')) {
+    const targetInstanceId = frame.dataset.windowInstanceId;
+    if (!targetInstanceId || targetInstanceId === sourceInstanceId) continue;
+    const rect = frame.getBoundingClientRect();
+    if (axis === 'horizontal' && clientY >= rect.top - hitDistance && clientY <= rect.bottom + hitDistance) {
+      add({ kind: 'window', instanceId: targetInstanceId, edge: 'left' }, 'left', rect.left - rootRect.left, (rect.top + rect.bottom) / 2 - rootRect.top, Math.abs(clientX - rect.left), targetInstanceId);
+      add({ kind: 'window', instanceId: targetInstanceId, edge: 'right' }, 'right', rect.right - rootRect.left, (rect.top + rect.bottom) / 2 - rootRect.top, Math.abs(clientX - rect.right), targetInstanceId);
+    }
+    if (axis === 'vertical' && clientX >= rect.left - hitDistance && clientX <= rect.right + hitDistance) {
+      add({ kind: 'window', instanceId: targetInstanceId, edge: 'top' }, 'top', (rect.left + rect.right) / 2 - rootRect.left, rect.top - rootRect.top, Math.abs(clientY - rect.top), targetInstanceId);
+      add({ kind: 'window', instanceId: targetInstanceId, edge: 'bottom' }, 'bottom', (rect.left + rect.right) / 2 - rootRect.left, rect.bottom - rootRect.top, Math.abs(clientY - rect.bottom), targetInstanceId);
+    }
+  }
+  const floatingRect = rootElement.querySelector<HTMLElement>('[data-workspace-floating]')?.getBoundingClientRect();
+  if (floatingRect) {
+    if (axis === 'horizontal' && clientY >= floatingRect.top && clientY <= floatingRect.bottom) {
+      add({ kind: 'workspace', edge: 'left' }, 'left', floatingRect.left - rootRect.left, (floatingRect.top + floatingRect.bottom) / 2 - rootRect.top, Math.abs(clientX - floatingRect.left));
+      add({ kind: 'workspace', edge: 'right' }, 'right', floatingRect.right - rootRect.left, (floatingRect.top + floatingRect.bottom) / 2 - rootRect.top, Math.abs(clientX - floatingRect.right));
+    }
+    if (axis === 'vertical' && clientX >= floatingRect.left && clientX <= floatingRect.right) {
+      add({ kind: 'workspace', edge: 'top' }, 'top', (floatingRect.left + floatingRect.right) / 2 - rootRect.left, floatingRect.top - rootRect.top, Math.abs(clientY - floatingRect.top));
+      add({ kind: 'workspace', edge: 'bottom' }, 'bottom', (floatingRect.left + floatingRect.right) / 2 - rootRect.left, floatingRect.bottom - rootRect.top, Math.abs(clientY - floatingRect.bottom));
+    }
+  }
+  return candidates.sort((left, right) => left.distance - right.distance)[0] ?? null;
+}
+function finishConstraintLink(cancel = true): void {
+  if (!constraintLink.value) return;
+  if (cancel) history?.cancelTransaction();
+  disposeConstraintLink?.();
+}
+function commitConstraintLink(): void {
+  const link = constraintLink.value;
+  if (!link?.started || !link.target) { finishConstraintLink(); return; }
+  try {
+    const spec = createWindowLayoutConstraintDraft(windowStates.value, link.sourceInstanceId, link.sourceEdge, link.target.target);
+    windowManager.setLayoutSpec(link.sourceInstanceId, spec, floatingSize.value, 'user', 'active');
+    history?.commitTransaction();
+    finishConstraintLink(false);
+  } catch {
+    finishConstraintLink();
+  }
+}
+function startConstraintLink(event: PointerEvent, sourceEdge: WindowLayoutEdge): void {
+  const captureTarget = event.currentTarget;
+  if (!(captureTarget instanceof HTMLElement)) return;
+  const sourceWindow = selectedWindow.value;
+  if (!sourceWindow || !editState.value.editActive || layoutLocked.value || event.button !== 0 || sourceWindow.instanceId !== captureTarget.dataset.windowConstraintSource) return;
+  event.preventDefault();
+  event.stopPropagation();
+  finishConstraintLink();
+  const pointerId = typeof event.pointerId === 'number' ? event.pointerId : undefined;
+  const point = rootLocalPoint(event.clientX, event.clientY);
+  const session: ConstraintLinkState = { sourceInstanceId: sourceWindow.instanceId, sourceEdge, pointerId, captureTarget, started: false, pointer: point, target: null };
+  constraintLink.value = session;
+  history?.beginTransaction();
+  if (pointerId !== undefined && typeof captureTarget.setPointerCapture === 'function') { try { captureTarget.setPointerCapture(pointerId); } catch { /* optional */ } }
+  const matches = (next: PointerEvent): boolean => pointerId === undefined || typeof next.pointerId !== 'number' || next.pointerId === pointerId;
+  const move = (next: PointerEvent): void => {
+    if (!matches(next)) return;
+    const started = session.started || Math.hypot(next.clientX - event.clientX, next.clientY - event.clientY) >= 4;
+    if (!started) return;
+    const target = constraintTargetAtPoint(session.sourceInstanceId, sourceEdge, next.clientX, next.clientY);
+    constraintLink.value = { ...session, started: true, pointer: rootLocalPoint(next.clientX, next.clientY), target };
+  };
+  const cleanup = (): void => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', end);
+    window.removeEventListener('pointercancel', cancel);
+    captureTarget.removeEventListener('lostpointercapture', lost);
+    if (pointerId !== undefined && typeof captureTarget.releasePointerCapture === 'function') { try { captureTarget.releasePointerCapture(pointerId); } catch { /* optional */ } }
+    constraintLink.value = null;
+    if (disposeConstraintLink === cleanup) disposeConstraintLink = null;
+  };
+  const end = (next: PointerEvent): void => {
+    if (!matches(next)) return;
+    if (next.type === 'pointerup') commitConstraintLink();
+    else finishConstraintLink();
+  };
+  const cancel = (): void => finishConstraintLink();
+  const lost = (): void => finishConstraintLink();
+  disposeConstraintLink = cleanup;
+  captureTarget.addEventListener('lostpointercapture', lost);
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', cancel);
 }
 function ownerFromElement(element: Element): WorkspacePaneOwner | null {
   const windowElement = element.closest<HTMLElement>(
@@ -955,6 +1211,11 @@ function selectFromPointer(event: PointerEvent): void {
   if (!editState.value.editActive || layoutLocked.value) return;
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
+  const constraintHandle = target.closest<HTMLElement>('[data-window-constraint-handle]');
+  if (constraintHandle?.dataset.windowConstraintSource) {
+    editController.selectWindow(constraintHandle.dataset.windowConstraintSource);
+    return;
+  }
   const frame = target.closest<HTMLElement>('.wf-window-frame[data-window-instance-id]');
   const windowId = frame?.dataset.windowInstanceId;
   const windowState = windowId ? windowStates.value.find((window) => window.instanceId === windowId) : undefined;
@@ -990,6 +1251,7 @@ function pointerSessionKind(event: PointerEvent): PointerSessionKind | null {
     layoutLocked.value
   )
     return null;
+  if (target.closest('[data-window-constraint-handle]')) return null;
   if (target.closest("[data-pane-divider-index]")) return "pane-resize";
   if (target.closest("[data-dock-resize]")) return "dock-resize";
   if (target.closest('[data-layout-edit-interaction-layer]')) return "pane-drag";
@@ -1059,6 +1321,9 @@ function toggleEditMode(): void {
   editController.setMode(editState.value.mode === 'edit' ? 'normal' : 'edit')
 }
 function resetEditTransients(): void {
+  finishConstraintLink();
+  keyboardConstraintEdge.value = null;
+  selectedConstraint.value = null;
   finishPaneDrag();
   finishTabReorder();
   paneDropPreview.value = null;
@@ -1201,6 +1466,7 @@ function onWorkspaceKeyDown(event: KeyboardEvent): void {
 }
 function onGlobalKeyDown(event: KeyboardEvent): void {
   if (event.key === "Escape") {
+    finishConstraintLink();
     finishPaneDrag();
     finishTabReorder();
     paneDropPreview.value = null;
@@ -1216,6 +1482,7 @@ function onKeyUp(event: KeyboardEvent): void {
   if (event.key === "Control") editController.setTemporaryEdit(false);
 }
 function onBlur(): void {
+  finishConstraintLink();
   editController.setTemporaryEdit(false);
   finishPaneDrag();
   finishTabReorder();
@@ -1255,6 +1522,7 @@ onMounted(() => {
   window.addEventListener("lostpointercapture", onLostPointerCapture);
 });
 onBeforeUnmount(() => {
+  finishConstraintLink();
   finishPaneDrag();
   finishTabReorder();
   finishHistoryPointer("cancel");
@@ -1296,9 +1564,19 @@ onBeforeUnmount(() => {
         {{ editState.mode === 'edit' ? 'Done' : 'Edit layout' }}
       </button>
     </div>
-    <svg v-if="editMode && layoutRelations.length" class="wf-window-layout-relations" :width="size.width" :height="size.height" :viewBox="`0 0 ${Math.max(1, size.width)} ${Math.max(1, size.height)}`" data-window-layout-relations aria-hidden="true">
-      <line v-for="(relation, index) in layoutRelations" :key="`${relation.sourceId}-${relation.targetId}-${index}`" :x1="relation.x1" :y1="relation.y1" :x2="relation.x2" :y2="relation.y2" data-window-layout-relation />
+    <div v-if="editMode && selectedWindow" class="wf-window-constraint-handles" data-window-constraint-handles aria-label="Window constraint handles">
+      <button v-for="edge in constraintEdges" :key="edge" class="wf-window-constraint-handle" :style="constraintHandleStyle(edge)" :data-window-constraint-handle="edge" :data-window-constraint-source="selectedWindow.instanceId" :aria-label="`Connect ${edge} edge`" type="button" @pointerdown="startConstraintLink($event, edge)" @click.stop="startConstraintKeyboardSelection(edge)"><span aria-hidden="true">{{ edge === 'top' ? '↑' : edge === 'right' ? '→' : edge === 'bottom' ? '↓' : '←' }}</span></button>
+    </div>
+    <div v-if="keyboardConstraintEdge" class="wf-window-constraint-keyboard-picker" data-window-constraint-keyboard-picker role="listbox" aria-label="Choose a constraint target">
+      <strong>Connect {{ keyboardConstraintEdge }} edge</strong>
+      <button v-for="option in constraintKeyboardOptions" :key="option.label" type="button" role="option" :aria-label="`Connect to ${option.label}`" @click="commitKeyboardConstraint(option)">{{ option.label }}</button>
+      <button type="button" class="wf-window-constraint-keyboard-picker__cancel" @click="keyboardConstraintEdge = null">Cancel</button>
+    </div>
+    <svg v-if="editMode && (layoutRelations.length || constraintLinkLine())" class="wf-window-layout-relations" :width="size.width" :height="size.height" :viewBox="`0 0 ${Math.max(1, size.width)} ${Math.max(1, size.height)}`" data-window-layout-relations>
+      <line v-for="(relation, index) in layoutRelations" :key="`${relation.sourceId}-${relation.targetId}-${index}`" :class="{ 'wf-window-layout-relation--selected': selectedConstraint?.sourceInstanceId === relation.sourceId && selectedConstraint?.sourceEdge === relation.sourceEdge && selectedConstraint?.targetId === relation.targetId && selectedConstraint?.targetEdge === relation.targetEdge }" :x1="relation.x1" :y1="relation.y1" :x2="relation.x2" :y2="relation.y2" data-window-layout-relation role="button" tabindex="0" :aria-label="`Select constraint ${relation.sourceEdge} to ${relation.targetId} ${relation.targetEdge}`" @click.stop="selectConstraint(relation)" @keydown.enter.prevent="selectConstraint(relation)" @keydown.space.prevent="selectConstraint(relation)" />
+      <line v-if="constraintLinkLine()" class="wf-window-layout-relation--active" :x1="constraintLinkLine()?.x1" :y1="constraintLinkLine()?.y1" :x2="constraintLinkLine()?.x2" :y2="constraintLinkLine()?.y2" data-window-constraint-drag-line />
     </svg>
+    <button v-if="selectedConstraint && selectedConstraintLabel" class="wf-window-constraint-remove" data-window-constraint-remove type="button" :aria-label="`Remove constraint ${selectedConstraintLabel}`" @click="removeSelectedConstraint">Remove {{ selectedConstraintLabel }}</button>
     <WorkspaceSelectionActions
       v-if="editMode && selectedWindow"
       :instance-id="selectedWindow.instanceId"
@@ -1336,6 +1614,8 @@ onBeforeUnmount(() => {
       :style="previewRectStyle(layoutPreview)"
       aria-hidden="true"
     />
+    <div v-if="constraintLink?.target" class="wf-window-constraint-target" data-window-constraint-target :data-window-constraint-target-id="constraintLink.target.targetInstanceId ?? 'workspace'" :data-window-constraint-target-edge="constraintLink.target.edge" :style="constraintTargetMarkerStyle(constraintLink.target)" aria-hidden="true" />
+    <div v-if="constraintGhostStyle()" class="wf-window-constraint-ghost" data-window-constraint-ghost :style="constraintGhostStyle()" aria-hidden="true" />
     <DockHost
       v-for="dock in dockStates"
       :key="dock.id"
@@ -1401,7 +1681,24 @@ onBeforeUnmount(() => {
 .wf-workspace-edit-toggle[aria-pressed="true"] { border-color: var(--wf-color-focus); background: var(--wf-color-selected); color: var(--wf-color-accent); }
 .wf-workspace-edit-toggle:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
 .wf-window-layout-relations { position: absolute; inset: 0; z-index: 1; overflow: visible; pointer-events: none; }
-.wf-window-layout-relations line { stroke: var(--wf-color-accent); stroke-width: 2; stroke-dasharray: 5 4; opacity: .8; }
+.wf-window-layout-relations line { stroke: var(--wf-color-accent); stroke-width: 2; stroke-dasharray: 5 4; opacity: .8; pointer-events: stroke; cursor: pointer; }
+.wf-window-layout-relations line:focus-visible { stroke: var(--wf-color-focus); stroke-width: 4; outline: none; }
+.wf-window-layout-relations .wf-window-layout-relation--selected { stroke: var(--wf-color-focus); stroke-width: 4; stroke-dasharray: none; opacity: 1; }
+.wf-window-layout-relations .wf-window-layout-relation--active { stroke: var(--wf-color-focus); stroke-width: 3; stroke-dasharray: none; opacity: 1; }
+.wf-window-constraint-handles { position: absolute; inset: 0; z-index: var(--wf-layer-overlay); pointer-events: none; }
+.wf-window-constraint-handle { position: absolute; display: grid; width: var(--wf-size-icon-button-size); height: var(--wf-size-icon-button-size); transform: translate(-50%, -50%); place-items: center; padding: 0; border: 1px solid var(--wf-color-accent); border-radius: 50%; background: var(--wf-color-surface-floating); color: var(--wf-color-accent); font: inherit; font-size: var(--wf-font-size-sm); cursor: crosshair; pointer-events: auto; box-shadow: var(--wf-shadow-sm); }
+.wf-window-constraint-handle:hover, .wf-window-constraint-handle:focus-visible { background: var(--wf-color-selected); color: var(--wf-color-focus); }
+.wf-window-constraint-handle:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
+.wf-window-constraint-keyboard-picker { position: absolute; top: calc(var(--wf-space-sm) + var(--wf-size-control-height) + var(--wf-space-xs)); right: var(--wf-space-sm); z-index: calc(var(--wf-layer-overlay) + 2); display: grid; min-width: 240px; max-width: min(320px, calc(100% - var(--wf-space-md))); gap: var(--wf-space-xs); padding: var(--wf-space-sm); border: 1px solid var(--wf-color-border-floating); border-radius: var(--wf-radius-md); background: var(--wf-color-surface-floating); box-shadow: var(--wf-shadow-md); color: var(--wf-color-text); }
+.wf-window-constraint-keyboard-picker button { min-height: var(--wf-size-control-height-compact); padding: 0 var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-raised); color: var(--wf-color-text); font: inherit; font-size: var(--wf-font-size-xs); text-align: left; cursor: pointer; }
+.wf-window-constraint-keyboard-picker button:hover, .wf-window-constraint-keyboard-picker button:focus-visible { background: var(--wf-color-selected); border-color: var(--wf-color-focus); }
+.wf-window-constraint-keyboard-picker button:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 1px; }
+.wf-window-constraint-keyboard-picker__cancel { color: var(--wf-color-text-muted) !important; }
+.wf-window-constraint-remove { position: absolute; top: calc(var(--wf-space-sm) + var(--wf-size-control-height) + var(--wf-space-xs)); left: var(--wf-space-sm); z-index: calc(var(--wf-layer-overlay) + 2); min-height: var(--wf-size-control-height-compact); max-width: min(320px, calc(100% - var(--wf-space-md))); padding: 0 var(--wf-space-sm); overflow: hidden; border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-floating); color: var(--wf-color-text); font: inherit; font-size: var(--wf-font-size-xs); text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.wf-window-constraint-remove:hover, .wf-window-constraint-remove:focus-visible { border-color: var(--wf-color-focus); background: var(--wf-color-selected); }
+.wf-window-constraint-remove:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
+.wf-window-constraint-target { position: absolute; z-index: calc(var(--wf-layer-overlay) + 1); border-radius: var(--wf-radius-sm); background: var(--wf-color-success); box-shadow: 0 0 0 var(--wf-space-2xs) var(--wf-color-selected); pointer-events: none; }
+.wf-window-constraint-ghost { position: absolute; z-index: calc(var(--wf-layer-overlay) - 1); border: 2px dashed var(--wf-color-success); border-radius: var(--wf-radius-sm); background: var(--wf-color-selected); pointer-events: none; }
 .wf-window-layout-preview { position: absolute; z-index: var(--wf-layer-overlay); border: 2px dashed var(--wf-color-success); border-radius: var(--wf-radius-sm); background: color-mix(in srgb, var(--wf-color-success) 12%, transparent); box-shadow: 0 0 0 1px var(--wf-color-border); pointer-events: none; }
 .wf-workspace-host :deep([data-layout-picker-source]) { outline: 3px solid var(--wf-color-focus); outline-offset: 3px; }
 .wf-workspace-host :deep([data-layout-picker-target]) { outline: 3px solid var(--wf-color-success); outline-offset: 3px; }

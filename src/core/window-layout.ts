@@ -318,6 +318,92 @@ export function createAbsoluteWindowLayoutSpec(geometry: WindowGeometry): Window
   }
 }
 
+function axisForEdge(edge: WindowLayoutEdge): WindowLayoutAxis {
+  return edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical'
+}
+
+function axisSizeFromGeometry(geometry: WindowGeometry, axis: WindowLayoutAxis): WindowLayoutLength {
+  return { value: axis === 'horizontal' ? geometry.size.width : geometry.size.height, unit: 'px' }
+}
+
+/**
+ * Create the durable spec represented by a direct canvas connection. The
+ * operation deliberately keeps the source edge as the start/end anchor and
+ * drops an explicit size only while the opposite edge is not constrained.
+ */
+export function setWindowLayoutConstraint(
+  currentSpec: WindowLayoutSpec | null | undefined,
+  geometry: WindowGeometry,
+  sourceEdge: WindowLayoutEdge,
+  target: WindowLayoutTarget,
+): WindowLayoutSpec {
+  const axis = axisForEdge(sourceEdge)
+  const sourceIsStart = sourceEdge === 'left' || sourceEdge === 'top'
+  const anchor: WindowLayoutAnchor = { target: { ...target }, offset: { value: 0, unit: 'px' } }
+  const currentAxis = currentSpec
+    ? cloneAxis(axis === 'horizontal' ? currentSpec.horizontal : currentSpec.vertical)
+    : null
+  const size = currentAxis?.size && currentAxis.size !== 'auto'
+    ? cloneLength(currentAxis.size)
+    : axisSizeFromGeometry(geometry, axis)
+
+  let nextAxis: WindowLayoutAxisSpec
+  if (!currentAxis) {
+    nextAxis = sourceIsStart ? { start: anchor, size } : { end: anchor, size }
+  } else if (sourceIsStart) {
+    nextAxis = currentAxis.end ? { start: anchor, end: currentAxis.end } : { start: anchor, size }
+  } else {
+    nextAxis = currentAxis.start ? { start: currentAxis.start, end: anchor } : { end: anchor, size }
+  }
+
+  const base = currentSpec ? cloneWindowLayoutSpec(currentSpec) : createAbsoluteWindowLayoutSpec(geometry)
+  return axis === 'horizontal'
+    ? { horizontal: nextAxis, vertical: base.vertical }
+    : { horizontal: base.horizontal, vertical: nextAxis }
+}
+
+/**
+ * Remove one direct edge relationship while keeping the current physical
+ * geometry representable by the remaining axis anchors.
+ */
+export function removeWindowLayoutConstraint(
+  currentSpec: WindowLayoutSpec,
+  geometry: WindowGeometry,
+  sourceEdge: WindowLayoutEdge,
+): WindowLayoutSpec {
+  const axis = axisForEdge(sourceEdge)
+  const sourceIsStart = sourceEdge === 'left' || sourceEdge === 'top'
+  const currentAxis = cloneAxis(axis === 'horizontal' ? currentSpec.horizontal : currentSpec.vertical)
+  const nextAxis: WindowLayoutAxisSpec = sourceIsStart
+    ? currentAxis.end
+      ? { end: currentAxis.end, size: axisSizeFromGeometry(geometry, axis) }
+      : { start: { target: { kind: 'workspace', edge: sourceEdge }, offset: { value: axis === 'horizontal' ? geometry.position.x : geometry.position.y, unit: 'px' } }, size: axisSizeFromGeometry(geometry, axis) }
+    : currentAxis.start
+      ? { start: currentAxis.start, size: axisSizeFromGeometry(geometry, axis) }
+      : { start: { target: { kind: 'workspace', edge: axis === 'horizontal' ? 'left' : 'top' }, offset: { value: axis === 'horizontal' ? geometry.position.x : geometry.position.y, unit: 'px' } }, size: axisSizeFromGeometry(geometry, axis) }
+  return axis === 'horizontal'
+    ? { horizontal: nextAxis, vertical: cloneAxis(currentSpec.vertical) }
+    : { horizontal: cloneAxis(currentSpec.horizontal), vertical: nextAxis }
+}
+
+/**
+ * Build and validate a direct-constraint draft against the complete window
+ * graph before the WindowManager is asked to commit it.
+ */
+export function createWindowLayoutConstraintDraft(
+  windows: readonly ResponsiveLayoutWindow[],
+  sourceInstanceId: string,
+  sourceEdge: WindowLayoutEdge,
+  target: WindowLayoutTarget,
+): WindowLayoutSpec {
+  const source = windows.find((window) => window.instanceId === sourceInstanceId)
+  if (!source) fail('unknown-window', `responsive layout references unknown window "${sourceInstanceId}"`, sourceInstanceId)
+  const spec = setWindowLayoutConstraint(source.layoutSpec, source.geometry, sourceEdge, target)
+  const candidates = windows.map((window) => window.instanceId === sourceInstanceId ? { ...window, layoutSpec: spec } : window)
+  validateWindowLayoutReferences(candidates)
+  return spec
+}
+
 function workspaceAnchor(edge: WindowLayoutEdge): WindowLayoutAnchor { return { target: { kind: 'workspace', edge } } }
 function percent(value: number): WindowLayoutLength { return { value, unit: 'percent' } }
 
