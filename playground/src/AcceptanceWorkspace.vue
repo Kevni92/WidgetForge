@@ -41,17 +41,28 @@ function seedWorkspace(): void {
   })
 }
 
+function lockStaticMenuWindows(): void {
+  for (const instanceId of ['left-menu', 'right-menu']) {
+    const window = windows.list().find((candidate) => candidate.instanceId === instanceId)
+    if (window && !window.layoutLocked) windows.lockWindow(instanceId, 'api')
+  }
+}
+
 function restoreOrSeed(): void {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY)
     if (stored) {
       const restored = restoreWorkspace(windows, stored, docks, undefined, { atomic: true })
-      if (restored.valid && restored.issues.length === 0 && windows.list().length > 0) return
+      if (restored.valid && restored.issues.length === 0 && windows.list().length > 0) {
+        lockStaticMenuWindows()
+        return
+      }
     }
   } catch {
     // A clean fixture is the safe fallback when persisted data is stale.
   }
   seedWorkspace()
+  lockStaticMenuWindows()
 }
 
 restoreOrSeed()

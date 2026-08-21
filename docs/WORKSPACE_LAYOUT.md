@@ -29,3 +29,14 @@ Workspace-Format v3 kann optional einen `DockManager` in `captureWorkspace`, `se
 ## Architekturgrenze
 
 Es gibt keine speziellen Navbar-, Toolbar- oder Sidebar-Komponenten im Core. Solche Oberflächen werden ausschließlich aus `Dock + Pane + Widget` zusammengesetzt.
+
+## Visueller Zustandsvertrag
+
+Produktive Surface-Styles und temporäre Editor-Affordances bleiben getrennt:
+
+- `data-focused` beschreibt den fachlichen Window-Fokus; `data-window-visual-focused` beschreibt, ob dieser Fokus die äußere Window-Surface visuell markieren darf. Bei `layoutLocked` bleibt die Surface trotz fachlichem Fokus ohne Focus-Border.
+- `data-pane-active` beschreibt die aktive fachliche Pane-/Tab-Navigation und ändert keinen äußeren Window- oder Dock-Border.
+- `data-layout-selection="selected|unselected"` beschreibt ausschließlich die temporäre Auswahl bzw. Hover-Kandidatur im Layout Edit Mode. Window-, Dock- und Pane-Selection wird über `outline`/Editor-Layer außerhalb der produktiven Borderbox dargestellt.
+- `data-pane-locked` und `data-window-layout-locked` beschreiben Lock-Zustände; sie sind keine Focus- oder Selection-Zustände.
+
+Beim Verlassen des Edit Mode werden die `data-layout-selection`-Marker entfernt. Interne Buttons, Inputs und Tabs behalten dagegen ihren eigenen `:focus-visible`- beziehungsweise Active-State.

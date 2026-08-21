@@ -226,6 +226,10 @@ const selectedWindow = computed<WindowState | null>(() => {
   return id ? windowStates.value.find((window) => window.instanceId === id) ?? null : null;
 });
 const selectedWindowStatus = computed<WindowLayoutStatus | null>(() => selectedWindow.value ? deriveWindowLayoutStatus(selectedWindow.value) : null)
+function dockLayoutSelection(dockId: string): 'selected' | 'unselected' | undefined {
+  if (!editMode.value) return undefined
+  return editState.value.selection?.owner.kind === 'dock' && editState.value.selection.owner.id === dockId ? 'selected' : 'unselected'
+}
 interface LayoutRelation { readonly sourceId: string; readonly targetId: string; readonly sourceEdge: WindowLayoutEdge; readonly targetEdge: WindowLayoutEdge; readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number }
 function edgePoint(geometry: WindowGeometry, edge: WindowLayoutEdge): { x: number; y: number } {
   if (edge === 'left') return { x: geometry.position.x, y: geometry.position.y + geometry.size.height / 2 }
@@ -710,6 +714,7 @@ function syncEditMarkers(): void {
     ".wf-pane-host[data-pane-id]",
   )) {
     element.removeAttribute("data-pane-selected");
+    element.removeAttribute("data-layout-selection");
     element.removeAttribute("data-pane-layout-locked");
     const paneId = element.dataset.paneId;
     if (!paneId) continue;
@@ -721,6 +726,8 @@ function syncEditMarkers(): void {
       selection.paneId === editState.value.selection.paneId
     )
       element.dataset.paneSelected = "true";
+    if (editMode.value)
+      element.dataset.layoutSelection = element.dataset.paneSelected === "true" ? "selected" : "unselected";
     if (editController.isPaneLocked(selection))
       element.dataset.paneLayoutLocked = "true";
   }
@@ -1800,6 +1807,7 @@ onBeforeUnmount(() => {
       :commands="props.commands"
       :layout-locked="layoutLocked"
       :edit-mode="editMode"
+      :layout-selection="dockLayoutSelection(dock.id)"
       :pane-drag-enabled="(paneId) => dockPaneDragEnabled(dock.id, paneId)"
     />
     <div
@@ -1889,10 +1897,13 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: hidden;
 }
+.wf-workspace-host--edit {
+  --wf-editor-selection-outline: var(--wf-color-accent);
+  --wf-editor-hover-outline: var(--wf-color-focus);
+  --wf-editor-locked-outline: var(--wf-color-warning);
+}
 .wf-workspace-host--edit :deep(.wf-pane-host) {
   position: relative;
-  outline: 1px dashed var(--wf-color-border);
-  outline-offset: -1px;
 }
 .wf-workspace-host--edit :deep(.wf-window-shell__content) {
   opacity: var(--wf-editor-content-opacity);
@@ -1900,28 +1911,34 @@ onBeforeUnmount(() => {
   transition: opacity 120ms ease, filter 120ms ease;
 }
 .wf-workspace-host--edit :deep(.wf-window-frame[data-layout-selection="unselected"]) {
-  outline: 1px solid var(--wf-color-border-floating);
+  outline: 1px dashed var(--wf-color-border-floating);
   outline-offset: 1px;
 }
 .wf-workspace-host--edit :deep(.wf-window-frame:hover[data-layout-selection="unselected"]) {
-  outline: 2px solid var(--wf-color-focus);
+  outline: 2px solid var(--wf-editor-hover-outline);
   outline-offset: 1px;
 }
 .wf-workspace-host--edit :deep(.wf-window-frame[data-layout-selection="selected"]) {
-  outline: 2px solid var(--wf-color-accent);
+  outline: 2px solid var(--wf-editor-selection-outline);
   outline-offset: 2px;
-  box-shadow: 0 0 0 1px var(--wf-color-selected);
+  box-shadow: 0 0 0 1px var(--wf-editor-selection-outline);
 }
 .wf-workspace-host--edit :deep(.wf-window-frame:focus-visible) {
-  outline: 2px solid var(--wf-color-focus);
+  outline: 2px solid var(--wf-editor-hover-outline);
   outline-offset: 3px;
 }
-.wf-workspace-host--edit :deep(.wf-pane-host:hover) {
-  outline-color: var(--wf-color-focus);
+.wf-workspace-host--edit :deep(.wf-pane-host[data-layout-selection="unselected"]) {
+  outline: 1px dashed var(--wf-color-border-floating);
+  outline-offset: -1px;
 }
-.wf-workspace-host--edit :deep(.wf-pane-host[data-pane-selected="true"]) {
-  outline: 2px solid var(--wf-color-focus);
+.wf-workspace-host--edit :deep(.wf-pane-host:hover[data-layout-selection="unselected"]) {
+  outline: 2px solid var(--wf-editor-hover-outline);
   outline-offset: -2px;
+}
+.wf-workspace-host--edit :deep(.wf-pane-host[data-layout-selection="selected"]) {
+  outline: 2px solid var(--wf-editor-selection-outline);
+  outline-offset: -2px;
+  box-shadow: 0 0 0 1px var(--wf-editor-selection-outline);
 }
 .wf-workspace-host--edit
   :deep(.wf-pane-host[data-pane-selected="true"]::before) {
@@ -1940,15 +1957,24 @@ onBeforeUnmount(() => {
 .wf-workspace-host--edit :deep([data-window-resize-handle]) { display: none; }
 .wf-workspace-host--edit :deep(.wf-pane-host[data-pane-layout-locked="true"]) {
   outline-style: solid;
-  outline-color: var(--wf-color-warning);
+  outline-color: var(--wf-editor-locked-outline);
 }
-.wf-workspace-host--edit :deep(.wf-window-frame[data-window-layout-locked="true"]) {
-  outline: 1px solid var(--wf-color-warning);
+.wf-workspace-host--edit :deep(.wf-window-frame[data-window-layout-locked="true"][data-layout-selection="unselected"]) {
+  outline: 1px solid var(--wf-editor-locked-outline);
   outline-offset: -1px;
 }
-.wf-workspace-host--edit :deep(.wf-window-frame[data-window-selected="true"]) {
-  outline: 2px solid var(--wf-color-focus);
-  outline-offset: -2px;
+.wf-workspace-host--edit :deep(.wf-dock-host[data-layout-selection="unselected"]) {
+  outline: 1px dashed var(--wf-color-border-floating);
+  outline-offset: 1px;
+}
+.wf-workspace-host--edit :deep(.wf-dock-host:hover[data-layout-selection="unselected"]) {
+  outline: 2px solid var(--wf-editor-hover-outline);
+  outline-offset: 1px;
+}
+.wf-workspace-host--edit :deep(.wf-dock-host[data-layout-selection="selected"]) {
+  outline: 2px solid var(--wf-editor-selection-outline);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px var(--wf-editor-selection-outline);
 }
 .wf-workspace-host--edit :deep([data-pane-divider-index]),
 .wf-workspace-host--edit :deep([data-window-resize-handle]),
