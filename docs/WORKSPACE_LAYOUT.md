@@ -6,7 +6,7 @@ WidgetForge unterscheidet zwischen frei beweglichen Windows und am Workspace-Ran
 
 Ein Dock besitzt eine stabile ID, eine Position `top`, `bottom`, `left` oder `right`, einen Root-Pane sowie eine Dicke mit optionalen Min-/Max-Grenzen. Docks besitzen keine Window-Chrome und benötigen keinen Fokus.
 
-Wird ein Floating Window über `anchorWindowToDock()` verankert, werden seine Fenster-Constraints auf die Dock-Achse projiziert und die ursprüngliche Geometrie, ID, Optionen und der Titel als Restore-Metadaten am Dock persistiert. `detachDockToWindow()` stellt daraus wieder ein Floating Window mit derselben Pane-Struktur her. Die Registrierung mehrerer Docks an derselben Kante ist deterministisch: früh registrierte Docks liegen näher an der Workspace-Kante.
+Workspace-Kanten für Floating Windows werden über die Layout-Constraints im Layout Edit Mode definiert. Das verändert die Geometrie responsiv, ohne aus dem Window ein Dock zu machen. Ein `Dock` ist dagegen eine explizit registrierte strukturelle Workspace-Fläche mit eigener ID, Root-Pane und Dock-Dicke. Die Registrierung mehrerer Docks an derselben Kante ist deterministisch: früh registrierte Docks liegen näher an der Workspace-Kante.
 
 Ein Dock kann wie jedes Window einen einzelnen Widget-Pane oder einen beliebig verschachtelten Split-Pane enthalten. Eine Topbar ist daher kein Sondertyp, sondern beispielsweise:
 
@@ -24,7 +24,7 @@ Resizable Docks besitzen nur an ihrer inneren Workspace-Kante einen Resize-Handl
 
 ## Persistenz
 
-Workspace-Format v3 kann optional einen `DockManager` in `captureWorkspace`, `serializeWorkspace` und `restoreWorkspace` einbeziehen. Snapshots ohne Docks bleiben kompatibel. Enthält ein Snapshot Docks, verlangt Restore explizit einen DockManager, damit Dock-State nicht stillschweigend verloren geht. Die optionalen Restore-Metadaten älterer Docks fehlen und verwenden beim Detach deterministische Fallback-Geometrie.
+Workspace-Format v3 kann optional einen `DockManager` in `captureWorkspace`, `serializeWorkspace` und `restoreWorkspace` einbeziehen. Snapshots ohne Docks bleiben kompatibel. Enthält ein Snapshot Docks, verlangt Restore explizit einen DockManager, damit Dock-State nicht stillschweigend verloren geht. Die optionalen Restore-Metadaten älterer Docks fehlen und verwenden beim `detachDockToWindow()`-Aufruf deterministische Fallback-Geometrie. Ein Dock wird nicht über die normale Window-Chrome erzeugt; die Umwandlung eines Floating Windows in ein Dock ist kein produktiver Window-Befehl.
 
 ## Architekturgrenze
 

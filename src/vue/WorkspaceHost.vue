@@ -16,7 +16,6 @@ import {
 import {
   calculateWorkspaceDockLayout,
   type DockManager,
-  type DockPosition,
   type DockState,
 } from "../core/dock-manager";
 import {
@@ -46,7 +45,6 @@ import {
   detectWorkspaceDropZone,
   movePaneToTarget,
   relocatePaneBetweenTrees,
-  anchorWindowToDock,
   detachDockToWindow,
   type WorkspaceDropRect,
   type WorkspaceDropZone,
@@ -645,16 +643,6 @@ function setOwnerRoot(owner: WorkspacePaneOwner, pane: PaneNode): void {
     commitWorkspacePaneMutations(windowManager, dockManager, [
       { owner, rootPane: pane },
     ]);
-}
-function anchorWindow(instanceId: string, position: DockPosition): void {
-  if (layoutLocked.value) return;
-  history?.beginTransaction();
-  try {
-    anchorWindowToDock(windowManager, dockManager, { instanceId, position });
-    history?.commitTransaction();
-  } catch {
-    history?.cancelTransaction();
-  }
 }
 function detachDock(dockId: string): void {
   if (layoutLocked.value) return;
@@ -1791,7 +1779,6 @@ onBeforeUnmount(() => {
         :layout-locked="layoutLocked"
         :edit-mode="editMode"
         :pane-drag-enabled="windowPaneDragEnabled"
-        :anchor-window="anchorWindow"
       />
     </div>
     <div

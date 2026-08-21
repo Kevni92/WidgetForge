@@ -105,6 +105,8 @@ test.beforeEach(async ({ page }) => {
 
 test('runs the real Edit → Select → Connect → Resize → Inspector → Workspace resize → Done flow', async ({ page }, info) => {
   await loadFixture(page)
+  await expect(page.locator('[aria-label="Anchor window to workspace"]')).toHaveCount(0)
+  await expect(page.locator('.wf-window-dock-picker')).toHaveCount(0)
   await page.locator('[data-window-instance-id="center-window"] [data-layout-content-action]').click()
   await expect(page.locator('[data-layout-content-details]')).toBeVisible()
   await checkpoint(page, info, '01-normal-mode')

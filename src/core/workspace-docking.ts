@@ -10,7 +10,7 @@ import {
   type PaneNode,
   type PaneSplitEdge,
 } from './pane'
-import { type DockManager, type DockPosition } from './dock-manager'
+import type { DockManager } from './dock-manager'
 import type { WindowGeometry, WindowPosition, WindowSize } from './window-geometry'
 import type { WindowManager, WindowState } from './window-manager'
 import { defaultWindowOptions } from './window-options'
@@ -133,28 +133,10 @@ export class WorkspaceDockTransformError extends Error {
   constructor(message: string) { super(message); this.name = 'WorkspaceDockTransformError' }
 }
 
-export interface AnchorWindowToDockRequest {
-  readonly instanceId: string
-  readonly position: DockPosition
-  readonly dockId?: string
-}
-
 export interface DetachDockToWindowRequest {
   readonly dockId: string
   readonly position?: WindowPosition
   readonly size?: WindowSize
-}
-
-function cloneGeometry(geometry: WindowGeometry): WindowGeometry {
-  return { position: { ...geometry.position }, size: { ...geometry.size } }
-}
-
-function nextDockId(dockManager: DockManager, requested: string): string {
-  const ids = new Set(dockManager.list().map((dock) => dock.id))
-  if (!ids.has(requested)) return requested
-  let suffix = 2
-  while (ids.has(`${requested}-${suffix}`)) suffix += 1
-  return `${requested}-${suffix}`
 }
 
 function nextWindowId(manager: WindowManager, requested: string): string {
@@ -185,42 +167,6 @@ function applyWorkspaceTransformation(
     try { clearAndRestoreWorkspace(manager, dockManager, before) } catch (rollbackError) { throw new WorkspaceDockTransformError(`workspace transformation and rollback failed: ${String(rollbackError)}`) }
     throw error
   }
-}
-
-export function anchorWindowToDock(
-  manager: WindowManager,
-  dockManager: DockManager,
-  request: AnchorWindowToDockRequest,
-): ReturnType<DockManager['get']> {
-  const source = manager.get(request.instanceId)
-  if (source.layoutLocked) throw new WorkspaceDockTransformError('layout-locked windows cannot be anchored to a dock')
-  if (source.mode !== 'normal' || source.snap) throw new WorkspaceDockTransformError('only a floating, normal window can be anchored to a dock')
-  if (source.options.role !== 'normal' && source.options.role !== 'utility') throw new WorkspaceDockTransformError(`window role "${source.options.role}" cannot be anchored to a dock`)
-
-  const before = captureWorkspace(manager, dockManager)
-  const axis = request.position === 'top' || request.position === 'bottom' ? 'height' : 'width'
-  const minThickness = source.constraints.minSize[axis]
-  const maxThickness = source.constraints.maxSize?.[axis] ?? null
-  const thickness = Math.max(minThickness, maxThickness === null ? source.geometry.size[axis] : Math.min(maxThickness, source.geometry.size[axis]))
-  const id = nextDockId(dockManager, request.dockId?.trim() || `${source.instanceId}-dock`)
-  const restoreWindow = {
-    instanceId: source.instanceId,
-    title: source.title,
-    geometry: cloneGeometry(source.geometry),
-    constraints: { minSize: { ...source.constraints.minSize }, maxSize: source.constraints.maxSize ? { ...source.constraints.maxSize } : null },
-    options: { ...source.options },
-  }
-  const remainingWindows = before.windows.filter((window) => window.instanceId !== source.instanceId)
-  const nextFocusId = source.focused
-    ? remainingWindows.filter((window) => window.mode !== 'minimized').at(-1)?.instanceId
-    : remainingWindows.find((window) => window.focused)?.instanceId
-  const next: WorkspaceSnapshot = {
-    version: before.version,
-    windows: remainingWindows.map((window) => ({ ...window, focused: window.instanceId === nextFocusId })),
-    docks: [...before.docks, { id, position: request.position, rootPane: source.rootPane, thickness, minThickness, maxThickness, resizable: source.options.resizable, restoreWindow }],
-  }
-  applyWorkspaceTransformation(manager, dockManager, before, next)
-  return dockManager.get(id)
 }
 
 export function detachDockToWindow(
