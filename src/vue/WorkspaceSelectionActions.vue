@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import type { WindowGeometry } from '../core/window-geometry'
 import type { WindowLayoutRuleState, WindowLayoutSurfaceState } from '../core/window-layout'
 import type { WindowSnapZone } from '../core/window-snap'
+import WfIcon from './WfIcon.vue'
 
 interface Props {
   instanceId: string
@@ -59,7 +60,7 @@ function toggleLock(): void {
       :title="`${locked ? 'Unlock' : 'Lock'} window ${title}`"
       @click="toggleLock"
     >
-      <span aria-hidden="true">{{ locked ? '▣' : '□' }}</span>
+      <WfIcon :name="locked ? 'lock' : 'unlock'" />
       <span>{{ locked ? 'Unlock' : 'Lock' }}</span>
     </button>
   </div>

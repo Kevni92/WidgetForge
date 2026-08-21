@@ -12,6 +12,7 @@ describe('theme', () => {
     expect(theme.shadow.lg).toBe(defaultTheme.shadow.lg)
     expect(theme.size.controlHeightCompact).toBe(defaultTheme.size.controlHeightCompact)
     expect(theme.size.iconButtonSize).toBe(defaultTheme.size.iconButtonSize)
+    expect(theme.editor.selectionColor).toBe(defaultTheme.editor.selectionColor)
   })
 
   it('serializes tokens to stable CSS variables', () => {
@@ -38,5 +39,8 @@ describe('theme', () => {
     expect(variables['--wf-size-table-row-height']).toBe(defaultTheme.size.tableRowHeight)
     expect(variables['--wf-size-table-row-height-compact']).toBe(defaultTheme.size.tableRowHeightCompact)
     expect(variables['--wf-layer-tooltip']).toBe(String(defaultTheme.layer.tooltip))
+    expect(variables['--wf-editor-content-opacity']).toBe(defaultTheme.editor.contentOpacity)
+    expect(variables['--wf-editor-selection-color']).toBe(defaultTheme.editor.selectionColor)
+    expect(variables['--wf-editor-panel-background']).toBe(defaultTheme.editor.panelBackground)
   })
 })

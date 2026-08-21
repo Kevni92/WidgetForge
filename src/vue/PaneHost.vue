@@ -44,6 +44,7 @@ import type { WidgetRegistry } from "../core/widget-registry";
 import { observeElementSize } from "./observe-element-size";
 import { providePaneContext, type PaneHostType } from "./pane-context";
 import { provideWidgetDocumentationForHost } from './documentation-context'
+import WfIcon from './WfIcon.vue'
 import WidgetActionToolbar from "./WidgetActionToolbar.vue";
 import WidgetHost from "./WidgetHost.vue";
 
@@ -466,9 +467,7 @@ onBeforeUnmount(() => {
             :aria-label="`Reorder tab ${tabLabel(child)}`"
             :aria-disabled="tabDragEnabled(pane, child) ? undefined : 'true'"
             @click.stop.prevent
-            ><span class="wf-pane-host__drag-glyph" aria-hidden="true"
-              >⠿</span
-            ></span
+            ><WfIcon class="wf-pane-host__drag-glyph" name="move" /></span
           >
         </button>
       </div>

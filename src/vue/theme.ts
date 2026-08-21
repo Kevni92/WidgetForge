@@ -74,6 +74,12 @@ export interface WidgetForgeTheme {
     contentOpacity: string
     contentSaturation: string
     contentBlur: string
+    selectionColor: string
+    hoverColor: string
+    constraintColor: string
+    previewColor: string
+    handleSize: string
+    panelBackground: string
   }
 }
 
@@ -140,7 +146,17 @@ export const defaultTheme: WidgetForgeTheme = {
     tableRowHeightCompact: '24px',
   },
   layer: { base: 0, window: 100, overlay: 1000, tooltip: 2000 },
-  editor: { contentOpacity: '0.52', contentSaturation: '0.7', contentBlur: '0.5px' },
+  editor: {
+    contentOpacity: '0.36',
+    contentSaturation: '0.55',
+    contentBlur: '1px',
+    selectionColor: 'var(--wf-color-accent)',
+    hoverColor: 'var(--wf-color-focus)',
+    constraintColor: 'var(--wf-color-info)',
+    previewColor: 'var(--wf-color-success)',
+    handleSize: '22px',
+    panelBackground: 'var(--wf-color-surface-floating)',
+  },
 }
 
 function mergeSection<T extends object>(base: T, override?: DeepPartial<T>): T {

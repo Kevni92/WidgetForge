@@ -62,6 +62,7 @@ import WindowManagerHost from "./WindowManagerHost.vue";
 import WindowLayoutDialog, { type WindowLayoutDialogPreview, type WindowLayoutDialogSave } from './WindowLayoutDialog.vue'
 import LayoutInspector from './LayoutInspector.vue'
 import { provideWidgetDocumentationForHost } from './documentation-context'
+import WfIcon from './WfIcon.vue'
 
 interface Props {
   windows: WindowManager;
@@ -1800,11 +1801,12 @@ onBeforeUnmount(() => {
     <div class="wf-workspace-edit-chrome" data-workspace-edit-chrome role="toolbar" aria-label="Layout editor controls">
       <span v-if="editState.mode === 'edit'" class="wf-workspace-edit-status" data-workspace-edit-status role="status">Layout editing</span>
       <button class="wf-workspace-edit-toggle" type="button" data-workspace-edit-toggle :aria-label="editState.mode === 'edit' ? 'Exit layout edit mode' : 'Edit layout'" :aria-pressed="editState.mode === 'edit' ? 'true' : 'false'" @click="toggleEditMode">
-        {{ editState.mode === 'edit' ? 'Done' : 'Edit layout' }}
+        <WfIcon :name="editState.mode === 'edit' ? 'check' : 'edit'" />
+        <span>{{ editState.mode === 'edit' ? 'Done' : 'Edit layout' }}</span>
       </button>
     </div>
     <div v-if="editMode && selectedWindow" class="wf-window-constraint-handles" data-window-constraint-handles aria-label="Window constraint handles">
-      <button v-for="edge in constraintEdges" :key="edge" class="wf-window-constraint-handle" :style="constraintHandleStyle(edge)" :data-window-constraint-handle="edge" :data-window-constraint-source="selectedWindow.instanceId" :aria-label="`Connect ${edge} edge`" type="button" @pointerdown="startConstraintLink($event, edge)" @click.stop="startConstraintKeyboardSelection(edge)"><span aria-hidden="true">{{ edge === 'top' ? '↑' : edge === 'right' ? '→' : edge === 'bottom' ? '↓' : '←' }}</span></button>
+      <button v-for="edge in constraintEdges" :key="edge" class="wf-window-constraint-handle" :style="constraintHandleStyle(edge)" :data-window-constraint-handle="edge" :data-window-constraint-source="selectedWindow.instanceId" :aria-label="`Connect ${edge} edge`" type="button" @pointerdown="startConstraintLink($event, edge)" @click.stop="startConstraintKeyboardSelection(edge)"><WfIcon name="link" /></button>
     </div>
     <div v-if="editMode && selectedWindow && selectedWindow.options.resizable" class="wf-window-layout-resize-handles" data-window-layout-resize-handles aria-label="Window resize zones">
       <div v-for="handle in layoutResizeHandles" :key="handle" class="wf-window-layout-resize-handle" :class="`wf-window-layout-resize-handle--${handle}`" :style="layoutResizeHandleStyle(handle)" :data-window-layout-resize-handle="handle" :data-window-layout-resize-source="selectedWindow.instanceId" :aria-label="`Resize ${handle}`" aria-hidden="true" @pointerdown="startLayoutResize($event, handle)" />
@@ -1930,28 +1932,31 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: var(--wf-color-canvas);
 }
-.wf-workspace-edit-chrome { position: absolute; top: var(--wf-space-sm); right: var(--wf-space-sm); z-index: var(--wf-layer-overlay); display: inline-flex; align-items: center; gap: var(--wf-space-xs); padding: var(--wf-space-2xs); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-floating); box-shadow: var(--wf-shadow-sm); }
+.wf-workspace-edit-chrome { position: absolute; top: var(--wf-space-sm); right: var(--wf-space-sm); z-index: var(--wf-layer-overlay); display: inline-flex; align-items: center; gap: var(--wf-space-xs); padding: var(--wf-space-2xs); border: 1px solid var(--wf-color-border-floating); border-radius: var(--wf-radius-sm); background: var(--wf-editor-panel-background); box-shadow: var(--wf-shadow-sm); }
 .wf-workspace-edit-status { padding-inline: var(--wf-space-xs); color: var(--wf-color-accent); font-size: var(--wf-font-size-xs); font-weight: var(--wf-font-weight-bold); }
-.wf-workspace-edit-toggle { min-height: var(--wf-size-control-height); padding: 0 var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-floating); color: var(--wf-color-text); font: inherit; font-size: var(--wf-font-size-xs); cursor: pointer; }
+.wf-workspace-edit-toggle { display: inline-flex; min-height: var(--wf-size-control-height); align-items: center; gap: var(--wf-space-xs); padding: 0 var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-editor-panel-background); color: var(--wf-color-text); font: inherit; font-size: var(--wf-font-size-xs); cursor: pointer; }
 .wf-workspace-edit-toggle:hover { background: var(--wf-color-hover); }
 .wf-workspace-edit-toggle[aria-pressed="true"] { border-color: var(--wf-color-focus); background: var(--wf-color-selected); color: var(--wf-color-accent); }
 .wf-workspace-edit-toggle:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
 .wf-window-layout-relations { position: absolute; inset: 0; z-index: 1; overflow: visible; pointer-events: none; }
-.wf-window-layout-relations line { stroke: var(--wf-color-accent); stroke-width: 2; stroke-dasharray: 5 4; opacity: .8; pointer-events: stroke; cursor: pointer; }
+.wf-window-layout-relations line { stroke: var(--wf-editor-constraint-color); stroke-width: 1.5; stroke-dasharray: 4 5; opacity: .48; pointer-events: stroke; cursor: pointer; vector-effect: non-scaling-stroke; transition: opacity 120ms ease, stroke-width 120ms ease; }
 .wf-window-layout-relations line:focus-visible { stroke: var(--wf-color-focus); stroke-width: 4; outline: none; }
-.wf-window-layout-relations .wf-window-layout-relation--selected { stroke: var(--wf-color-focus); stroke-width: 4; stroke-dasharray: none; opacity: 1; }
-.wf-window-layout-relations .wf-window-layout-relation--active { stroke: var(--wf-color-focus); stroke-width: 3; stroke-dasharray: none; opacity: 1; }
+.wf-window-layout-relations .wf-window-layout-relation--selected { stroke: var(--wf-editor-selection-color); stroke-width: 2.5; stroke-dasharray: none; opacity: 1; }
+.wf-window-layout-relations .wf-window-layout-relation--active { stroke: var(--wf-editor-constraint-color); stroke-width: 2; stroke-dasharray: 6 3; opacity: .95; }
 .wf-window-constraint-handles { position: absolute; inset: 0; z-index: var(--wf-layer-overlay); pointer-events: none; }
-.wf-window-constraint-handle { position: absolute; display: grid; width: var(--wf-size-icon-button-size); height: var(--wf-size-icon-button-size); transform: translate(-50%, -50%); place-items: center; padding: 0; border: 1px solid var(--wf-color-accent); border-radius: 50%; background: var(--wf-color-surface-floating); color: var(--wf-color-accent); font: inherit; font-size: var(--wf-font-size-sm); cursor: crosshair; pointer-events: auto; box-shadow: var(--wf-shadow-sm); }
-.wf-window-constraint-handle:hover, .wf-window-constraint-handle:focus-visible { background: var(--wf-color-selected); color: var(--wf-color-focus); }
+.wf-window-constraint-handle { position: absolute; display: grid; width: var(--wf-editor-handle-size); height: var(--wf-editor-handle-size); transform: translate(-50%, -50%); place-items: center; padding: 0; border: 1px solid var(--wf-editor-constraint-color); border-radius: 50%; background: var(--wf-editor-panel-background); color: var(--wf-editor-constraint-color); font: inherit; font-size: var(--wf-size-icon-size); cursor: crosshair; pointer-events: auto; box-shadow: var(--wf-shadow-sm); transition: background 120ms ease, color 120ms ease, transform 120ms ease; }
+.wf-window-constraint-handle:hover, .wf-window-constraint-handle:focus-visible { transform: translate(-50%, -50%) scale(1.08); background: var(--wf-color-selected); color: var(--wf-editor-selection-color); }
 .wf-window-constraint-handle:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
 .wf-window-layout-resize-handles { position: absolute; inset: 0; z-index: calc(var(--wf-layer-overlay) - 1); pointer-events: none; }
 .wf-window-layout-resize-handle { position: absolute; display: block; pointer-events: auto; background: transparent; touch-action: none; }
+.wf-window-layout-resize-handle::after { content: ''; position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; transform: translate(-50%, -50%) rotate(45deg); border: 1px solid var(--wf-editor-selection-color); border-radius: 2px; background: var(--wf-editor-panel-background); box-shadow: 0 0 0 2px color-mix(in srgb, var(--wf-editor-selection-color) 14%, transparent); pointer-events: none; }
+.wf-window-layout-resize-handle--top::after, .wf-window-layout-resize-handle--bottom::after { width: 18px; height: 4px; transform: translate(-50%, -50%); border-radius: 3px; }
+.wf-window-layout-resize-handle--left::after, .wf-window-layout-resize-handle--right::after { width: 4px; height: 18px; transform: translate(-50%, -50%); border-radius: 3px; }
 .wf-window-layout-resize-handle--top, .wf-window-layout-resize-handle--bottom { cursor: ns-resize; }
 .wf-window-layout-resize-handle--left, .wf-window-layout-resize-handle--right { cursor: ew-resize; }
 .wf-window-layout-resize-handle--top-left, .wf-window-layout-resize-handle--bottom-right { cursor: nwse-resize; }
 .wf-window-layout-resize-handle--top-right, .wf-window-layout-resize-handle--bottom-left { cursor: nesw-resize; }
-.wf-window-layout-resize-handle:hover { background: var(--wf-color-selected); opacity: .35; }
+.wf-window-layout-resize-handle:hover { background: var(--wf-color-selected); opacity: .55; }
 .wf-window-constraint-keyboard-picker { position: absolute; top: calc(var(--wf-space-sm) + var(--wf-size-control-height) + var(--wf-space-xs)); right: var(--wf-space-sm); z-index: calc(var(--wf-layer-overlay) + 4); display: grid; min-width: 240px; max-width: min(320px, calc(100% - var(--wf-space-md))); gap: var(--wf-space-xs); padding: var(--wf-space-sm); border: 1px solid var(--wf-color-border-floating); border-radius: var(--wf-radius-md); background: var(--wf-color-surface-floating); box-shadow: var(--wf-shadow-md); color: var(--wf-color-text); }
 .wf-window-constraint-keyboard-picker button { min-height: var(--wf-size-control-height-compact); padding: 0 var(--wf-space-sm); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-raised); color: var(--wf-color-text); font: inherit; font-size: var(--wf-font-size-xs); text-align: left; cursor: pointer; }
 .wf-window-constraint-keyboard-picker button:hover, .wf-window-constraint-keyboard-picker button:focus-visible { background: var(--wf-color-selected); border-color: var(--wf-color-focus); }
@@ -1960,9 +1965,9 @@ onBeforeUnmount(() => {
 .wf-window-constraint-remove { position: absolute; top: calc(var(--wf-space-sm) + var(--wf-size-control-height) + var(--wf-space-xs)); left: var(--wf-space-sm); z-index: calc(var(--wf-layer-overlay) + 2); min-height: var(--wf-size-control-height-compact); max-width: min(320px, calc(100% - var(--wf-space-md))); padding: 0 var(--wf-space-sm); overflow: hidden; border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius-sm); background: var(--wf-color-surface-floating); color: var(--wf-color-text); font: inherit; font-size: var(--wf-font-size-xs); text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .wf-window-constraint-remove:hover, .wf-window-constraint-remove:focus-visible { border-color: var(--wf-color-focus); background: var(--wf-color-selected); }
 .wf-window-constraint-remove:focus-visible { outline: 2px solid var(--wf-color-focus); outline-offset: 2px; }
-.wf-window-constraint-target { position: absolute; z-index: calc(var(--wf-layer-overlay) + 1); border-radius: var(--wf-radius-sm); background: var(--wf-color-success); box-shadow: 0 0 0 var(--wf-space-2xs) var(--wf-color-selected); pointer-events: none; }
-.wf-window-constraint-ghost { position: absolute; z-index: calc(var(--wf-layer-overlay) - 1); border: 2px dashed var(--wf-color-success); border-radius: var(--wf-radius-sm); background: var(--wf-color-selected); pointer-events: none; }
-.wf-window-layout-preview { position: absolute; z-index: var(--wf-layer-overlay); border: 2px dashed var(--wf-color-success); border-radius: var(--wf-radius-sm); background: color-mix(in srgb, var(--wf-color-success) 12%, transparent); box-shadow: 0 0 0 1px var(--wf-color-border); pointer-events: none; }
+.wf-window-constraint-target { position: absolute; z-index: calc(var(--wf-layer-overlay) + 1); border-radius: var(--wf-radius-sm); background: var(--wf-editor-preview-color); box-shadow: 0 0 0 var(--wf-space-2xs) var(--wf-color-selected); pointer-events: none; }
+.wf-window-constraint-ghost { position: absolute; z-index: calc(var(--wf-layer-overlay) - 1); border: 1px dashed var(--wf-editor-constraint-color); border-radius: var(--wf-radius-sm); background: color-mix(in srgb, var(--wf-editor-constraint-color) 8%, transparent); pointer-events: none; }
+.wf-window-layout-preview { position: absolute; z-index: var(--wf-layer-overlay); border: 1px dashed var(--wf-editor-preview-color); border-radius: var(--wf-radius-sm); background: color-mix(in srgb, var(--wf-editor-preview-color) 10%, transparent); box-shadow: 0 0 0 1px var(--wf-editor-preview-color); pointer-events: none; }
 .wf-workspace-host :deep([data-layout-picker-source]) { outline: 3px solid var(--wf-color-focus); outline-offset: 3px; }
 .wf-workspace-host :deep([data-layout-picker-target]) { outline: 3px solid var(--wf-color-success); outline-offset: 3px; }
 .wf-workspace-host__floating {
@@ -1972,9 +1977,11 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 .wf-workspace-host--edit {
-  --wf-editor-selection-outline: var(--wf-color-accent);
-  --wf-editor-hover-outline: var(--wf-color-focus);
+  --wf-editor-selection-outline: var(--wf-editor-selection-color);
+  --wf-editor-hover-outline: var(--wf-editor-hover-color);
   --wf-editor-locked-outline: var(--wf-color-warning);
+  background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--wf-editor-hover-color) 18%, transparent) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 .wf-workspace-host--edit :deep(.wf-pane-host) {
   position: relative;
@@ -1994,8 +2001,8 @@ onBeforeUnmount(() => {
 }
 .wf-workspace-host--edit :deep(.wf-window-frame[data-layout-selection="selected"]) {
   outline: 2px solid var(--wf-editor-selection-outline);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 1px var(--wf-editor-selection-outline);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 1px var(--wf-editor-selection-outline), 0 0 0 4px color-mix(in srgb, var(--wf-editor-selection-outline) 18%, transparent);
 }
 .wf-workspace-host--edit :deep(.wf-window-frame:focus-visible) {
   outline: 2px solid var(--wf-editor-hover-outline);
@@ -2077,5 +2084,10 @@ onBeforeUnmount(() => {
 }
 .wf-workspace-host--locked {
   cursor: default;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wf-workspace-host--edit :deep(.wf-window-shell__content),
+  .wf-window-layout-relations line,
+  .wf-window-constraint-handle { transition: none; }
 }
 </style>
