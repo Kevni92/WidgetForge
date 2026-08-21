@@ -41,7 +41,11 @@ async function chooseKeyboardTarget(page: Page, optionPattern: RegExp): Promise<
 async function createConstraintByKeyboard(page: Page, sourceEdge: 'left' | 'right' | 'top' | 'bottom', optionPattern: RegExp, targetId: string): Promise<void> {
   await page.locator(`[data-window-constraint-handle="${sourceEdge}"]`).click()
   await chooseKeyboardTarget(page, optionPattern)
-  await expect(relation(page, targetId)).toHaveCount(1)
+  if (targetId === 'workspace') {
+    await expect(page.locator(`[data-window-layout-relation][aria-label*="${sourceEdge} to workspace"]`)).toHaveCount(1)
+  } else {
+    await expect(relation(page, targetId)).toHaveCount(1)
+  }
 }
 
 async function createConstraintByPointer(page: Page, info: TestInfo): Promise<void> {
@@ -93,6 +97,43 @@ async function physicalDistance(page: Page, sourceId: string, sourceEdge: 'left'
 
 async function checkpoint(page: Page, info: TestInfo, name: string): Promise<void> {
   await page.screenshot({ path: info.outputPath(`screenshots/${name}.png`), fullPage: true })
+}
+
+async function selectDock(page: Page, dockId: string): Promise<void> {
+  await page.locator(`[data-dock-id="${dockId}"]`).dispatchEvent('pointerdown')
+  await expect(page.locator('[data-layout-inspector-selection-kind]')).toHaveText(`DOCK · ${dockId}`)
+}
+
+async function selectPane(page: Page, paneId: string): Promise<void> {
+  await page.locator(`[data-pane-id="${paneId}"]`).dispatchEvent('pointerdown')
+  await expect(page.locator('[data-layout-inspector-selection-kind]')).toHaveText(new RegExp(`PANE · ${paneId}$`))
+}
+
+async function openStyles(page: Page): Promise<void> {
+  await page.locator('[data-layout-inspector-tab="styles"]').click()
+  await expect(page.locator('[data-layout-inspector-styles]')).toBeVisible()
+}
+
+async function commitStyleInput(page: Page, selector: string, value: string): Promise<void> {
+  const input = page.locator(selector)
+  await input.fill(value)
+  await input.press('Enter')
+  await expect(page.locator('[data-style-error]')).toBeHidden()
+}
+
+async function setBorderState(page: Page, side: 'top' | 'right' | 'bottom' | 'left', enabled: boolean): Promise<void> {
+  const button = page.locator(`[data-style-border-side="${side}"]`)
+  const current = await button.getAttribute('aria-pressed')
+  if ((current === 'true') !== enabled) await button.click()
+  await expect(button).toHaveAttribute('aria-pressed', enabled ? 'true' : 'false')
+}
+
+async function expectOnlyBorder(page: Page, host: Locator, side: 'top' | 'right' | 'bottom' | 'left', width = '1px'): Promise<void> {
+  const style = await host.getAttribute('style')
+  if (!style) throw new Error(`Expected surface style for ${side} border`)
+  for (const candidate of ['top', 'right', 'bottom', 'left'] as const) {
+    expect(style).toContain(`--wf-surface-border-${candidate}-width: ${candidate === side ? width : '0px'}`)
+  }
 }
 
 function overlaps(left: { x: number; y: number; width: number; height: number }, right: { x: number; y: number; width: number; height: number }): boolean {
@@ -374,6 +415,260 @@ test('restores a committed direct constraint and 20px gap through the consumer p
   await expect(relation(page, 'right-menu')).toHaveCount(1)
   await expect(page.locator('[data-layout-constraint-offset="right"]')).toHaveValue('20')
   await expect.poll(() => physicalGap(page, 'center-window', 'right-menu')).toBeCloseTo(20, 0)
+})
+
+test('keeps static chrome separate from editor selection and binds a window to workspace bottom without dock conversion', async ({ page }, info) => {
+  await loadFixture(page)
+  await expect(page.locator('[aria-label="Anchor window to workspace"]')).toHaveCount(0)
+  await expect(page.locator('.wf-window-dock-picker')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Anchor window to workspace/i })).toHaveCount(0)
+
+  await page.locator('[data-dock-id="topnav"]').click()
+  await expect(page.locator('[data-dock-id="topnav"]')).not.toHaveAttribute('data-layout-selection')
+  await frame(page, 'left-menu').locator('.wf-window-shell').click()
+  await expect(frame(page, 'left-menu')).not.toHaveAttribute('data-layout-selection')
+  await expect(frame(page, 'left-menu').locator('.wf-window-shell')).toHaveAttribute('data-window-visual-focused', 'false')
+
+  const leftBefore = await frame(page, 'left-menu').boundingBox()
+  const rightBefore = await frame(page, 'right-menu').boundingBox()
+  if (!leftBefore || !rightBefore) throw new Error('Static menu geometry was not measurable')
+
+  await enterEditMode(page)
+  await selectWindow(page, 'center-window')
+  await createConstraintByKeyboard(page, 'bottom', /Workspace .* bottom/i, 'workspace')
+  await expect(frame(page, 'center-window')).toHaveCount(1)
+  await expect(page.locator('.wf-window-frame[data-window-instance-id="center-window"]')).toHaveCount(1)
+  await expect(page.locator('[data-dock-id="topnav"]')).toHaveCount(1)
+  await expect(page.locator('[data-dock-id="topnav"]')).toHaveAttribute('data-dock-position', 'top')
+  const leftAfter = await frame(page, 'left-menu').boundingBox()
+  const rightAfter = await frame(page, 'right-menu').boundingBox()
+  if (!leftAfter || !rightAfter) throw new Error('Static menu geometry after constraint was not measurable')
+  expect(leftAfter).toMatchObject({ x: leftBefore.x, y: leftBefore.y, width: leftBefore.width, height: leftBefore.height })
+  expect(rightAfter).toMatchObject({ x: rightBefore.x, y: rightBefore.y, width: rightBefore.width, height: rightBefore.height })
+  await checkpoint(page, info, '11-workspace-bottom-constraint')
+
+  await page.locator('[data-workspace-edit-toggle]').click()
+  await expect(page.locator('[data-layout-inspector]')).toBeHidden()
+  await expect(frame(page, 'center-window')).not.toHaveAttribute('data-layout-selection')
+})
+
+test('applies scoped Topnav and Left Menu SurfaceStyles without adding normal-mode focus borders', async ({ page }, info) => {
+  await loadFixture(page)
+  await enterEditMode(page)
+
+  await selectDock(page, 'topnav')
+  await openStyles(page)
+  await page.locator('[data-style-background-mode]').selectOption('custom')
+  await commitStyleInput(page, '[data-style-background-color]', '#193044')
+  await setBorderState(page, 'top', false)
+  await setBorderState(page, 'right', false)
+  await setBorderState(page, 'bottom', true)
+  await setBorderState(page, 'left', false)
+  await page.locator('[data-style-border-target]').selectOption('bottom')
+  await commitStyleInput(page, '[data-style-border-width]', '1')
+  await commitStyleInput(page, '[data-style-padding-all]', '6')
+  await page.locator('[data-style-padding-linked]').click()
+  await commitStyleInput(page, '[data-style-padding-side="left"]', '12')
+  await commitStyleInput(page, '[data-style-padding-side="right"]', '12')
+  await commitStyleInput(page, '[data-style-radius]', '0')
+  await page.locator('[data-style-shadow]').selectOption('none')
+  const topnav = page.locator('[data-dock-id="topnav"]')
+  await expectOnlyBorder(page, topnav, 'bottom')
+  await expect(topnav).toHaveAttribute('style', /--wf-surface-padding-top: 6px/)
+  await expect(topnav).toHaveAttribute('style', /--wf-surface-padding-left: 12px/)
+  await checkpoint(page, info, '12-topnav-styles')
+
+  await selectWindow(page, 'left-menu')
+  await openStyles(page)
+  await page.locator('[data-style-background-mode]').selectOption('custom')
+  await commitStyleInput(page, '[data-style-background-color]', '#252f3b')
+  await setBorderState(page, 'top', false)
+  await setBorderState(page, 'right', true)
+  await setBorderState(page, 'bottom', false)
+  await setBorderState(page, 'left', false)
+  await page.locator('[data-style-border-target]').selectOption('right')
+  await commitStyleInput(page, '[data-style-border-width]', '1')
+  await commitStyleInput(page, '[data-style-padding-all]', '8')
+  await commitStyleInput(page, '[data-style-radius]', '4')
+  await page.locator('[data-style-shadow]').selectOption('sm')
+  const leftMenu = frame(page, 'left-menu').locator('.wf-window-shell')
+  await expectOnlyBorder(page, leftMenu, 'right')
+  await checkpoint(page, info, '13-left-menu-styles')
+
+  await page.locator('[data-workspace-edit-toggle]').click()
+  await expect(frame(page, 'left-menu')).not.toHaveAttribute('data-layout-selection')
+  await expect(page.locator('[data-dock-id="topnav"]')).not.toHaveAttribute('data-layout-selection')
+  await leftMenu.click()
+  await expect(frame(page, 'left-menu')).not.toHaveAttribute('data-layout-selection')
+  await expectOnlyBorder(page, leftMenu, 'right')
+  await checkpoint(page, info, '14-final-styled-normal')
+})
+
+test('keeps Pane and Dock styles scoped to their host surfaces', async ({ page }, info) => {
+  await loadFixture(page)
+  await enterEditMode(page)
+
+  await selectPane(page, 'topnav-pane')
+  await openStyles(page)
+  await page.locator('[data-style-background-mode]').selectOption('custom')
+  await commitStyleInput(page, '[data-style-background-color]', '#263b4a')
+  await setBorderState(page, 'top', false)
+  await setBorderState(page, 'right', false)
+  await setBorderState(page, 'bottom', false)
+  await setBorderState(page, 'left', true)
+  await page.locator('[data-style-border-target]').selectOption('left')
+  await commitStyleInput(page, '[data-style-border-width]', '2')
+  await commitStyleInput(page, '[data-style-padding-all]', '4')
+  const pane = page.locator('[data-pane-id="topnav-pane"]')
+  await expect(pane).toHaveAttribute('style', /--wf-surface-background: #263b4a/)
+  await expect(pane).toHaveAttribute('style', /--wf-surface-border-left-width: 2px/)
+  await expect(pane).toHaveAttribute('style', /--wf-surface-padding-top: 4px/)
+  await checkpoint(page, info, '15-pane-styles')
+
+  await selectDock(page, 'topnav')
+  await openStyles(page)
+  await expect(page.locator('[data-dock-id="topnav"]')).not.toHaveAttribute('style', /#263b4a/)
+  await expect(page.locator('[data-dock-id="topnav"] [data-pane-id="topnav-pane"]')).toHaveAttribute('data-surface-style', 'true')
+  const beforeThickness = await page.locator('[data-dock-id="topnav"]').boundingBox()
+  await page.locator('[data-style-background-mode]').selectOption('transparent')
+  const afterThickness = await page.locator('[data-dock-id="topnav"]').boundingBox()
+  if (!beforeThickness || !afterThickness) throw new Error('Dock geometry was not measurable')
+  expect(afterThickness.height).toBe(beforeThickness.height)
+  await checkpoint(page, info, '16-dock-styles')
+})
+
+test('keeps Window constraints and SurfaceStyles independent through resize and reload', async ({ page }, info) => {
+  await loadFixture(page)
+  await enterEditMode(page)
+  await selectWindow(page, 'center-window')
+  await createConstraintByKeyboard(page, 'right', /Right Menu .* left/, 'right-menu')
+  await setInspectorDistance(page, 'right', '20')
+  await openStyles(page)
+  await page.locator('[data-style-background-mode]').selectOption('custom')
+  await commitStyleInput(page, '[data-style-background-color]', '#30485b')
+  await setBorderState(page, 'bottom', true)
+  await page.locator('[data-style-border-target]').selectOption('bottom')
+  await commitStyleInput(page, '[data-style-border-width]', '2')
+  await commitStyleInput(page, '[data-style-padding-all]', '5')
+  const shell = frame(page, 'center-window').locator('.wf-window-shell')
+  await expect(shell).toHaveAttribute('style', /--wf-surface-background: #30485b/)
+  await expect(relation(page, 'right-menu')).toHaveCount(1)
+  await checkpoint(page, info, '17-window-styles-and-constraint')
+
+  await page.locator('[data-workspace-edit-toggle]').click()
+  await page.waitForTimeout(50)
+  await page.reload()
+  await enterEditMode(page)
+  await selectWindow(page, 'center-window')
+  await expect(relation(page, 'right-menu')).toHaveCount(1)
+  await expect(page.locator('[data-layout-inspector-tab="object"]')).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('[data-layout-constraint-offset="right"]')).toHaveValue('20')
+  await openStyles(page)
+  await expect(page.locator('[data-style-background-mode]')).toHaveValue('custom')
+  await expect(page.locator('[data-style-background-color]')).toHaveValue('#30485b')
+  await expect.poll(() => physicalGap(page, 'center-window', 'right-menu')).toBeCloseTo(20, 0)
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await expect.poll(() => physicalGap(page, 'center-window', 'right-menu')).toBeCloseTo(20, 0)
+})
+
+test('records atomic border history, linked padding, reset, and redo without changing layout constraints', async ({ page }) => {
+  await loadFixture(page)
+  await enterEditMode(page)
+  await selectWindow(page, 'left-menu')
+  await openStyles(page)
+  await setBorderState(page, 'bottom', true)
+  await page.locator('[data-style-border-target]').selectOption('bottom')
+  await commitStyleInput(page, '[data-style-border-width]', '2')
+  await commitStyleInput(page, '[data-style-border-color]', '#d26b42')
+  await commitStyleInput(page, '[data-style-padding-all]', '8')
+  await page.locator('[data-style-padding-linked]').click()
+  await commitStyleInput(page, '[data-style-padding-side="left"]', '12')
+  await commitStyleInput(page, '[data-style-padding-side="right"]', '12')
+  const shell = frame(page, 'left-menu').locator('.wf-window-shell')
+  await expectOnlyBorder(page, shell, 'bottom', '2px')
+  await expect(shell).toHaveAttribute('style', /--wf-surface-padding-top: 8px/)
+  await expect(shell).toHaveAttribute('style', /--wf-surface-padding-left: 12px/)
+  await expect(page.locator('[data-layout-acceptance-undo]')).toBeEnabled()
+
+  for (let index = 0; index < 6; index += 1) await page.locator('[data-layout-acceptance-undo]').click()
+  await expect(shell).not.toHaveAttribute('style', /--wf-surface-border-bottom-width: 2px/)
+  await expect(page.locator('[data-layout-inspector]')).toBeVisible()
+  await expect(relation(page, 'right-menu')).toHaveCount(0)
+  for (let index = 0; index < 6; index += 1) await page.locator('[data-layout-acceptance-redo]').click()
+  await expectOnlyBorder(page, shell, 'bottom', '2px')
+  await expect(shell).toHaveAttribute('style', /--wf-surface-border-bottom-color: #d26b42/)
+
+  await page.locator('[data-style-reset]').click()
+  await expect(shell).not.toHaveAttribute('style', /--wf-surface-border-bottom-width: 2px/)
+  await page.locator('[data-layout-acceptance-undo]').click()
+  await expectOnlyBorder(page, shell, 'bottom', '2px')
+})
+
+test('covers keyboard Inspector controls and keeps editor chrome sharp while content is dimmed', async ({ page }, info) => {
+  await loadFixture(page)
+  await enterEditMode(page)
+  await selectWindow(page, 'center-window')
+
+  const content = page.locator('[data-window-instance-id="center-window"] [data-layout-content="dimmed"]')
+  const contentState = await content.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return { opacity: style.opacity, filter: style.filter }
+  })
+  expect(contentState.opacity).toBe('0.36')
+  expect(contentState.filter).toContain('blur(1px)')
+  expect(await page.locator('[data-layout-inspector]').evaluate((element) => getComputedStyle(element).filter)).toBe('none')
+  expect(await page.locator('[data-workspace-edit-chrome]').evaluate((element) => getComputedStyle(element).filter)).toBe('none')
+  await expect(page.locator('[data-layout-inspector] .wf-icon')).toHaveCount(7)
+  await expect(page.locator('[data-window-constraint-handle] .wf-icon')).toHaveCount(4)
+
+  const objectTab = page.locator('[data-layout-inspector-tab="object"]')
+  await objectTab.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(page.locator('[data-layout-inspector-tab="styles"]')).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.press('ArrowLeft')
+  await expect(objectTab).toHaveAttribute('aria-selected', 'true')
+  await openStyles(page)
+  const bottomBorder = page.locator('[data-style-border-side="bottom"]')
+  await bottomBorder.focus()
+  await page.keyboard.press('Enter')
+  await expect(bottomBorder).toHaveAttribute('aria-pressed', 'true')
+  await commitStyleInput(page, '[data-style-padding-all]', '8')
+
+  const dockButton = page.locator('[data-layout-inspector-dock]')
+  await dockButton.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('[data-layout-inspector]')).toHaveAttribute('data-layout-inspector-mode', 'floating')
+  const minimize = page.locator('[data-layout-inspector-minimize]')
+  await minimize.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('[data-layout-inspector]')).toHaveAttribute('data-layout-inspector-mode', 'minimized')
+  await page.locator('[data-layout-inspector-restore]').focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('[data-layout-inspector]')).toHaveAttribute('data-layout-inspector-mode', 'floating')
+  await page.locator('[data-layout-inspector-dock]').focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('[data-layout-inspector]')).toHaveAttribute('data-layout-inspector-mode', 'docked')
+  await checkpoint(page, info, '18-keyboard-and-dimmed-editor')
+
+  await page.locator('[data-workspace-edit-toggle]').focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('[data-layout-inspector]')).toBeHidden()
+  const normalState = await page.locator('[data-window-instance-id="center-window"] .wf-window-shell__content').evaluate((element) => {
+    const style = getComputedStyle(element)
+    return { opacity: style.opacity, filter: style.filter }
+  })
+  expect(normalState).toEqual({ opacity: '1', filter: 'none' })
+})
+
+test('curates the Light Theme acceptance checkpoint with the same accessible editor flow', async ({ page }, info) => {
+  await page.addInitScript(() => window.localStorage.setItem('widgetforge.playground.theme', 'forge-light'))
+  await loadFixture(page)
+  await expect(page.locator('.wf-theme')).toHaveAttribute('style', /--wf-color-canvas: #e6edf2/)
+  await enterEditMode(page)
+  await selectDock(page, 'topnav')
+  await openStyles(page)
+  await expect(page.locator('[data-layout-inspector] .wf-icon')).toHaveCount(11)
+  await checkpoint(page, info, '19-light-theme-styles')
 })
 
 test.describe('viewport matrix', () => {

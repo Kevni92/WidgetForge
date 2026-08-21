@@ -242,7 +242,11 @@ const selectedPane = computed<{ pane: PaneNode; owner: WorkspacePaneOwner } | nu
   const selection = editState.value.selection
   if (!selection) return null
   try {
-    const pane = findPane(ownerRoot(selection.owner), selection.paneId)
+    const root = selection.owner.kind === 'window'
+      ? windowStates.value.find((window) => window.instanceId === selection.owner.id)?.rootPane
+      : dockStates.value.find((dock) => dock.id === selection.owner.id)?.rootPane
+    if (!root) return null
+    const pane = findPane(root, selection.paneId)
     return pane ? { pane, owner: selection.owner } : null
   } catch { return null }
 })
