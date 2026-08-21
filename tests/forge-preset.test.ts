@@ -49,6 +49,8 @@ describe('Forge preset', () => {
     expect(lightVariables['--wf-size-icon-size']).toBe(forgeLightTheme.size.iconSize)
     expect(lightVariables['--wf-size-icon-button-size']).toBe(forgeLightTheme.size.iconButtonSize)
     expect(lightVariables['--wf-size-tab-height']).toBe(forgeLightTheme.size.tabHeight)
+    expect(darkVariables['--wf-editor-selection-color']).toBe(forgeDarkTheme.editor.selectionColor)
+    expect(lightVariables['--wf-editor-panel-background']).toBe(forgeLightTheme.editor.panelBackground)
   })
 
   it('keeps glyphs visually smaller than their compact interaction surfaces', () => {

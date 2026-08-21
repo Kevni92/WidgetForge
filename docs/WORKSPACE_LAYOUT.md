@@ -43,6 +43,8 @@ Beim Verlassen des Edit Mode werden die `data-layout-selection`-Marker entfernt.
 
 Der Layout Inspector ist Editor-Chrome außerhalb der Floating-Layoutfläche. Sein UI-State (`docked`, `floating` oder `minimized` sowie die Floating-Position) wird deshalb separat als laufender `WorkspaceHost`-Session-State gehalten. Inspector-Bewegungen und Moduswechsel werden nicht in Workspace-/Window-History, Geometrie oder Layout-Snapshots geschrieben; beim Wechsel der Auswahl bleibt dieser State erhalten.
 
+Die Editor-Darstellung verwendet zusätzlich die Theme-Gruppe `editor`: `contentOpacity`, `contentSaturation` und `contentBlur` dimmen ausschließlich den Widget-Inhalt im Edit Mode; `selectionColor`, `hoverColor`, `constraintColor` und `previewColor` unterscheiden Auswahl, Hover und Constraint-Feedback; `handleSize` definiert die sichtbare Handle-Größe; `panelBackground` hält Toolbar und Inspector vom produktiven Surface-Styling getrennt. Diese Tokens sind semantische Defaults und können für Dark-, Light- und Custom-Themes überschrieben werden.
+
 ## Object- und Styles-Inspector
 
 Im Edit Mode projiziert der Layout Inspector die aktuelle Host-Auswahl in zwei semantische Tabs: `Object` zeigt die Eigenschaften des ausgewählten Windows, Docks oder Panes, `Styles` bearbeitet den gemeinsamen `LayoutSurfaceStyle`. Die Tabs sind als WAI-ARIA-Tablist umgesetzt und per `ArrowLeft`/`ArrowRight` sowie `Home`/`End` bedienbar. Der Tab-Zustand ist reiner Inspector-UI-State und verändert weder Workspace-Auswahl noch Layout.

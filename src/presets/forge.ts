@@ -57,7 +57,17 @@ export const forgeDarkTheme: WidgetForgeTheme = {
     tableRowHeightCompact: '24px',
   },
   layer: { base: 0, window: 100, overlay: 1000, tooltip: 2000 },
-  editor: { contentOpacity: '0.52', contentSaturation: '0.7', contentBlur: '0.5px' },
+  editor: {
+    contentOpacity: '0.36',
+    contentSaturation: '0.55',
+    contentBlur: '1px',
+    selectionColor: '#2aa7df',
+    hoverColor: '#70d4ff',
+    constraintColor: '#5ec8ff',
+    previewColor: '#40d98a',
+    handleSize: '22px',
+    panelBackground: '#1c3042',
+  },
 }
 
 export const forgeLightTheme: WidgetForgeTheme = {
@@ -117,5 +127,15 @@ export const forgeLightTheme: WidgetForgeTheme = {
     tableRowHeightCompact: '24px',
   },
   layer: { base: 0, window: 100, overlay: 1000, tooltip: 2000 },
-  editor: { contentOpacity: '0.52', contentSaturation: '0.7', contentBlur: '0.5px' },
+  editor: {
+    contentOpacity: '0.36',
+    contentSaturation: '0.55',
+    contentBlur: '1px',
+    selectionColor: '#0b769f',
+    hoverColor: '#0872a3',
+    constraintColor: '#0b6e97',
+    previewColor: '#167a4b',
+    handleSize: '22px',
+    panelBackground: '#fbfdff',
+  },
 }
